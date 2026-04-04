@@ -1,12 +1,14 @@
 package provider
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -26,6 +28,13 @@ func NewOpenAI(name, baseURL, apiKey string, headers map[string]string) *OpenAIP
 		headers: headers,
 		client: &http.Client{
 			Timeout: 120 * time.Second,
+			Transport: &http.Transport{
+				MaxIdleConns:        100,
+				MaxIdleConnsPerHost: 10,
+				IdleConnTimeout:     90 * time.Second,
+				DisableCompression:  false,
+				ForceAttemptHTTP2:   true,
+			},
 		},
 	}
 }
@@ -99,14 +108,34 @@ func (p *OpenAIProvider) SendStream(ctx context.Context, req ChatRequest, w io.W
 		return nil, fmt.Errorf("provider error (status %d): %s", resp.StatusCode, string(respBody))
 	}
 
-	// Stream SSE directly to the client
-	_, err = io.Copy(w, resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("stream response: %w", err)
+	// Buffer and forward SSE stream, extracting usage from final chunk
+	usage := &Usage{}
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		line := scanner.Text()
+		// Forward the line to client
+		fmt.Fprintf(w, "%s\n", line)
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+
+		// Parse usage from SSE data lines
+		if strings.HasPrefix(line, "data: ") {
+			data := strings.TrimPrefix(line, "data: ")
+			if data == "[DONE]" {
+				continue
+			}
+			var chunk struct {
+				Usage *Usage `json:"usage"`
+			}
+			if json.Unmarshal([]byte(data), &chunk) == nil && chunk.Usage != nil {
+				usage = chunk.Usage
+			}
+		}
 	}
 
-	// Usage tracking for streaming is approximate
-	return &Usage{}, nil
+	return usage, scanner.Err()
 }
 
 func (p *OpenAIProvider) HealthCheck(ctx context.Context) error {

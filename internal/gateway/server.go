@@ -148,6 +148,18 @@ func New(cfg *config.Config, logger *slog.Logger) *Server {
 }
 
 func (s *Server) Start(ctx context.Context) error {
+	// Pre-flight validation and warmup
+	validator := NewStartupValidator(s.logger)
+
+	warnings := validator.ValidateConfig(s)
+	for _, w := range warnings {
+		s.logger.Warn(w)
+	}
+
+	validator.CheckProviderReachability(s)
+	validator.CheckOllamaModels(s)
+	validator.WarmupModels(s)
+
 	mux := http.NewServeMux()
 
 	// OpenAI-compatible chat endpoint
@@ -435,6 +447,11 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("X-Nexus-Cache", source)
+			w.Header().Set("X-Nexus-Model", "cached")
+			w.Header().Set("X-Nexus-Tier", "cached")
+			w.Header().Set("X-Nexus-Provider", "cache/"+source)
+			w.Header().Set("X-Nexus-Cost", "0.000000")
+			w.Header().Set("X-Nexus-Workflow-ID", workflowID)
 			w.Write(cached)
 			return
 		}
@@ -693,21 +710,46 @@ func (s *Server) handleReadiness(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 	hits, misses, cacheSize := s.cache.Stats()
+
+	providerNames := make([]string, 0, len(s.providers))
+	for name := range s.providers {
+		providerNames = append(providerNames, name)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"name":    "nexus",
-		"version": "0.1.0",
+		"service":     "nexus",
+		"name":        "nexus",
+		"version":     "0.1.0",
 		"description": "Agentic-first inference optimization gateway",
+		"status":      "operational",
+		"providers":   providerNames,
 		"endpoints": []string{
 			"/v1/chat/completions",
 			"/v1/feedback",
 			"/health",
+			"/health/live",
+			"/health/ready",
 			"/metrics",
+			"/dashboard",
+			"/api/synonyms/stats",
+			"/api/circuit-breakers",
 		},
 		"cache": map[string]any{
 			"hits":   hits,
 			"misses": misses,
 			"size":   cacheSize,
+			"layers": map[string]bool{
+				"l1_exact":    s.cfg.Cache.L1Enabled || s.cfg.Cache.L1.Enabled,
+				"l2_bm25":    s.cfg.Cache.L2BM25.Enabled,
+				"l2_semantic": s.cfg.Cache.L2Semantic.Enabled,
+			},
+		},
+		"security": map[string]bool{
+			"tls":          s.cfg.Security.TLS.Enabled,
+			"rate_limit":   s.cfg.Security.RateLimit.Enabled,
+			"prompt_guard": s.cfg.Security.PromptGuard.Enabled,
+			"oidc":         s.cfg.Security.OIDC.Enabled,
 		},
 		"requests_total": s.metrics.RequestsTotal.Load(),
 	})

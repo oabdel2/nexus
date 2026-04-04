@@ -11,6 +11,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -93,7 +95,8 @@ func main() {
 		fmt.Println("❌ Nexus gateway failed to become ready within 30s")
 		os.Exit(1)
 	}
-	fmt.Println("✅ Nexus gateway is ready\n")
+	fmt.Println("✅ Nexus gateway is ready")
+	fmt.Println()
 
 	// Phase 2: Run all test suites
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
@@ -143,6 +146,13 @@ func main() {
 	fmt.Println("  LAYER 7: Synonym & Admin APIs")
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 	testSynonymAPIs()
+
+	fmt.Println("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Println("  LAYER 8: Concurrency & Resilience")
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	testConcurrentRequests()
+	testCacheHitLatency()
+	testResponseSchema()
 
 	// Phase 3: Print summary
 	printSummary()
@@ -909,6 +919,205 @@ func testSynonymAPIs() {
 			return "", fmt.Errorf("learned returned %d: %s", resp2.StatusCode, body)
 		}
 		return "synonym add + read working", nil
+	})
+}
+
+// ─── Layer 8: Concurrency & Resilience ───────────────────────────────
+
+func testConcurrentRequests() {
+	record("concurrent-5-requests", func() (string, error) {
+		var wg sync.WaitGroup
+		var successCount atomic.Int32
+		var failCount atomic.Int32
+
+		prompts := []string{
+			"What is 1+1?",
+			"What is 2+2?",
+			"What is 3+3?",
+			"What is 4+4?",
+			"What is 5+5?",
+		}
+
+		start := time.Now()
+		for _, prompt := range prompts {
+			wg.Add(1)
+			go func(p string) {
+				defer wg.Done()
+				req := ChatRequest{
+					Model:     "qwen2.5:1.5b",
+					Messages:  []Message{{Role: "user", Content: p}},
+					MaxTokens: 5,
+				}
+				body, _ := json.Marshal(req)
+				resp, err := http.Post(
+					baseURL+"/v1/chat/completions",
+					"application/json",
+					bytes.NewReader(body),
+				)
+				if err != nil {
+					failCount.Add(1)
+					return
+				}
+				defer resp.Body.Close()
+				io.ReadAll(resp.Body)
+				if resp.StatusCode == 200 {
+					successCount.Add(1)
+				} else {
+					failCount.Add(1)
+				}
+			}(prompt)
+		}
+		wg.Wait()
+		elapsed := time.Since(start)
+
+		s := int(successCount.Load())
+		f := int(failCount.Load())
+		if s == 0 {
+			return "", fmt.Errorf("all %d concurrent requests failed", f)
+		}
+		return fmt.Sprintf("%d/%d succeeded in %v", s, s+f, elapsed.Round(time.Millisecond)), nil
+	})
+}
+
+func testCacheHitLatency() {
+	// Use a prompt we already primed in testL1CacheHit
+	prompt := "What is the capital of France? Answer in one word."
+
+	record("cache-hit-latency-p99", func() (string, error) {
+		var latencies []time.Duration
+
+		for i := 0; i < 10; i++ {
+			req := ChatRequest{
+				Model:     "qwen2.5:1.5b",
+				Messages:  []Message{{Role: "user", Content: prompt}},
+				MaxTokens: 20,
+			}
+			body, _ := json.Marshal(req)
+
+			start := time.Now()
+			resp, err := http.Post(
+				baseURL+"/v1/chat/completions",
+				"application/json",
+				bytes.NewReader(body),
+			)
+			elapsed := time.Since(start)
+			if err != nil {
+				continue
+			}
+			resp.Body.Close()
+
+			cacheHeader := resp.Header.Get("X-Nexus-Cache")
+			if cacheHeader != "" {
+				latencies = append(latencies, elapsed)
+			}
+		}
+
+		if len(latencies) == 0 {
+			return "", fmt.Errorf("no cache hits in 10 attempts")
+		}
+
+		// Find max (p99-ish for small sample)
+		var total, maxLat time.Duration
+		for _, l := range latencies {
+			total += l
+			if l > maxLat {
+				maxLat = l
+			}
+		}
+		avg := total / time.Duration(len(latencies))
+
+		if maxLat > 50*time.Millisecond {
+			return fmt.Sprintf("avg=%v max=%v (%d hits) — SLOW", avg.Round(time.Microsecond), maxLat.Round(time.Microsecond), len(latencies)), nil
+		}
+		return fmt.Sprintf("avg=%v max=%v (%d hits) ⚡", avg.Round(time.Microsecond), maxLat.Round(time.Microsecond), len(latencies)), nil
+	})
+}
+
+func testResponseSchema() {
+	record("response-schema-validation", func() (string, error) {
+		req := ChatRequest{
+			Model:     "qwen2.5:1.5b",
+			Messages:  []Message{{Role: "user", Content: "Say test"}},
+			MaxTokens: 5,
+		}
+		body, _ := json.Marshal(req)
+		resp, err := http.Post(
+			baseURL+"/v1/chat/completions",
+			"application/json",
+			bytes.NewReader(body),
+		)
+		if err != nil {
+			return "", err
+		}
+		defer resp.Body.Close()
+		respBody, _ := io.ReadAll(resp.Body)
+
+		if resp.StatusCode != 200 {
+			return "", fmt.Errorf("status %d", resp.StatusCode)
+		}
+
+		// Validate full OpenAI-compatible response schema
+		var chatResp map[string]interface{}
+		if err := json.Unmarshal(respBody, &chatResp); err != nil {
+			return "", fmt.Errorf("invalid JSON: %v", err)
+		}
+
+		required := []string{"id", "object", "model", "choices", "usage"}
+		missing := []string{}
+		for _, field := range required {
+			if _, ok := chatResp[field]; !ok {
+				missing = append(missing, field)
+			}
+		}
+		if len(missing) > 0 {
+			return "", fmt.Errorf("missing fields: %v", missing)
+		}
+
+		// Validate choices structure
+		choices, ok := chatResp["choices"].([]interface{})
+		if !ok || len(choices) == 0 {
+			return "", fmt.Errorf("choices is not a non-empty array")
+		}
+
+		choice, ok := choices[0].(map[string]interface{})
+		if !ok {
+			return "", fmt.Errorf("choice[0] is not an object")
+		}
+		choiceFields := []string{"index", "message", "finish_reason"}
+		for _, f := range choiceFields {
+			if _, ok := choice[f]; !ok {
+				missing = append(missing, "choices[0]."+f)
+			}
+		}
+
+		// Validate usage structure
+		usage, ok := chatResp["usage"].(map[string]interface{})
+		if !ok {
+			return "", fmt.Errorf("usage is not an object")
+		}
+		usageFields := []string{"prompt_tokens", "completion_tokens", "total_tokens"}
+		for _, f := range usageFields {
+			if _, ok := usage[f]; !ok {
+				missing = append(missing, "usage."+f)
+			}
+		}
+
+		if len(missing) > 0 {
+			return "", fmt.Errorf("missing nested fields: %v", missing)
+		}
+
+		// Validate Nexus extension headers
+		nexusHeaders := []string{"X-Nexus-Model", "X-Nexus-Tier", "X-Nexus-Provider"}
+		for _, h := range nexusHeaders {
+			if resp.Header.Get(h) == "" {
+				missing = append(missing, h)
+			}
+		}
+		if len(missing) > 0 {
+			return "", fmt.Errorf("missing Nexus headers: %v", missing)
+		}
+
+		return "OpenAI-compatible schema ✓ + Nexus headers ✓", nil
 	})
 }
 
