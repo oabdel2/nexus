@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "nexus.fullname" . }}-config
+  labels:
+    {{- include "nexus.labels" . | nindent 4 }}
+data:
+  nexus.yaml: |
+    {{- $cfg := deepCopy .Values.nexusConfig }}
+    {{- /* Merge Qdrant settings when enabled */}}
+    {{- if .Values.qdrant.enabled }}
+    {{-   $_ := set $cfg.storage "vector_backend" "qdrant" }}
+    {{-   $_ := set $cfg.storage "qdrant_host" .Values.qdrant.host }}
+    {{-   $_ := set $cfg.storage "qdrant_port" (.Values.qdrant.port | int) }}
+    {{-   $_ := set $cfg.storage "qdrant_collection" .Values.qdrant.collection }}
+    {{-   $_ := set $cfg.storage "qdrant_dimension" (.Values.qdrant.dimension | int) }}
+    {{- end }}
+    {{- /* Merge Redis settings when enabled */}}
+    {{- if .Values.redis.enabled }}
+    {{-   $_ := set $cfg.storage "kv_backend" "redis" }}
+    {{-   $_ := set $cfg.storage "redis_addr" .Values.redis.addr }}
+    {{-   $_ := set $cfg.storage "redis_password" .Values.redis.password }}
+    {{-   $_ := set $cfg.storage "redis_db" (.Values.redis.db | int) }}
+    {{- end }}
+    {{- /* Merge TLS settings when enabled */}}
+    {{- if .Values.tls.enabled }}
+    {{-   $_ := set $cfg.security.tls "enabled" true }}
+    {{-   $_ := set $cfg.security.tls "cert_file" "/etc/nexus/tls/tls.crt" }}
+    {{-   $_ := set $cfg.security.tls "key_file" "/etc/nexus/tls/tls.key" }}
+    {{- end }}
+    {{- toYaml $cfg | nindent 4 }}

@@ -2,124 +2,372 @@ package telemetry
 
 import (
 	"fmt"
+	"math"
 	"net/http"
+	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
+// ---------------------------------------------------------------------------
+// Atomic float64 helpers (CAS loop over int64-stored float64 bits)
+// ---------------------------------------------------------------------------
+
+func atomicAddFloat64(addr *atomic.Int64, val float64) {
+	for {
+		old := addr.Load()
+		newVal := math.Float64frombits(uint64(old)) + val
+		if addr.CompareAndSwap(old, int64(math.Float64bits(newVal))) {
+			return
+		}
+	}
+}
+
+func atomicLoadFloat64(addr *atomic.Int64) float64 {
+	return math.Float64frombits(uint64(addr.Load()))
+}
+
+// ---------------------------------------------------------------------------
+// sync.Map counter helpers
+// ---------------------------------------------------------------------------
+
+func addToMap(m *sync.Map, key string, delta int64) {
+	v, _ := m.LoadOrStore(key, &atomic.Int64{})
+	v.(*atomic.Int64).Add(delta)
+}
+
+func setInMap(m *sync.Map, key string, val int64) {
+	v, _ := m.LoadOrStore(key, &atomic.Int64{})
+	v.(*atomic.Int64).Store(val)
+}
+
+// ---------------------------------------------------------------------------
+// Histogram (lock-free, cumulative buckets)
+// ---------------------------------------------------------------------------
+
+type histogram struct {
+	buckets []atomic.Int64 // cumulative: index i counts values <= boundaries[i]; last is +Inf
+	sum     atomic.Int64   // float64 bits
+	count   atomic.Int64
+}
+
+type histogramVec struct {
+	boundaries []float64
+	instances  sync.Map // label-key string → *histogram
+}
+
+func (hv *histogramVec) getOrCreate(labels string) *histogram {
+	if v, ok := hv.instances.Load(labels); ok {
+		return v.(*histogram)
+	}
+	h := &histogram{
+		buckets: make([]atomic.Int64, len(hv.boundaries)+1),
+	}
+	actual, loaded := hv.instances.LoadOrStore(labels, h)
+	if loaded {
+		return actual.(*histogram)
+	}
+	return h
+}
+
+func (hv *histogramVec) observe(labels string, seconds float64) {
+	h := hv.getOrCreate(labels)
+	for i, b := range hv.boundaries {
+		if seconds <= b {
+			h.buckets[i].Add(1)
+		}
+	}
+	h.buckets[len(hv.boundaries)].Add(1) // +Inf
+	atomicAddFloat64(&h.sum, seconds)
+	h.count.Add(1)
+}
+
+// ---------------------------------------------------------------------------
+// Metrics
+// ---------------------------------------------------------------------------
+
+// Metrics collects and exposes Prometheus-format metrics for the Nexus gateway.
 type Metrics struct {
-	RequestsTotal    atomic.Int64
-	CacheHits        atomic.Int64
-	CacheMisses      atomic.Int64
-	TotalTokens      atomic.Int64
-	TotalCostMicros  atomic.Int64 // cost in microdollars for atomic ops
+	startTime time.Time
 
-	routingDecisions sync.Map // tier -> count
-	providerRequests sync.Map // provider -> count
-	latencyBuckets   sync.Map // bucket -> count
+	// Public for backward compatibility (server.go reads RequestsTotal.Load()).
+	RequestsTotal atomic.Int64
+
+	// Labeled counters — sync.Map[string]*atomic.Int64
+	requestsByLabel   sync.Map // provider,model,tier,status
+	cacheHitsByLayer  sync.Map // layer
+	cacheMissesTotal  atomic.Int64
+	tokensByDirection sync.Map // direction
+	costByLabel       sync.Map // provider,tier  (value = microdollars)
+	securityBlocks    sync.Map // reason
+	cacheEvictions    sync.Map // layer
+	synonymPromotions atomic.Int64
+
+	// Histograms
+	requestDuration   histogramVec
+	cacheLookup       histogramVec
+	embeddingDuration histogramVec
+
+	// Gauges
+	cacheEntries   sync.Map // layer
+	activeRequests atomic.Int64
 }
 
+// NewMetrics creates an initialised Metrics collector.
 func NewMetrics() *Metrics {
-	return &Metrics{}
+	return &Metrics{
+		startTime: time.Now(),
+		requestDuration: histogramVec{
+			boundaries: []float64{0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0},
+		},
+		cacheLookup: histogramVec{
+			boundaries: []float64{0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1},
+		},
+		embeddingDuration: histogramVec{
+			boundaries: []float64{0.01, 0.05, 0.1, 0.25, 0.5, 1.0},
+		},
+	}
 }
 
+// ---------------------------------------------------------------------------
+// Recording methods
+// ---------------------------------------------------------------------------
+
+// RecordRequest records a completed request.
+// Signature is kept for backward compatibility with server.go.
 func (m *Metrics) RecordRequest(provider, model, tier string, tokens int, costDollars float64, latencyMs int64, cacheHit bool) {
 	m.RequestsTotal.Add(1)
-	m.TotalTokens.Add(int64(tokens))
-	m.TotalCostMicros.Add(int64(costDollars * 1_000_000))
 
+	status := "ok"
 	if cacheHit {
-		m.CacheHits.Add(1)
+		status = "cache_hit"
+		m.RecordCacheHit(model) // model carries the cache layer on hits
 	} else {
-		m.CacheMisses.Add(1)
+		m.RecordCacheMiss()
 	}
 
-	// Track routing decisions by tier
-	if v, ok := m.routingDecisions.Load(tier); ok {
-		counter := v.(*atomic.Int64)
-		counter.Add(1)
-	} else {
-		counter := &atomic.Int64{}
-		counter.Add(1)
-		m.routingDecisions.Store(tier, counter)
+	key := fmt.Sprintf(`provider="%s",model="%s",tier="%s",status="%s"`, provider, model, tier, status)
+	addToMap(&m.requestsByLabel, key, 1)
+
+	if tokens > 0 {
+		addToMap(&m.tokensByDirection, `direction="total"`, int64(tokens))
 	}
 
-	// Track provider requests
-	key := provider + "/" + model
-	if v, ok := m.providerRequests.Load(key); ok {
-		counter := v.(*atomic.Int64)
-		counter.Add(1)
-	} else {
-		counter := &atomic.Int64{}
-		counter.Add(1)
-		m.providerRequests.Store(key, counter)
+	if costDollars > 0 {
+		costKey := fmt.Sprintf(`provider="%s",tier="%s"`, provider, tier)
+		addToMap(&m.costByLabel, costKey, int64(costDollars*1_000_000))
 	}
 
-	// Latency buckets
-	bucket := latencyBucket(latencyMs)
-	if v, ok := m.latencyBuckets.Load(bucket); ok {
-		counter := v.(*atomic.Int64)
-		counter.Add(1)
-	} else {
-		counter := &atomic.Int64{}
-		counter.Add(1)
-		m.latencyBuckets.Store(bucket, counter)
+	seconds := float64(latencyMs) / 1000.0
+	m.requestDuration.observe(fmt.Sprintf(`tier="%s"`, tier), seconds)
+}
+
+// RecordCacheHit records a cache hit for the given layer (l1, bm25, semantic).
+func (m *Metrics) RecordCacheHit(layer string) {
+	addToMap(&m.cacheHitsByLayer, fmt.Sprintf(`layer="%s"`, layer), 1)
+}
+
+// RecordCacheMiss records a cache miss.
+func (m *Metrics) RecordCacheMiss() {
+	m.cacheMissesTotal.Add(1)
+}
+
+// RecordCacheEviction records a cache eviction for the given layer.
+func (m *Metrics) RecordCacheEviction(layer string) {
+	addToMap(&m.cacheEvictions, fmt.Sprintf(`layer="%s"`, layer), 1)
+}
+
+// RecordSecurityBlock records a security block event.
+func (m *Metrics) RecordSecurityBlock(reason string) {
+	addToMap(&m.securityBlocks, fmt.Sprintf(`reason="%s"`, reason), 1)
+}
+
+// RecordSynonymPromotion records a synonym learning event.
+func (m *Metrics) RecordSynonymPromotion() {
+	m.synonymPromotions.Add(1)
+}
+
+// RecordDuration records an observation in the named histogram.
+// For "request": tier is a tier label. For "cache_lookup": tier is a layer label.
+func (m *Metrics) RecordDuration(name string, tier string, seconds float64) {
+	switch name {
+	case "request":
+		labels := ""
+		if tier != "" {
+			labels = fmt.Sprintf(`tier="%s"`, tier)
+		}
+		m.requestDuration.observe(labels, seconds)
+	case "cache_lookup":
+		labels := ""
+		if tier != "" {
+			labels = fmt.Sprintf(`layer="%s"`, tier)
+		}
+		m.cacheLookup.observe(labels, seconds)
+	case "embedding":
+		m.embeddingDuration.observe("", seconds)
 	}
 }
 
-func latencyBucket(ms int64) string {
-	switch {
-	case ms < 100:
-		return "lt100ms"
-	case ms < 500:
-		return "lt500ms"
-	case ms < 1000:
-		return "lt1s"
-	case ms < 5000:
-		return "lt5s"
-	case ms < 10000:
-		return "lt10s"
-	default:
-		return "gt10s"
-	}
+// RecordCacheLookup records a cache lookup duration for the given layer.
+func (m *Metrics) RecordCacheLookup(layer string, seconds float64) {
+	m.cacheLookup.observe(fmt.Sprintf(`layer="%s"`, layer), seconds)
 }
 
+// RecordEmbedding records an embedding generation duration.
+func (m *Metrics) RecordEmbedding(seconds float64) {
+	m.embeddingDuration.observe("", seconds)
+}
+
+// SetCacheEntries sets the current cache entry count for a layer.
+func (m *Metrics) SetCacheEntries(layer string, count int64) {
+	setInMap(&m.cacheEntries, fmt.Sprintf(`layer="%s"`, layer), count)
+}
+
+// IncActiveRequests increments the in-flight request gauge.
+func (m *Metrics) IncActiveRequests() { m.activeRequests.Add(1) }
+
+// DecActiveRequests decrements the in-flight request gauge.
+func (m *Metrics) DecActiveRequests() { m.activeRequests.Add(-1) }
+
+// ---------------------------------------------------------------------------
+// Prometheus exposition helpers
+// ---------------------------------------------------------------------------
+
+type mapEntry struct {
+	key   string
+	value *atomic.Int64
+}
+
+func sortedEntries(m *sync.Map) []mapEntry {
+	var entries []mapEntry
+	m.Range(func(k, v any) bool {
+		entries = append(entries, mapEntry{key: k.(string), value: v.(*atomic.Int64)})
+		return true
+	})
+	sort.Slice(entries, func(i, j int) bool { return entries[i].key < entries[j].key })
+	return entries
+}
+
+func sumMap(m *sync.Map) int64 {
+	var total int64
+	m.Range(func(_, v any) bool {
+		total += v.(*atomic.Int64).Load()
+		return true
+	})
+	return total
+}
+
+func fmtFloat(v float64) string { return strconv.FormatFloat(v, 'g', -1, 64) }
+
+// writeLabeledInt writes a metric family whose values are int64 counters.
+func writeLabeledInt(b *strings.Builder, name, help, typ string, m *sync.Map) {
+	fmt.Fprintf(b, "# HELP %s %s\n# TYPE %s %s\n", name, help, name, typ)
+	for _, e := range sortedEntries(m) {
+		fmt.Fprintf(b, "%s{%s} %d\n", name, e.key, e.value.Load())
+	}
+	b.WriteByte('\n')
+}
+
+// writeLabeledFloat writes a metric family whose raw int64 values are divided by divisor.
+func writeLabeledFloat(b *strings.Builder, name, help, typ string, m *sync.Map, divisor float64) {
+	fmt.Fprintf(b, "# HELP %s %s\n# TYPE %s %s\n", name, help, name, typ)
+	for _, e := range sortedEntries(m) {
+		fmt.Fprintf(b, "%s{%s} %s\n", name, e.key, fmtFloat(float64(e.value.Load())/divisor))
+	}
+	b.WriteByte('\n')
+}
+
+func writeSimpleInt(b *strings.Builder, name, help, typ string, val int64) {
+	fmt.Fprintf(b, "# HELP %s %s\n# TYPE %s %s\n%s %d\n\n", name, help, name, typ, name, val)
+}
+
+func writeSimpleFloat(b *strings.Builder, name, help, typ string, val float64) {
+	fmt.Fprintf(b, "# HELP %s %s\n# TYPE %s %s\n%s %s\n\n", name, help, name, typ, name, fmtFloat(val))
+}
+
+func writeHistogramFamily(b *strings.Builder, name, help string, hv *histogramVec) {
+	var keys []string
+	hv.instances.Range(func(k, _ any) bool {
+		keys = append(keys, k.(string))
+		return true
+	})
+	if len(keys) == 0 {
+		return
+	}
+	sort.Strings(keys)
+
+	fmt.Fprintf(b, "# HELP %s %s\n# TYPE %s histogram\n", name, help, name)
+	for _, labelStr := range keys {
+		v, _ := hv.instances.Load(labelStr)
+		h := v.(*histogram)
+
+		for i, bound := range hv.boundaries {
+			le := fmtFloat(bound)
+			if labelStr != "" {
+				fmt.Fprintf(b, "%s_bucket{%s,le=\"%s\"} %d\n", name, labelStr, le, h.buckets[i].Load())
+			} else {
+				fmt.Fprintf(b, "%s_bucket{le=\"%s\"} %d\n", name, le, h.buckets[i].Load())
+			}
+		}
+		// +Inf
+		if labelStr != "" {
+			fmt.Fprintf(b, "%s_bucket{%s,le=\"+Inf\"} %d\n", name, labelStr, h.buckets[len(hv.boundaries)].Load())
+			fmt.Fprintf(b, "%s_sum{%s} %s\n", name, labelStr, fmtFloat(atomicLoadFloat64(&h.sum)))
+			fmt.Fprintf(b, "%s_count{%s} %d\n", name, labelStr, h.count.Load())
+		} else {
+			fmt.Fprintf(b, "%s_bucket{le=\"+Inf\"} %d\n", name, h.buckets[len(hv.boundaries)].Load())
+			fmt.Fprintf(b, "%s_sum %s\n", name, fmtFloat(atomicLoadFloat64(&h.sum)))
+			fmt.Fprintf(b, "%s_count %d\n", name, h.count.Load())
+		}
+	}
+	b.WriteByte('\n')
+}
+
+// ---------------------------------------------------------------------------
+// Handler — Prometheus exposition endpoint
+// ---------------------------------------------------------------------------
+
+// Handler returns an HTTP handler that serves metrics in Prometheus text format.
 func (m *Metrics) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 
-		totalCost := float64(m.TotalCostMicros.Load()) / 1_000_000.0
+		var b strings.Builder
 
-		fmt.Fprintf(w, "# HELP nexus_requests_total Total number of requests processed\n")
-		fmt.Fprintf(w, "nexus_requests_total %d\n", m.RequestsTotal.Load())
-		fmt.Fprintf(w, "# HELP nexus_cache_hits_total Total cache hits\n")
-		fmt.Fprintf(w, "nexus_cache_hits_total %d\n", m.CacheHits.Load())
-		fmt.Fprintf(w, "# HELP nexus_cache_misses_total Total cache misses\n")
-		fmt.Fprintf(w, "nexus_cache_misses_total %d\n", m.CacheMisses.Load())
-		fmt.Fprintf(w, "# HELP nexus_tokens_total Total tokens processed\n")
-		fmt.Fprintf(w, "nexus_tokens_total %d\n", m.TotalTokens.Load())
-		fmt.Fprintf(w, "# HELP nexus_cost_dollars_total Total cost in dollars\n")
-		fmt.Fprintf(w, "nexus_cost_dollars_total %.6f\n", totalCost)
+		// ---- Counters ----
+		writeLabeledInt(&b, "nexus_requests_total", "Total requests processed", "counter", &m.requestsByLabel)
+		writeLabeledInt(&b, "nexus_cache_hits_total", "Cache hits by layer", "counter", &m.cacheHitsByLayer)
+		writeSimpleInt(&b, "nexus_cache_misses_total", "Total cache misses", "counter", m.cacheMissesTotal.Load())
+		writeLabeledInt(&b, "nexus_tokens_total", "Tokens processed by direction", "counter", &m.tokensByDirection)
+		writeLabeledFloat(&b, "nexus_cost_dollars_total", "Total cost in dollars", "counter", &m.costByLabel, 1_000_000)
+		writeLabeledInt(&b, "nexus_security_blocks_total", "Security blocks by reason", "counter", &m.securityBlocks)
+		writeLabeledInt(&b, "nexus_cache_evictions_total", "Cache evictions by layer", "counter", &m.cacheEvictions)
+		writeSimpleInt(&b, "nexus_synonym_promotions_total", "Synonym promotion events", "counter", m.synonymPromotions.Load())
 
-		fmt.Fprintf(w, "# HELP nexus_routing_decisions_total Routing decisions by tier\n")
-		m.routingDecisions.Range(func(key, value any) bool {
-			counter := value.(*atomic.Int64)
-			fmt.Fprintf(w, "nexus_routing_decisions_total{tier=%q} %d\n", key.(string), counter.Load())
-			return true
-		})
+		// ---- Histograms ----
+		writeHistogramFamily(&b, "nexus_request_duration_seconds", "Request latency histogram", &m.requestDuration)
+		writeHistogramFamily(&b, "nexus_cache_lookup_duration_seconds", "Cache lookup latency", &m.cacheLookup)
+		writeHistogramFamily(&b, "nexus_embedding_duration_seconds", "Embedding generation latency", &m.embeddingDuration)
 
-		fmt.Fprintf(w, "# HELP nexus_provider_requests_total Requests by provider/model\n")
-		m.providerRequests.Range(func(key, value any) bool {
-			counter := value.(*atomic.Int64)
-			fmt.Fprintf(w, "nexus_provider_requests_total{provider_model=%q} %d\n", key.(string), counter.Load())
-			return true
-		})
+		// ---- Gauges ----
+		writeLabeledInt(&b, "nexus_cache_entries", "Current cache entries per layer", "gauge", &m.cacheEntries)
+		writeSimpleInt(&b, "nexus_active_requests", "Current in-flight requests", "gauge", m.activeRequests.Load())
 
-		fmt.Fprintf(w, "# HELP nexus_latency_bucket Request count by latency bucket\n")
-		m.latencyBuckets.Range(func(key, value any) bool {
-			counter := value.(*atomic.Int64)
-			fmt.Fprintf(w, "nexus_latency_bucket{bucket=%q} %d\n", key.(string), counter.Load())
-			return true
-		})
+		uptime := time.Since(m.startTime).Seconds()
+		writeSimpleFloat(&b, "nexus_uptime_seconds", "Time since gateway start", "gauge", uptime)
+
+		totalHits := sumMap(&m.cacheHitsByLayer)
+		totalMisses := m.cacheMissesTotal.Load()
+		total := totalHits + totalMisses
+		var hitRate float64
+		if total > 0 {
+			hitRate = float64(totalHits) / float64(total)
+		}
+		writeSimpleFloat(&b, "nexus_cache_hit_rate", "Cache hit rate", "gauge", hitRate)
+
+		w.Write([]byte(b.String()))
 	}
 }

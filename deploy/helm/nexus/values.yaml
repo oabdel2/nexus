@@ -1,0 +1,243 @@
+# -- Number of Nexus gateway replicas
+replicaCount: 2
+
+image:
+  # -- Container image repository
+  repository: ghcr.io/nexus-gateway/nexus
+  # -- Image tag (defaults to chart appVersion)
+  tag: ""
+  # -- Image pull policy
+  pullPolicy: IfNotPresent
+
+# -- Image pull secrets for private registries
+imagePullSecrets: []
+# -- Override the chart name
+nameOverride: ""
+# -- Override the full release name
+fullnameOverride: ""
+
+serviceAccount:
+  # -- Create a ServiceAccount
+  create: true
+  # -- Annotations for the ServiceAccount
+  annotations: {}
+  # -- Name override (generated if empty)
+  name: ""
+
+# -- Annotations added to every pod
+podAnnotations: {}
+
+# -- Pod-level security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+# -- Container-level security context
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# -------------------------------------------------------
+# Service
+# -------------------------------------------------------
+service:
+  # -- Service type
+  type: ClusterIP
+  # -- Service port
+  port: 8080
+
+# -------------------------------------------------------
+# Ingress
+# -------------------------------------------------------
+ingress:
+  # -- Enable ingress
+  enabled: false
+  # -- Ingress class name
+  className: nginx
+  # -- Ingress annotations
+  annotations: {}
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: nexus.local
+      paths:
+        - path: /
+          pathType: Prefix
+  # -- TLS configuration for ingress
+  tls: []
+  #  - secretName: nexus-tls
+  #    hosts:
+  #      - nexus.local
+
+# -------------------------------------------------------
+# Resource requests and limits
+# -------------------------------------------------------
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# -------------------------------------------------------
+# Autoscaling
+# -------------------------------------------------------
+autoscaling:
+  # -- Enable HPA
+  enabled: true
+  # -- Minimum replicas
+  minReplicas: 2
+  # -- Maximum replicas
+  maxReplicas: 10
+  # -- Target CPU utilisation (%)
+  targetCPUUtilizationPercentage: 70
+  # -- Target memory utilisation (%)
+  targetMemoryUtilizationPercentage: 80
+
+# -------------------------------------------------------
+# Health probes
+# -------------------------------------------------------
+livenessProbe:
+  httpGet:
+    path: /health/live
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health/ready
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# -------------------------------------------------------
+# Nexus configuration (rendered into a ConfigMap)
+# -------------------------------------------------------
+nexusConfig:
+  server:
+    port: 8080
+    read_timeout: 30s
+    write_timeout: 120s
+  providers: []
+  router:
+    threshold: 0.7
+    default_tier: mid
+    budget_enabled: true
+    default_budget: 1.0
+    complexity_weights:
+      prompt_complexity: 0.30
+      context_length: 0.15
+      agent_role: 0.20
+      step_position: 0.15
+      budget_pressure: 0.20
+  cache:
+    enabled: true
+    l1_enabled: true
+    l2_enabled: false
+    ttl: 1h
+    max_entries: 10000
+    similarity_min: 0.95
+  workflow:
+    ttl: 1h
+    max_steps: 100
+  telemetry:
+    metrics_enabled: true
+    metrics_port: 9090
+    log_level: info
+    log_format: json
+  security:
+    tls:
+      enabled: false
+    prompt_guard:
+      enabled: true
+      mode: block
+      max_prompt_length: 32000
+    rate_limit:
+      enabled: true
+      default_rpm: 60
+      burst_size: 10
+    cors:
+      allowed_origins:
+        - "*"
+    audit_log: true
+  storage:
+    vector_backend: memory
+    kv_backend: memory
+
+# -------------------------------------------------------
+# Secrets — provider API keys
+# -------------------------------------------------------
+secrets:
+  # -- OpenAI API key
+  openaiApiKey: ""
+  # -- Anthropic API key
+  anthropicApiKey: ""
+  # -- Google Gemini API key
+  geminiApiKey: ""
+
+# -------------------------------------------------------
+# External dependencies
+# -------------------------------------------------------
+
+# -- Qdrant vector database settings
+qdrant:
+  # -- Enable Qdrant integration (also sets storage.vector_backend)
+  enabled: false
+  host: qdrant
+  port: 6333
+  collection: nexus_cache
+  dimension: 1024
+
+# -- Redis KV cache settings
+redis:
+  # -- Enable Redis integration (also sets storage.kv_backend)
+  enabled: false
+  addr: "redis:6379"
+  password: ""
+  db: 0
+
+# -- Ollama embedding model settings
+ollama:
+  # -- Enable Ollama integration for semantic cache
+  enabled: false
+  host: ollama
+  port: 11434
+
+# -------------------------------------------------------
+# Prometheus ServiceMonitor
+# -------------------------------------------------------
+serviceMonitor:
+  # -- Deploy a ServiceMonitor resource (requires prometheus-operator)
+  enabled: false
+  # -- Scrape interval
+  interval: 15s
+  # -- Extra labels for the ServiceMonitor
+  labels: {}
+
+# -------------------------------------------------------
+# TLS
+# -------------------------------------------------------
+tls:
+  # -- Mount a TLS certificate secret into the pod
+  enabled: false
+  # -- Name of the Kubernetes TLS secret
+  certSecret: ""
+
+# -------------------------------------------------------
+# Scheduling
+# -------------------------------------------------------
+# -- Node selector labels
+nodeSelector: {}
+# -- Tolerations
+tolerations: []
+# -- Affinity rules
+affinity: {}
