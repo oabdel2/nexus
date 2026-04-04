@@ -4,127 +4,33 @@ import (
 	"strings"
 )
 
+// defaultRegistry is the package-level synonym registry for dynamic expansion.
+var defaultRegistry *SynonymRegistry
+
+// SetSynonymRegistry sets the global synonym registry for dynamic expansion.
+func SetSynonymRegistry(r *SynonymRegistry) {
+	defaultRegistry = r
+}
+
+// GetSynonymRegistry returns the global synonym registry.
+func GetSynonymRegistry() *SynonymRegistry {
+	return defaultRegistry
+}
+
 // expandSynonyms appends expanded terms to the text for better embedding matching.
 // This handles abbreviations, jargon, and domain-specific terms.
+// Uses the dynamic registry if available, falling back to a static map.
 func expandSynonyms(text string) string {
+	// Use dynamic registry if available
+	if defaultRegistry != nil {
+		return defaultRegistry.Expand(text)
+	}
+
+	// Fallback: static expansion (original behavior)
 	lower := strings.ToLower(text)
 	expanded := lower
 
-	synonyms := map[string]string{
-		// Original entries
-		"k8s":           "kubernetes",
-		"gc":            "garbage collection",
-		"ci/cd":         "continuous integration continuous deployment",
-		"ssl":           "tls https encryption",
-		"tls":           "ssl https encryption",
-		"db":            "database",
-		"postgres":      "postgresql",
-		"js":            "javascript",
-		"ts":            "typescript",
-		"py":            "python",
-		"goroutine":     "go concurrency lightweight thread",
-		"dockerfile":    "docker container image build",
-		"throttling":    "rate limiting",
-		"rate limiting": "throttling",
-		"load balancer": "traffic distribution reverse proxy",
-		"bcrypt":        "password hashing",
-		"jwt":           "json web token authentication",
-		"websocket":     "real-time bidirectional socket connection",
-		"regex":         "regular expression pattern matching",
-		"orm":           "object relational mapping database",
-		"cdn":           "content delivery network caching",
-		"dns":           "domain name system resolution nameserver",
-		"ssh":           "secure shell remote access",
-		"cors":          "cross origin resource sharing",
-		"csrf":          "cross site request forgery",
-		"xss":           "cross site scripting",
-		"api":           "application programming interface endpoint",
-		"sdk":           "software development kit library",
-		"cli":           "command line interface terminal",
-		"gui":           "graphical user interface",
-		"crud":          "create read update delete operations",
-		"mutex":         "mutual exclusion lock synchronization",
-		"env":           "environment variable configuration",
-		"repo":          "repository codebase",
-		"pr":            "pull request code review",
-		"ci":            "continuous integration build test",
-		"cd":            "continuous deployment delivery release",
-		"di":            "dependency injection inversion control",
-		"hashmap":       "hash table dictionary map",
-		"hash map":      "hash table dictionary",
-		"hashtable":     "hash map dictionary",
-		"hash table":    "hash map dictionary",
-		// Go / concurrency
-		"golang":      "go programming language",
-		"goroutines":  "go concurrency lightweight thread",
-		"concurrency": "parallel concurrent goroutine thread",
-		"async":       "asynchronous non-blocking",
-		"await":       "asynchronous promise",
-		// Docker / Kubernetes
-		"helm":    "kubernetes package manager chart",
-		"ingress": "kubernetes networking traffic routing",
-		// Cloud networking
-		"vpc":  "virtual private cloud network",
-		"iam":  "identity access management permissions",
-		"s3":   "simple storage service object bucket aws",
-		"ec2":  "elastic compute cloud instance aws",
-		"rds":  "relational database service aws managed",
-		"sqs":  "simple queue service aws messaging",
-		"sns":  "simple notification service aws pubsub",
-		"ecs":  "elastic container service aws docker",
-		"eks":  "elastic kubernetes service aws",
-		"gke":  "google kubernetes engine gcp",
-		"aks":  "azure kubernetes service",
-		"rbac": "role based access control permissions",
-		"cidr": "classless inter domain routing network subnet",
-		"nat":  "network address translation gateway",
-		"vpn":  "virtual private network tunnel encrypted",
-		"waf":  "web application firewall security",
-		"ddos": "distributed denial of service attack",
-		"mitm": "man in the middle attack security",
-		// Database
-		"sql injection": "sqli database attack vulnerability",
-		"nosql":         "non-relational database document store",
-		"acid":          "atomicity consistency isolation durability transaction",
-		"cap theorem":   "consistency availability partition tolerance distributed",
-		// Architecture patterns
-		"cqrs": "command query responsibility segregation pattern",
-		"ddd":  "domain driven design architecture",
-		// Development methodologies
-		"tdd": "test driven development methodology",
-		"bdd": "behavior driven development testing",
-		"mvp": "minimum viable product lean startup",
-		// Cloud service models
-		"saas": "software as a service cloud",
-		"paas": "platform as a service cloud",
-		"iaas": "infrastructure as a service cloud",
-		"faas": "function as a service serverless",
-		// Data engineering
-		"etl": "extract transform load data pipeline",
-		"elt": "extract load transform data pipeline",
-		"dag": "directed acyclic graph workflow",
-		// AI / ML
-		"ml":  "machine learning artificial intelligence",
-		"nlp": "natural language processing text",
-		"llm": "large language model ai",
-		"rag": "retrieval augmented generation",
-		// Hardware
-		"gpu": "graphics processing unit compute cuda",
-		"cpu": "central processing unit processor",
-		"ssd": "solid state drive storage",
-		// Programming paradigms
-		"oop": "object oriented programming classes",
-		"fp":  "functional programming immutable",
-		"ioc": "inversion of control dependency injection",
-		"aop": "aspect oriented programming cross cutting",
-		// Frontend
-		"spa":  "single page application frontend",
-		"ssr":  "server side rendering",
-		"csr":  "client side rendering",
-		"ssg":  "static site generation",
-		"pwa":  "progressive web app offline",
-		"wasm": "webassembly binary format browser",
-	}
+	synonyms := getBaseSynonyms()
 
 	for k, v := range synonyms {
 		if strings.Contains(lower, k) {
@@ -348,7 +254,14 @@ func getKeyNouns() map[string]bool {
 
 // hasDifferentKeyNoun detects if two prompts refer to different specific technologies,
 // tools, languages, or algorithms. Returns true if they have mutually exclusive key nouns.
+// Uses the dynamic registry if available, falling back to static key nouns.
 func hasDifferentKeyNoun(text1, text2 string) bool {
+	// Use dynamic registry if available
+	if defaultRegistry != nil {
+		return defaultRegistry.HasDifferentKeyNounDynamic(text1, text2)
+	}
+
+	// Fallback: static key nouns (original behavior)
 	w1 := tokenizeWords(text1)
 	w2 := tokenizeWords(text2)
 

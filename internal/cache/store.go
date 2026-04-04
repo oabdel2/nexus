@@ -13,37 +13,47 @@ type Store struct {
 	feedback   *FeedbackStore
 	shadow     *ShadowMode
 	context    *ContextFingerprint
+	registry   *SynonymRegistry
 }
 
 // StoreConfig holds configuration for all cache layers.
 type StoreConfig struct {
-	L1Enabled         bool
-	L1TTL             time.Duration
-	L1MaxEntries      int
-	L2aEnabled        bool // BM25
-	L2aTTL            time.Duration
-	L2aMaxEntries     int
-	L2aThreshold      float64
-	L2bEnabled        bool // Semantic
-	L2bTTL            time.Duration
-	L2bMaxEntries     int
-	L2bThreshold      float64
-	L2bBackend        string // "ollama" or "openai"
-	L2bModel          string // embedding model name
-	L2bEndpoint       string // embedding endpoint URL
-	L2bAPIKey         string // for OpenAI
-	RerankerEnabled   bool
-	RerankerModel     string
-	RerankerEndpoint  string
-	RerankerThreshold float64
-	FeedbackEnabled   bool
-	FeedbackMaxSize   int
-	ShadowEnabled     bool
-	ShadowMaxResults  int
+	L1Enabled             bool
+	L1TTL                 time.Duration
+	L1MaxEntries          int
+	L2aEnabled            bool // BM25
+	L2aTTL                time.Duration
+	L2aMaxEntries         int
+	L2aThreshold          float64
+	L2bEnabled            bool // Semantic
+	L2bTTL                time.Duration
+	L2bMaxEntries         int
+	L2bThreshold          float64
+	L2bBackend            string // "ollama" or "openai"
+	L2bModel              string // embedding model name
+	L2bEndpoint           string // embedding endpoint URL
+	L2bAPIKey             string // for OpenAI
+	RerankerEnabled       bool
+	RerankerModel         string
+	RerankerEndpoint      string
+	RerankerThreshold     float64
+	FeedbackEnabled       bool
+	FeedbackMaxSize       int
+	ShadowEnabled         bool
+	ShadowMaxResults      int
+	SynonymDataDir        string // directory for learned synonym persistence
+	SynonymPromoThreshold int    // confirmations needed (default: 3)
 }
 
 // NewStore creates a Store from a StoreConfig, initializing all enabled layers.
 func NewStore(cfg StoreConfig) *Store {
+	// Initialize synonym registry
+	registry := NewSynonymRegistry(RegistryConfig{
+		DataDir:            cfg.SynonymDataDir,
+		PromotionThreshold: cfg.SynonymPromoThreshold,
+	})
+	SetSynonymRegistry(registry)
+
 	s := &Store{
 		l1Enabled:  cfg.L1Enabled,
 		l2aEnabled: cfg.L2aEnabled,
@@ -51,6 +61,7 @@ func NewStore(cfg StoreConfig) *Store {
 		feedback:   NewFeedbackStore(cfg.FeedbackMaxSize),
 		shadow:     NewShadowMode(cfg.ShadowEnabled, cfg.ShadowMaxResults),
 		context:    NewContextFingerprint(3),
+		registry:   registry,
 	}
 
 	if cfg.L1Enabled {
@@ -161,4 +172,9 @@ func (s *Store) Shadow() *ShadowMode {
 // Context returns the context fingerprint generator.
 func (s *Store) Context() *ContextFingerprint {
 	return s.context
+}
+
+// Registry returns the synonym registry.
+func (s *Store) Registry() *SynonymRegistry {
+	return s.registry
 }

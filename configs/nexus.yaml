@@ -129,6 +129,9 @@ cache:
   shadow:
     enabled: false
     max_results: 1000
+  synonym:
+    data_dir: "./data"
+    promotion_threshold: 3
 
 workflow:
   ttl: 1h

@@ -131,6 +131,13 @@ func (c *SemanticCache) Lookup(prompt, model string) ([]byte, bool) {
 	c.mu.RUnlock()
 
 	if bestIdx < 0 || bestScore < threshold {
+		// Record near-miss for synonym learning
+		if bestIdx >= 0 && bestScore >= 0.55 && defaultRegistry != nil {
+			c.mu.RLock()
+			cachedPrompt := c.entries[bestIdx].prompt
+			c.mu.RUnlock()
+			defaultRegistry.RecordNearMiss(prompt, cachedPrompt, bestScore)
+		}
 		c.mu.Lock()
 		c.misses++
 		c.mu.Unlock()

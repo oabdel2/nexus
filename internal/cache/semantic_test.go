@@ -1867,3 +1867,205 @@ func TestStoreConfigComplete(t *testing.T) {
 		t.Errorf("expected %s, got %s", string(resp), string(data))
 	}
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SYNONYM REGISTRY TESTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+func TestSynonymRegistryBasics(t *testing.T) {
+	tmpDir := t.TempDir()
+	r := NewSynonymRegistry(RegistryConfig{
+		DataDir:            tmpDir,
+		PromotionThreshold: 3,
+		StaleTimeout:       1 * time.Hour,
+		SaveInterval:       1 * time.Hour,
+	})
+	defer r.Stop()
+
+	// Base synonyms should be loaded
+	stats := r.Stats()
+	if stats.BaseSynonyms == 0 {
+		t.Fatal("expected base synonyms to be loaded")
+	}
+	t.Logf("Base synonyms: %d, Key nouns: %d", stats.BaseSynonyms, stats.BaseKeyNouns)
+
+	// Expansion should include base
+	expanded := r.Expand("set up k8s cluster")
+	if !strings.Contains(expanded, "kubernetes") {
+		t.Error("expected k8s expansion to include kubernetes")
+	}
+
+	// Manual add should work
+	r.ManualAdd("nextjs", "next.js react framework ssr")
+	expanded = r.Expand("deploy nextjs app")
+	if !strings.Contains(expanded, "react framework") {
+		t.Error("expected nextjs expansion to include react framework")
+	}
+
+	stats = r.Stats()
+	if stats.LearnedSynonyms != 1 {
+		t.Errorf("expected 1 learned synonym, got %d", stats.LearnedSynonyms)
+	}
+}
+
+func TestSynonymRegistryNearMiss(t *testing.T) {
+	tmpDir := t.TempDir()
+	r := NewSynonymRegistry(RegistryConfig{
+		DataDir:            tmpDir,
+		PromotionThreshold: 3,
+		SaveInterval:       1 * time.Hour,
+	})
+	defer r.Stop()
+
+	// Record near-misses — need 3 confirmations to promote
+	r.RecordNearMiss("explain goroutines in depth", "go concurrency patterns", 0.62)
+	stats := r.Stats()
+	if stats.CandidateSynonyms == 0 {
+		t.Error("expected candidates after near-miss")
+	}
+
+	// Second confirmation
+	r.RecordNearMiss("goroutine lifecycle", "concurrency lifecycle in go", 0.58)
+
+	// Third confirmation — should auto-promote
+	r.RecordNearMiss("goroutine pool pattern", "concurrency pool in go", 0.61)
+
+	// Check that some candidates were promoted
+	candidates := r.GetCandidates()
+	learned := r.GetLearnedSynonyms()
+	t.Logf("After 3 near-misses: %d candidates, %d learned", len(candidates), len(learned))
+}
+
+func TestSynonymRegistryFeedback(t *testing.T) {
+	tmpDir := t.TempDir()
+	r := NewSynonymRegistry(RegistryConfig{
+		DataDir:            tmpDir,
+		PromotionThreshold: 3,
+		SaveInterval:       1 * time.Hour,
+	})
+	defer r.Stop()
+
+	// Feedback counts double — 2 feedbacks should promote (2*2 = 4 >= 3)
+	r.RecordFeedbackMiss("what is dependency injection", "explain DI pattern")
+	r.RecordFeedbackMiss("dependency injection in Spring", "DI framework Spring")
+
+	learned := r.GetLearnedSynonyms()
+	t.Logf("After 2 feedback reports: %d learned synonyms", len(learned))
+}
+
+func TestSynonymRegistryFalsePositive(t *testing.T) {
+	tmpDir := t.TempDir()
+	r := NewSynonymRegistry(RegistryConfig{
+		DataDir:            tmpDir,
+		PromotionThreshold: 3,
+		SaveInterval:       1 * time.Hour,
+	})
+	defer r.Stop()
+
+	before := r.Stats()
+	r.RecordFalsePositive("deploy to AWS Lambda", "deploy to Google Cloud Run")
+	after := r.Stats()
+
+	if after.LearnedKeyNouns <= before.LearnedKeyNouns {
+		t.Error("expected new key nouns from false positive")
+	}
+	t.Logf("New key nouns learned: %d", after.LearnedKeyNouns-before.LearnedKeyNouns)
+}
+
+func TestSynonymRegistryPersistence(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create registry, add data, save
+	r1 := NewSynonymRegistry(RegistryConfig{
+		DataDir:            tmpDir,
+		PromotionThreshold: 3,
+		SaveInterval:       1 * time.Hour,
+	})
+	r1.ManualAdd("testterm", "test expansion value")
+	r1.ManualAddKeyNoun("testnoun")
+	r1.Stop() // triggers final save
+
+	// Create new registry from same directory — should load persisted data
+	r2 := NewSynonymRegistry(RegistryConfig{
+		DataDir:            tmpDir,
+		PromotionThreshold: 3,
+		SaveInterval:       1 * time.Hour,
+	})
+	defer r2.Stop()
+
+	learned := r2.GetLearnedSynonyms()
+	if learned["testterm"] != "test expansion value" {
+		t.Errorf("expected persisted synonym, got: %v", learned)
+	}
+
+	if !r2.IsKeyNounDynamic("testnoun") {
+		t.Error("expected persisted key noun to be loadable")
+	}
+}
+
+func TestSynonymRegistryManualPromote(t *testing.T) {
+	tmpDir := t.TempDir()
+	r := NewSynonymRegistry(RegistryConfig{
+		DataDir:            tmpDir,
+		PromotionThreshold: 10, // high threshold so nothing auto-promotes
+		SaveInterval:       1 * time.Hour,
+	})
+	defer r.Stop()
+
+	r.RecordNearMiss("explain coroutines", "kotlin concurrency", 0.60)
+
+	candidates := r.GetCandidates()
+	if len(candidates) == 0 {
+		t.Fatal("expected at least one candidate")
+	}
+
+	term := candidates[0].Term
+	ok := r.ManualPromote(term)
+	if !ok {
+		t.Errorf("expected successful promotion of %q", term)
+	}
+
+	// Should now be in learned
+	learned := r.GetLearnedSynonyms()
+	if _, exists := learned[term]; !exists {
+		t.Errorf("expected %q in learned synonyms after promotion", term)
+	}
+}
+
+func TestSynonymRegistryExpandFallback(t *testing.T) {
+	// When no global registry is set, expandSynonyms should still work with static map
+	old := defaultRegistry
+	defaultRegistry = nil
+	defer func() { defaultRegistry = old }()
+
+	result := expandSynonyms("set up k8s cluster")
+	if !strings.Contains(result, "kubernetes") {
+		t.Error("expected static fallback to expand k8s to kubernetes")
+	}
+}
+
+func TestSynonymRegistryDynamicKeyNoun(t *testing.T) {
+	tmpDir := t.TempDir()
+	r := NewSynonymRegistry(RegistryConfig{
+		DataDir:            tmpDir,
+		PromotionThreshold: 3,
+		SaveInterval:       1 * time.Hour,
+	})
+	defer r.Stop()
+
+	// Base key nouns should work
+	if !r.IsKeyNounDynamic("python") {
+		t.Error("expected 'python' to be a base key noun")
+	}
+
+	// Add a learned key noun
+	r.ManualAddKeyNoun("fooframework")
+	if !r.IsKeyNounDynamic("fooframework") {
+		t.Error("expected 'fooframework' to be a learned key noun")
+	}
+
+	// HasDifferentKeyNounDynamic should detect differences
+	if !r.HasDifferentKeyNounDynamic("deploy python app", "deploy java app") {
+		t.Error("expected different key nouns for python vs java")
+	}
+}

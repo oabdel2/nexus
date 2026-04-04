@@ -68,6 +68,12 @@ type CacheConfig struct {
 	L2Semantic    L2SemanticConfig `yaml:"l2_semantic"`
 	Feedback      FeedbackConfig `yaml:"feedback"`
 	Shadow        ShadowConfig   `yaml:"shadow"`
+	Synonym       SynonymConfig  `yaml:"synonym"`
+}
+
+type SynonymConfig struct {
+	DataDir            string `yaml:"data_dir"`
+	PromotionThreshold int    `yaml:"promotion_threshold"`
 }
 
 type FeedbackConfig struct {
@@ -217,6 +223,12 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.Cache.L2Semantic.Endpoint == "" {
 		cfg.Cache.L2Semantic.Endpoint = "http://localhost:11434"
+	}
+	if cfg.Cache.Synonym.DataDir == "" {
+		cfg.Cache.Synonym.DataDir = "./data"
+	}
+	if cfg.Cache.Synonym.PromotionThreshold == 0 {
+		cfg.Cache.Synonym.PromotionThreshold = 3
 	}
 	if cfg.Workflow.TTL == 0 {
 		cfg.Workflow.TTL = 1 * time.Hour

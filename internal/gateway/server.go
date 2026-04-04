@@ -66,8 +66,10 @@ func New(cfg *config.Config, logger *slog.Logger) *Server {
 		RerankerThreshold: cfg.Cache.L2Semantic.Reranker.Threshold,
 		FeedbackEnabled:   cfg.Cache.Feedback.Enabled,
 		FeedbackMaxSize:   cfg.Cache.Feedback.MaxSize,
-		ShadowEnabled:     cfg.Cache.Shadow.Enabled,
-		ShadowMaxResults:  cfg.Cache.Shadow.MaxResults,
+		ShadowEnabled:         cfg.Cache.Shadow.Enabled,
+		ShadowMaxResults:      cfg.Cache.Shadow.MaxResults,
+		SynonymDataDir:        cfg.Cache.Synonym.DataDir,
+		SynonymPromoThreshold: cfg.Cache.Synonym.PromotionThreshold,
 	})
 
 	// Init workflow tracker
@@ -120,7 +122,14 @@ func (s *Server) Start(ctx context.Context) error {
 	// Info
 	mux.HandleFunc("/", s.handleInfo)
 
-	s.httpServer = &http.Server{
+	// Synonym admin API
+	mux.HandleFunc("/api/synonyms/stats", s.handleSynonymStats)
+	mux.HandleFunc("/api/synonyms/candidates", s.handleSynonymCandidates)
+	mux.HandleFunc("/api/synonyms/learned", s.handleSynonymLearned)
+	mux.HandleFunc("/api/synonyms/promote", s.handleSynonymPromote)
+	mux.HandleFunc("/api/synonyms/add", s.handleSynonymAdd)
+
+	s.httpServer= &http.Server{
 		Addr:         fmt.Sprintf(":%d", s.cfg.Server.Port),
 		Handler:      mux,
 		ReadTimeout:  s.cfg.Server.ReadTimeout,
@@ -371,4 +380,87 @@ func extractPromptText(messages []provider.Message) string {
 		parts = append(parts, m.Content)
 	}
 	return strings.Join(parts, "\n")
+}
+
+func (s *Server) handleSynonymStats(w http.ResponseWriter, r *http.Request) {
+	registry := s.cache.Registry()
+	if registry == nil {
+		http.Error(w, "synonym registry not enabled", http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(registry.Stats())
+}
+
+func (s *Server) handleSynonymCandidates(w http.ResponseWriter, r *http.Request) {
+	registry := s.cache.Registry()
+	if registry == nil {
+		http.Error(w, "synonym registry not enabled", http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(registry.GetCandidates())
+}
+
+func (s *Server) handleSynonymLearned(w http.ResponseWriter, r *http.Request) {
+	registry := s.cache.Registry()
+	if registry == nil {
+		http.Error(w, "synonym registry not enabled", http.StatusServiceUnavailable)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(registry.GetLearnedSynonyms())
+}
+
+func (s *Server) handleSynonymPromote(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+	registry := s.cache.Registry()
+	if registry == nil {
+		http.Error(w, "synonym registry not enabled", http.StatusServiceUnavailable)
+		return
+	}
+	var req struct {
+		Term string `json:"term"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if registry.ManualPromote(req.Term) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "promoted", "term": req.Term})
+	} else {
+		http.Error(w, "candidate not found", http.StatusNotFound)
+	}
+}
+
+func (s *Server) handleSynonymAdd(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+	registry := s.cache.Registry()
+	if registry == nil {
+		http.Error(w, "synonym registry not enabled", http.StatusServiceUnavailable)
+		return
+	}
+	var req struct {
+		Term      string `json:"term"`
+		Expansion string `json:"expansion"`
+		Type      string `json:"type"` // "synonym" or "key_noun"
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if req.Type == "key_noun" {
+		registry.ManualAddKeyNoun(req.Term)
+	} else {
+		registry.ManualAdd(req.Term, req.Expansion)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "added", "term": req.Term})
 }
