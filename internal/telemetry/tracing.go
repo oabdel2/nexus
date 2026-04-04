@@ -80,8 +80,8 @@ func NewTracer(cfg TracerConfig) *Tracer {
 	if cfg.ServiceName == "" {
 		cfg.ServiceName = "nexus-gateway"
 	}
-	if cfg.SampleRate <= 0 {
-		cfg.SampleRate = 1.0
+	if cfg.SampleRate < 0 {
+		cfg.SampleRate = 0
 	}
 	if cfg.SampleRate > 1.0 {
 		cfg.SampleRate = 1.0

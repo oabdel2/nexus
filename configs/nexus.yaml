@@ -143,6 +143,13 @@ telemetry:
   log_level: info
   log_format: json
 
+tracing:
+  enabled: true
+  service_name: "nexus-gateway"
+  sample_rate: 1.0
+  log_spans: true
+  export_url: ""  # set to http://jaeger:4318/v1/traces for OTLP
+
 security:
   tls:
     enabled: false

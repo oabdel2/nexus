@@ -1,6 +1,7 @@
 package telemetry
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 )
@@ -21,12 +22,13 @@ func TraceMiddleware(tracer *Tracer) func(http.Handler) http.Handler {
 			if tp := r.Header.Get("traceparent"); tp != "" {
 				traceID, parentSpanID, _, ok := ParseTraceparent(tp)
 				if ok {
-					// Create a "virtual" parent span in context to carry trace ID
+					// Inject a virtual parent span into context so StartSpan
+					// picks up the incoming trace-id and parent-span-id.
 					parentSpan := &Span{
 						TraceID: traceID,
 						SpanID:  parentSpanID,
 					}
-					ctx = setSpanInContext(ctx, parentSpan)
+					ctx = context.WithValue(ctx, spanContextKey, parentSpan)
 				}
 			}
 
@@ -57,23 +59,6 @@ func TraceMiddleware(tracer *Tracer) func(http.Handler) http.Handler {
 			tracer.EndSpan(span)
 		})
 	}
-}
-
-// setSpanInContext stores a span in context (used for virtual parent injection).
-func setSpanInContext(ctx interface{ Value(any) any }, span *Span) interface {
-	Value(any) any
-	Deadline() (interface{}, bool)
-	Done() <-chan struct{}
-	Err() error
-} {
-	// We just use the standard context.WithValue here
-	return nil // placeholder — replaced by actual implementation below
-}
-
-// Actually use context.WithValue:
-func init() {
-	// Override at package init to avoid circular reference in the function above.
-	// This is a no-op; the real setSpanInContext is defined below.
 }
 
 // traceStatusWriter captures the HTTP status code written by handlers.

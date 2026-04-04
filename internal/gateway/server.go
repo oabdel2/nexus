@@ -30,6 +30,7 @@ type Server struct {
 	cbPool       *provider.ProviderPool
 	metrics      *telemetry.Metrics
 	costTracker  *telemetry.CostTracker
+	tracer       *telemetry.Tracer
 	Dashboard    *dashboard.EventBus
 	logger       *slog.Logger
 	httpServer   *http.Server
@@ -41,6 +42,13 @@ func New(cfg *config.Config, logger *slog.Logger) *Server {
 		providers:   make(map[string]provider.Provider),
 		metrics:     telemetry.NewMetrics(),
 		costTracker: telemetry.NewCostTracker(),
+		tracer: telemetry.NewTracer(telemetry.TracerConfig{
+			Enabled:     cfg.Tracing.Enabled,
+			ServiceName: cfg.Tracing.ServiceName,
+			SampleRate:  cfg.Tracing.SampleRate,
+			ExportURL:   cfg.Tracing.ExportURL,
+			LogSpans:    cfg.Tracing.LogSpans,
+		}),
 		cbPool: provider.NewProviderPool(provider.CircuitBreakerConfig{
 			FailureThreshold: 5,
 			SuccessThreshold: 2,
@@ -146,6 +154,11 @@ func (s *Server) Start(ctx context.Context) error {
 
 	// Build security middleware chain
 	var middlewares []security.Middleware
+
+	// Tracing: first in chain to capture full request lifecycle
+	if s.cfg.Tracing.Enabled {
+		middlewares = append(middlewares, security.Middleware(telemetry.TraceMiddleware(s.tracer)))
+	}
 
 	// Always: security headers + request ID
 	middlewares = append(middlewares, security.SecurityHeaders())
@@ -289,7 +302,12 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	// Check cache first
 	cacheKey := ""
 	if s.cfg.Cache.Enabled {
+		ctx, cacheSpan := s.tracer.StartSpan(r.Context(), "cache.lookup")
 		if cached, hit, source := s.cache.Lookup(promptText, req.Model); hit {
+			cacheSpan.SetAttribute("cache.hit", "true")
+			cacheSpan.SetAttribute("cache.source", source)
+			s.tracer.EndSpan(cacheSpan)
+
 			s.logger.Info("cache hit",
 				"workflow_id", workflowID,
 				"source", source,
@@ -322,11 +340,20 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 			w.Write(cached)
 			return
 		}
+		cacheSpan.SetAttribute("cache.hit", "false")
+		s.tracer.EndSpan(cacheSpan)
+		r = r.WithContext(ctx)
 		_ = cacheKey
 	}
 
 	// Route the request
+	_, routeSpan := s.tracer.StartSpan(r.Context(), "router.classify")
 	selection := s.router.Route(promptText, agentRole, ws.GetStepRatio(), ws.GetBudgetRatio(), contextLen)
+	routeSpan.SetAttribute("router.tier", selection.Tier)
+	routeSpan.SetAttribute("router.model", selection.Model)
+	routeSpan.SetAttribute("router.provider", selection.Provider)
+	routeSpan.SetAttribute("router.score", fmt.Sprintf("%.4f", selection.Score.FinalScore))
+	s.tracer.EndSpan(routeSpan)
 
 	// Get the provider with circuit breaker check
 	p, ok := s.providers[selection.Provider]
@@ -355,9 +382,17 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Nexus-Tier", selection.Tier)
 		w.Header().Set("X-Nexus-Provider", selection.Provider)
 
+		_, streamSpan := s.tracer.StartSpan(r.Context(), "provider.send")
+		streamSpan.SetAttribute("provider.name", selection.Provider)
+		streamSpan.SetAttribute("provider.model", selection.Model)
+		streamSpan.SetAttribute("provider.stream", "true")
+
 		usage, err := p.SendStream(r.Context(), req, w)
 		latencyMs := time.Since(start).Milliseconds()
 		if err != nil {
+			streamSpan.SetStatus("error")
+			streamSpan.SetAttribute("error", err.Error())
+			s.tracer.EndSpan(streamSpan)
 			s.logger.Error("stream error", "error", err, "provider", selection.Provider)
 			s.health.RecordFailure(selection.Provider, err)
 			if cb := s.cbPool.Get(selection.Provider); cb != nil {
@@ -375,6 +410,10 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 			tokens = usage.TotalTokens
 		}
 		cost := float64(tokens) / 1000.0 * s.router.GetModelCost(selection.Provider, selection.Model)
+
+		streamSpan.SetAttribute("provider.tokens", fmt.Sprintf("%d", tokens))
+		streamSpan.SetAttribute("provider.cost", fmt.Sprintf("%.6f", cost))
+		s.tracer.EndSpan(streamSpan)
 
 		ws.AddStep(workflow.StepRecord{
 			Model:     selection.Model,
@@ -403,6 +442,11 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Non-streaming request with retry
+	_, sendSpan := s.tracer.StartSpan(r.Context(), "provider.send")
+	sendSpan.SetAttribute("provider.name", selection.Provider)
+	sendSpan.SetAttribute("provider.model", selection.Model)
+	sendSpan.SetAttribute("provider.stream", "false")
+
 	var resp *provider.ChatResponse
 	err = provider.RetryWithBackoff(provider.RetryConfig{
 		MaxRetries: 2,
@@ -415,6 +459,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	})
 	latencyMs := time.Since(start).Milliseconds()
 	if err != nil {
+		sendSpan.SetStatus("error")
+		sendSpan.SetAttribute("error", err.Error())
+		s.tracer.EndSpan(sendSpan)
 		s.logger.Error("request error", "error", err, "provider", selection.Provider)
 		s.health.RecordFailure(selection.Provider, err)
 		if cb := s.cbPool.Get(selection.Provider); cb != nil {
@@ -430,6 +477,10 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 	tokens := resp.Usage.TotalTokens
 	cost := float64(tokens) / 1000.0 * s.router.GetModelCost(selection.Provider, selection.Model)
+
+	sendSpan.SetAttribute("provider.tokens", fmt.Sprintf("%d", tokens))
+	sendSpan.SetAttribute("provider.cost", fmt.Sprintf("%.6f", cost))
+	s.tracer.EndSpan(sendSpan)
 
 	// Record step
 	ws.AddStep(workflow.StepRecord{
@@ -457,8 +508,11 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	s.Dashboard.UpdateWorkflow(workflowID, ws.Budget, ws.BudgetLeft, ws.GetBudgetRatio(), ws.CurrentStep, ws.TotalCost)
 
 	// Cache the response
+	_, storeSpan := s.tracer.StartSpan(r.Context(), "cache.store")
 	respBody, _ := json.Marshal(resp)
 	s.cache.StoreResponse(promptText, selection.Model, respBody)
+	storeSpan.SetAttribute("cache.model", selection.Model)
+	s.tracer.EndSpan(storeSpan)
 
 	// Return response with Nexus headers
 	w.Header().Set("Content-Type", "application/json")

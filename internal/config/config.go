@@ -14,6 +14,7 @@ type Config struct {
 	Cache     CacheConfig       `yaml:"cache"`
 	Workflow  WorkflowConfig    `yaml:"workflow"`
 	Telemetry TelemetryConfig   `yaml:"telemetry"`
+	Tracing   TracingConfig     `yaml:"tracing"`
 	Security  SecurityConfig    `yaml:"security"`
 	Storage   StorageYAMLConfig `yaml:"storage"`
 }
@@ -205,6 +206,14 @@ type TelemetryConfig struct {
 	LogFormat      string `yaml:"log_format"` // json, text
 }
 
+type TracingConfig struct {
+	Enabled     bool    `yaml:"enabled"`
+	ServiceName string  `yaml:"service_name"`
+	SampleRate  float64 `yaml:"sample_rate"`
+	ExportURL   string  `yaml:"export_url"`
+	LogSpans    bool    `yaml:"log_spans"`
+}
+
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -319,5 +328,12 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.Telemetry.LogFormat == "" {
 		cfg.Telemetry.LogFormat = "json"
+	}
+	// Tracing defaults
+	if cfg.Tracing.ServiceName == "" {
+		cfg.Tracing.ServiceName = "nexus-gateway"
+	}
+	if cfg.Tracing.SampleRate == 0 {
+		cfg.Tracing.SampleRate = 1.0
 	}
 }
