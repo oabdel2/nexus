@@ -8,15 +8,34 @@ import (
 )
 
 type Config struct {
-	Server    ServerConfig      `yaml:"server"`
-	Providers []ProviderConfig  `yaml:"providers"`
-	Router    RouterConfig      `yaml:"router"`
-	Cache     CacheConfig       `yaml:"cache"`
-	Workflow  WorkflowConfig    `yaml:"workflow"`
-	Telemetry TelemetryConfig   `yaml:"telemetry"`
-	Tracing   TracingConfig     `yaml:"tracing"`
-	Security  SecurityConfig    `yaml:"security"`
-	Storage   StorageYAMLConfig `yaml:"storage"`
+	Server       ServerConfig       `yaml:"server"`
+	Providers    []ProviderConfig   `yaml:"providers"`
+	Router       RouterConfig       `yaml:"router"`
+	Cache        CacheConfig        `yaml:"cache"`
+	Workflow     WorkflowConfig     `yaml:"workflow"`
+	Telemetry    TelemetryConfig    `yaml:"telemetry"`
+	Tracing      TracingConfig      `yaml:"tracing"`
+	Security     SecurityConfig     `yaml:"security"`
+	Storage      StorageYAMLConfig  `yaml:"storage"`
+	Billing      BillingConfig      `yaml:"billing"`
+	Notification NotificationConfig `yaml:"notification"`
+}
+
+type BillingConfig struct {
+	Enabled             bool   `yaml:"enabled"`
+	DataDir             string `yaml:"data_dir"`
+	StripeWebhookSecret string `yaml:"stripe_webhook_secret"`
+	DefaultPlan         string `yaml:"default_plan"`
+}
+
+type NotificationConfig struct {
+	Enabled    bool   `yaml:"enabled"`
+	SMTPHost   string `yaml:"smtp_host"`
+	SMTPPort   int    `yaml:"smtp_port"`
+	SMTPUser   string `yaml:"smtp_user"`
+	SMTPPass   string `yaml:"smtp_password"`
+	FromEmail  string `yaml:"from_email"`
+	FromName   string `yaml:"from_name"`
 }
 
 type SecurityConfig struct {
@@ -335,5 +354,22 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.Tracing.SampleRate == 0 {
 		cfg.Tracing.SampleRate = 1.0
+	}
+	// Billing defaults
+	if cfg.Billing.DataDir == "" {
+		cfg.Billing.DataDir = "./data/billing"
+	}
+	if cfg.Billing.DefaultPlan == "" {
+		cfg.Billing.DefaultPlan = "free"
+	}
+	// Notification defaults
+	if cfg.Notification.SMTPPort == 0 {
+		cfg.Notification.SMTPPort = 587
+	}
+	if cfg.Notification.FromEmail == "" {
+		cfg.Notification.FromEmail = "noreply@nexus-gateway.com"
+	}
+	if cfg.Notification.FromName == "" {
+		cfg.Notification.FromName = "Nexus Gateway"
 	}
 }

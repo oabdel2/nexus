@@ -10,9 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nexus-gateway/nexus/internal/billing"
 	"github.com/nexus-gateway/nexus/internal/cache"
 	"github.com/nexus-gateway/nexus/internal/config"
 	"github.com/nexus-gateway/nexus/internal/dashboard"
+	"github.com/nexus-gateway/nexus/internal/notification"
 	"github.com/nexus-gateway/nexus/internal/provider"
 	"github.com/nexus-gateway/nexus/internal/router"
 	"github.com/nexus-gateway/nexus/internal/security"
@@ -21,19 +23,25 @@ import (
 )
 
 type Server struct {
-	cfg          *config.Config
-	router       *router.Router
-	cache        *cache.Store
-	tracker      *workflow.Tracker
-	providers    map[string]provider.Provider
-	health       *provider.HealthChecker
-	cbPool       *provider.ProviderPool
-	metrics      *telemetry.Metrics
-	costTracker  *telemetry.CostTracker
-	tracer       *telemetry.Tracer
-	Dashboard    *dashboard.EventBus
-	logger       *slog.Logger
-	httpServer   *http.Server
+	cfg           *config.Config
+	router        *router.Router
+	cache         *cache.Store
+	tracker       *workflow.Tracker
+	providers     map[string]provider.Provider
+	health        *provider.HealthChecker
+	cbPool        *provider.ProviderPool
+	metrics       *telemetry.Metrics
+	costTracker   *telemetry.CostTracker
+	tracer        *telemetry.Tracer
+	Dashboard     *dashboard.EventBus
+	logger        *slog.Logger
+	httpServer    *http.Server
+	subStore      *billing.SubscriptionStore
+	keyStore      *billing.APIKeyStore
+	deviceTracker *billing.DeviceTracker
+	notifier      *notification.Notifier
+	eventLog      *notification.EventLog
+	webhookHandler *billing.StripeWebhookHandler
 }
 
 func New(cfg *config.Config, logger *slog.Logger) *Server {
@@ -115,6 +123,27 @@ func New(cfg *config.Config, logger *slog.Logger) *Server {
 	// Init router
 	s.router = router.New(cfg.Router, cfg.Providers, logger)
 
+	// Init billing (if enabled)
+	if cfg.Billing.Enabled {
+		s.eventLog = notification.NewEventLog(cfg.Billing.DataDir)
+		s.notifier = notification.NewNotifier(notification.NotifierConfig{
+			SMTPHost:     cfg.Notification.SMTPHost,
+			SMTPPort:     cfg.Notification.SMTPPort,
+			SMTPUser:     cfg.Notification.SMTPUser,
+			SMTPPassword: cfg.Notification.SMTPPass,
+			FromEmail:    cfg.Notification.FromEmail,
+			FromName:     cfg.Notification.FromName,
+			Enabled:      cfg.Notification.Enabled,
+		}, s.eventLog, logger)
+		s.subStore = billing.NewSubscriptionStore(cfg.Billing.DataDir, logger)
+		s.keyStore = billing.NewAPIKeyStore(cfg.Billing.DataDir, s.subStore, logger)
+		s.deviceTracker = billing.NewDeviceTracker(cfg.Billing.DataDir, logger)
+		s.webhookHandler = billing.NewStripeWebhookHandler(
+			s.subStore, s.keyStore, cfg.Billing.StripeWebhookSecret, logger,
+		)
+		s.subStore.StartLifecycleChecker()
+	}
+
 	return s
 }
 
@@ -152,10 +181,26 @@ func (s *Server) Start(ctx context.Context) error {
 	// Circuit breaker status
 	mux.HandleFunc("/api/circuit-breakers", s.handleCircuitBreakers)
 
+	// Billing endpoints (only registered if billing enabled)
+	if s.cfg.Billing.Enabled {
+		mux.HandleFunc("/webhooks/stripe", s.handleStripeWebhook)
+		mux.HandleFunc("/api/admin/subscriptions", s.handleAdminSubscriptions)
+		mux.HandleFunc("/api/admin/keys/", s.handleAdminKeys)
+		mux.HandleFunc("/api/admin/devices/", s.handleAdminDevices)
+		mux.HandleFunc("/api/keys/generate", s.handleKeyGenerate)
+		mux.HandleFunc("/api/keys/revoke", s.handleKeyRevoke)
+		mux.HandleFunc("/api/usage", s.handleUsage)
+	}
+
 	// Build security middleware chain
 	var middlewares []security.Middleware
 
-	// Tracing: first in chain to capture full request lifecycle
+	// Billing API key auth: first in chain (before other security)
+	if s.cfg.Billing.Enabled {
+		middlewares = append(middlewares, s.billingAuthMiddleware())
+	}
+
+	// Tracing: early in chain to capture full request lifecycle
 	if s.cfg.Tracing.Enabled {
 		middlewares = append(middlewares, security.Middleware(telemetry.TraceMiddleware(s.tracer)))
 	}
@@ -248,6 +293,21 @@ func (s *Server) Start(ctx context.Context) error {
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
+	if s.subStore != nil {
+		s.subStore.Stop()
+	}
+	if s.notifier != nil {
+		s.notifier.Stop()
+	}
+	if s.keyStore != nil {
+		s.keyStore.Save()
+	}
+	if s.deviceTracker != nil {
+		s.deviceTracker.Save()
+	}
+	if s.eventLog != nil {
+		s.eventLog.Save()
+	}
 	return s.httpServer.Shutdown(ctx)
 }
 
@@ -725,4 +785,290 @@ func (s *Server) findFallbackProvider(original router.ModelSelection) (provider.
 func (s *Server) handleCircuitBreakers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(s.cbPool.AllStats())
+}
+
+// billingContextKey is used to store billing info in request context.
+type billingContextKey string
+
+const billingKeyHashCtx billingContextKey = "billing_key_hash"
+const billingUserIDCtx billingContextKey = "billing_user_id"
+
+// billingAuthMiddleware validates API keys on protected routes.
+func (s *Server) billingAuthMiddleware() security.Middleware {
+	skipPaths := map[string]bool{
+		"/health":       true,
+		"/health/live":  true,
+		"/health/ready": true,
+		"/metrics":      true,
+		"/dashboard":    true,
+		"/":             true,
+		"/webhooks/stripe": true,
+	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			path := r.URL.Path
+			if skipPaths[path] || strings.HasPrefix(path, "/dashboard/") {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			auth := r.Header.Get("Authorization")
+			if !strings.HasPrefix(auth, "Bearer nxs_") {
+				// No billing key — let the request through for non-billing auth
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			rawKey := strings.TrimPrefix(auth, "Bearer ")
+			apiKey, err := s.keyStore.ValidateKey(rawKey)
+			if err != nil {
+				if strings.Contains(err.Error(), "subscription") {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusPaymentRequired)
+					json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnauthorized)
+				json.NewEncoder(w).Encode(map[string]string{"error": "invalid API key"})
+				return
+			}
+
+			// Check quota
+			quota := s.keyStore.CheckQuota(apiKey.KeyHash)
+			if !quota.Allowed {
+				w.Header().Set("Content-Type", "application/json")
+				w.Header().Set("X-RateLimit-Remaining", "0")
+				w.Header().Set("X-RateLimit-Reset", quota.ResetAt.Format(time.RFC3339))
+				w.WriteHeader(http.StatusTooManyRequests)
+				json.NewEncoder(w).Encode(map[string]string{
+					"error": "monthly quota exceeded",
+					"reset": quota.ResetAt.Format(time.RFC3339),
+				})
+				return
+			}
+
+			// Check device limit
+			sub, found := s.subStore.Get(apiKey.SubscriptionID)
+			if found {
+				plan, planFound := s.subStore.GetPlan(sub.PlanID)
+				if planFound && plan.MaxDevices > 0 {
+					s.deviceTracker.RecordDevice(apiKey.UserID, r)
+					devResult := s.deviceTracker.CheckDeviceLimit(apiKey.UserID, plan.MaxDevices)
+					if !devResult.Allowed {
+						w.Header().Set("Content-Type", "application/json")
+						w.WriteHeader(http.StatusForbidden)
+						json.NewEncoder(w).Encode(map[string]string{
+							"error": fmt.Sprintf("Device limit reached. Your plan allows %d devices. Upgrade or remove inactive devices.", devResult.Max),
+						})
+						return
+					}
+				} else if planFound {
+					s.deviceTracker.RecordDevice(apiKey.UserID, r)
+				}
+			}
+
+			// Record usage
+			s.keyStore.RecordUsage(apiKey.KeyHash)
+
+			// Store key info in context
+			ctx := context.WithValue(r.Context(), billingKeyHashCtx, apiKey.KeyHash)
+			ctx = context.WithValue(ctx, billingUserIDCtx, apiKey.UserID)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20)) // 1MB limit
+	if err != nil {
+		http.Error(w, "failed to read body", http.StatusBadRequest)
+		return
+	}
+
+	sigHeader := r.Header.Get("Stripe-Signature")
+	if err := billing.VerifyStripeSignature(body, sigHeader, s.cfg.Billing.StripeWebhookSecret); err != nil {
+		s.logger.Warn("stripe webhook signature verification failed", "error", err)
+		http.Error(w, "signature verification failed", http.StatusUnauthorized)
+		return
+	}
+
+	var event billing.StripeEvent
+	if err := json.Unmarshal(body, &event); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if err := s.webhookHandler.HandleEvent(event); err != nil {
+		s.logger.Error("stripe webhook handling failed", "error", err, "event_type", event.Type)
+		http.Error(w, "webhook processing failed", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+func (s *Server) handleAdminSubscriptions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET required", http.StatusMethodNotAllowed)
+		return
+	}
+	subs := s.subStore.ListAll()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(subs)
+}
+
+func (s *Server) handleAdminKeys(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET required", http.StatusMethodNotAllowed)
+		return
+	}
+	userID := strings.TrimPrefix(r.URL.Path, "/api/admin/keys/")
+	if userID == "" {
+		http.Error(w, "user ID required", http.StatusBadRequest)
+		return
+	}
+	keys := s.keyStore.ListByUser(userID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(keys)
+}
+
+func (s *Server) handleAdminDevices(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET required", http.StatusMethodNotAllowed)
+		return
+	}
+	userID := strings.TrimPrefix(r.URL.Path, "/api/admin/devices/")
+	if userID == "" {
+		http.Error(w, "user ID required", http.StatusBadRequest)
+		return
+	}
+	devices := s.deviceTracker.ListByUser(userID)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(devices)
+}
+
+func (s *Server) handleKeyGenerate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		UserID         string   `json:"user_id"`
+		SubscriptionID string   `json:"subscription_id"`
+		Name           string   `json:"name"`
+		Scopes         []string `json:"scopes"`
+		IsTest         bool     `json:"is_test"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Use context user if available
+	if ctxUser, ok := r.Context().Value(billingUserIDCtx).(string); ok && req.UserID == "" {
+		req.UserID = ctxUser
+	}
+
+	if req.UserID == "" || req.SubscriptionID == "" {
+		http.Error(w, "user_id and subscription_id required", http.StatusBadRequest)
+		return
+	}
+
+	key, rawKey, err := s.keyStore.GenerateKey(req.UserID, req.SubscriptionID, req.Name, req.Scopes, req.IsTest)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"key":      rawKey,
+		"key_hash": key.KeyHash,
+		"name":     key.Name,
+		"scopes":   key.Scopes,
+		"message":  "Save this key — it will not be shown again.",
+	})
+}
+
+func (s *Server) handleKeyRevoke(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		KeyHash string `json:"key_hash"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if req.KeyHash == "" {
+		http.Error(w, "key_hash required", http.StatusBadRequest)
+		return
+	}
+
+	// Verify ownership
+	key, found := s.keyStore.GetByHash(req.KeyHash)
+	if !found {
+		http.Error(w, "key not found", http.StatusNotFound)
+		return
+	}
+
+	if ctxUser, ok := r.Context().Value(billingUserIDCtx).(string); ok {
+		if key.UserID != ctxUser {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
+	}
+
+	if err := s.keyStore.RevokeKey(req.KeyHash); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "revoked"})
+}
+
+func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET required", http.StatusMethodNotAllowed)
+		return
+	}
+
+	keyHash, _ := r.Context().Value(billingKeyHashCtx).(string)
+	if keyHash == "" {
+		http.Error(w, "API key required", http.StatusUnauthorized)
+		return
+	}
+
+	key, found := s.keyStore.GetByHash(keyHash)
+	if !found {
+		http.Error(w, "key not found", http.StatusNotFound)
+		return
+	}
+
+	quota := s.keyStore.CheckQuota(keyHash)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"key_prefix":    key.KeyPrefix,
+		"request_count": key.RequestCount,
+		"monthly_usage": key.MonthlyUsage,
+		"monthly_reset": key.MonthlyReset.Format(time.RFC3339),
+		"quota_allowed": quota.Allowed,
+		"quota_remaining": quota.Remaining,
+	})
 }

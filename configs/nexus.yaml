@@ -185,6 +185,21 @@ security:
     allowed_origins: ["*"]
   audit_log: true
 
+billing:
+  enabled: false
+  data_dir: "./data/billing"
+  stripe_webhook_secret: ${STRIPE_WEBHOOK_SECRET}
+  default_plan: "free"
+
+notification:
+  enabled: false
+  smtp_host: ""
+  smtp_port: 587
+  smtp_user: ""
+  smtp_password: ""
+  from_email: "noreply@nexus-gateway.com"
+  from_name: "Nexus Gateway"
+
 storage:
   vector_backend: "memory"
   kv_backend: "memory"
