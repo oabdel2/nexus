@@ -1,0 +1,193 @@
+# Nexus Enterprise Configuration
+# Used with docker-compose.enterprise.yml for production deployments.
+
+server:
+  port: 8080
+  read_timeout: 30s
+  write_timeout: 120s
+
+providers:
+  - name: copilot
+    type: openai
+    base_url: https://api.githubcopilot.com
+    api_key: ${GITHUB_COPILOT_TOKEN}
+    enabled: true
+    priority: 1
+    headers:
+      Editor-Version: "vscode/1.96.0"
+      Copilot-Integration-Id: "vscode-chat"
+    models:
+      - name: gpt-4.1
+        tier: economy
+        cost_per_1k_tokens: 0.001
+        max_tokens: 16384
+      - name: gpt-4.1
+        tier: cheap
+        cost_per_1k_tokens: 0.002
+        max_tokens: 32768
+      - name: gpt-4.1
+        tier: mid
+        cost_per_1k_tokens: 0.002
+        max_tokens: 32768
+      - name: claude-sonnet-4
+        tier: premium
+        cost_per_1k_tokens: 0.003
+        max_tokens: 64000
+
+  - name: openai
+    type: openai
+    base_url: https://api.openai.com/v1
+    api_key: ${OPENAI_API_KEY}
+    enabled: false
+    priority: 2
+    models:
+      - name: gpt-4o-mini
+        tier: cheap
+        cost_per_1k_tokens: 0.00015
+        max_tokens: 16384
+      - name: gpt-4o
+        tier: mid
+        cost_per_1k_tokens: 0.005
+        max_tokens: 16384
+      - name: o3
+        tier: premium
+        cost_per_1k_tokens: 0.01
+        max_tokens: 100000
+
+  - name: anthropic
+    type: anthropic
+    base_url: https://api.anthropic.com/v1
+    api_key: ${ANTHROPIC_API_KEY}
+    enabled: false
+    priority: 3
+    models:
+      - name: claude-haiku-4
+        tier: cheap
+        cost_per_1k_tokens: 0.0008
+        max_tokens: 8192
+      - name: claude-sonnet-4
+        tier: mid
+        cost_per_1k_tokens: 0.003
+        max_tokens: 64000
+      - name: claude-opus-4
+        tier: premium
+        cost_per_1k_tokens: 0.015
+        max_tokens: 200000
+
+  - name: ollama
+    type: ollama
+    base_url: http://ollama:11434/v1
+    enabled: false
+    priority: 4
+    models:
+      - name: llama3.1
+        tier: cheap
+        cost_per_1k_tokens: 0.0
+        max_tokens: 8192
+
+router:
+  threshold: 0.7
+  default_tier: mid
+  budget_enabled: true
+  default_budget: 1.0
+  complexity_weights:
+    prompt_complexity: 0.30
+    context_length: 0.15
+    agent_role: 0.20
+    step_position: 0.15
+    budget_pressure: 0.20
+
+cache:
+  enabled: true
+  l1_enabled: true
+  l2_enabled: true
+  ttl: 1h
+  max_entries: 10000
+  similarity_min: 0.95
+  l1:
+    enabled: true
+    ttl: 15m
+    max_entries: 10000
+  l2_bm25:
+    enabled: true
+    ttl: 1h
+    max_entries: 50000
+    threshold: 15.0
+  l2_semantic:
+    enabled: true
+    ttl: 1h
+    max_entries: 50000
+    threshold: 0.70
+    backend: "ollama"
+    model: "bge-m3"
+    endpoint: "http://ollama:11434"
+    reranker:
+      enabled: false
+      model: "bge-reranker-v2-m3"
+      endpoint: "http://ollama:11434"
+      threshold: 0.5
+  feedback:
+    enabled: true
+    max_size: 10000
+  shadow:
+    enabled: false
+    max_results: 1000
+  synonym:
+    data_dir: "./data"
+    promotion_threshold: 3
+
+workflow:
+  ttl: 1h
+  max_steps: 100
+
+telemetry:
+  metrics_enabled: true
+  metrics_port: 9090
+  log_level: info
+  log_format: json
+
+security:
+  tls:
+    enabled: true
+    cert_file: "/etc/nexus/certs/server.crt"
+    key_file: "/etc/nexus/certs/server.key"
+    ca_file: ""
+    min_version: "1.2"
+    mutual_tls: false
+  prompt_guard:
+    enabled: true
+    mode: "block"
+    max_prompt_length: 32000
+  oidc:
+    enabled: false
+    issuer: ""
+    client_id: ""
+    client_secret: ""
+    allowed_domains: []
+  rbac:
+    enabled: false
+    roles:
+      admin:
+        permissions: ["chat", "admin", "synonyms:read", "synonyms:write", "dashboard", "feedback"]
+      user:
+        permissions: ["chat", "feedback"]
+      viewer:
+        permissions: ["dashboard", "synonyms:read"]
+  rate_limit:
+    enabled: true
+    default_rpm: 120
+    burst_size: 20
+  cors:
+    allowed_origins: ["*"]
+  audit_log: true
+
+storage:
+  vector_backend: "qdrant"
+  kv_backend: "redis"
+  qdrant_host: "qdrant"
+  qdrant_port: 6333
+  qdrant_collection: "nexus_cache"
+  qdrant_dimension: 1024
+  redis_addr: "redis:6379"
+  redis_password: ""
+  redis_db: 0

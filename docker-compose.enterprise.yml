@@ -1,0 +1,251 @@
+# Nexus Enterprise Stack
+# Production-ready deployment with Qdrant, Redis, Ollama, Prometheus, and Grafana.
+#
+# Quick start:
+#   ./scripts/enterprise-init.sh
+#
+# Manual start:
+#   docker compose -f docker-compose.enterprise.yml up -d
+
+services:
+  # ── Nexus Gateway ──────────────────────────────────────────────────────
+  nexus:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nexus-gateway
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./configs/nexus.enterprise.yaml:/etc/nexus/nexus.yaml:ro
+      - ./certs:/etc/nexus/certs:ro
+    environment:
+      - NEXUS_CONFIG=/etc/nexus/nexus.yaml
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - COHERE_API_KEY=${COHERE_API_KEY:-}
+      - GITHUB_COPILOT_TOKEN=${GITHUB_COPILOT_TOKEN:-}
+    networks:
+      - nexus-enterprise
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      start_period: 15s
+      retries: 5
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+    restart: unless-stopped
+
+  # ── Qdrant — Vector Database ───────────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: nexus-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    networks:
+      - nexus-enterprise
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:6333/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "0.25"
+          memory: 512M
+    restart: unless-stopped
+
+  # ── Redis — Key/Value Cache ────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: nexus-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: >
+      sh -c '
+        if [ -n "$REDIS_PASSWORD" ]; then
+          redis-server --appendonly yes --requirepass "$REDIS_PASSWORD"
+        else
+          redis-server --appendonly yes
+        fi
+      '
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+    networks:
+      - nexus-enterprise
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      start_period: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+    restart: unless-stopped
+
+  # ── Ollama — Embedding Model Server ────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: nexus-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - nexus-enterprise
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:11434/api/version || exit 1"]
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 4G
+        reservations:
+          cpus: "1.0"
+          memory: 1G
+    restart: unless-stopped
+
+  # ── Ollama Init — Pull BGE-M3 embedding model on first startup ────────
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: nexus-ollama-init
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Waiting for Ollama to be ready..."
+        until curl -sf http://ollama:11434/api/version > /dev/null 2>&1; do
+          echo "  Ollama not ready yet, retrying in 3s..."
+          sleep 3
+        done
+        echo "Ollama is up. Checking for bge-m3 model..."
+        if curl -sf http://ollama:11434/api/tags | grep -q "bge-m3"; then
+          echo "bge-m3 model already present, skipping pull."
+        else
+          echo "Pulling bge-m3 model (this may take a few minutes on first run)..."
+          curl -sf http://ollama:11434/api/pull -d '{"name":"bge-m3"}' | while read -r line; do
+            echo "  $line"
+          done
+          echo "bge-m3 model pull complete."
+        fi
+    networks:
+      - nexus-enterprise
+    depends_on:
+      ollama:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    restart: "no"
+
+  # ── Prometheus — Metrics ───────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: nexus-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - nexus-enterprise
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    depends_on:
+      nexus:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.1"
+          memory: 256M
+    restart: unless-stopped
+
+  # ── Grafana — Dashboards ───────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    container_name: nexus-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-nexus}
+    networks:
+      - nexus-enterprise
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+    restart: unless-stopped
+
+networks:
+  nexus-enterprise:
+    driver: bridge
+
+volumes:
+  qdrant-data:
+  redis-data:
+  ollama-data:
+  prometheus-data:
+  grafana-data:

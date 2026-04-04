@@ -113,6 +113,8 @@ func (s *Server) Start(ctx context.Context) error {
 
 	// Health & metrics
 	mux.HandleFunc("/health", s.handleHealth)
+	mux.HandleFunc("/health/live", s.handleLiveness)
+	mux.HandleFunc("/health/ready", s.handleReadiness)
 	mux.HandleFunc("/metrics", s.metrics.Handler())
 
 	// Dashboard
@@ -434,6 +436,65 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{
 		"status":    "ok",
 		"providers": status,
+	})
+}
+
+func (s *Server) handleLiveness(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"status": "ok",
+	})
+}
+
+func (s *Server) handleReadiness(w http.ResponseWriter, r *http.Request) {
+	checks := map[string]any{}
+	ready := true
+
+	// Check: at least one provider configured
+	providerCount := len(s.providers)
+	providerOK := providerCount > 0
+	checks["providers"] = map[string]any{
+		"ok":    providerOK,
+		"count": providerCount,
+	}
+	if !providerOK {
+		ready = false
+	}
+
+	// Check: cache initialized (if enabled)
+	if s.cfg.Cache.Enabled {
+		cacheOK := s.cache != nil
+		checks["cache"] = map[string]any{
+			"ok":      cacheOK,
+			"enabled": true,
+		}
+		if !cacheOK {
+			ready = false
+		}
+	} else {
+		checks["cache"] = map[string]any{
+			"ok":      true,
+			"enabled": false,
+		}
+	}
+
+	// Check: server is accepting connections (if we got here, it is)
+	checks["server"] = map[string]any{
+		"ok": true,
+	}
+
+	status := "ok"
+	statusCode := http.StatusOK
+	if !ready {
+		status = "not_ready"
+		statusCode = http.StatusServiceUnavailable
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(map[string]any{
+		"status": status,
+		"checks": checks,
 	})
 }
 

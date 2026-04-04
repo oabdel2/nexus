@@ -1,0 +1,117 @@
+version: 2
+
+project_name: nexus
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: nexus
+    main: ./cmd/nexus/
+    binary: nexus
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+
+archives:
+  - id: default
+    format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - configs/nexus.yaml
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: 'checksums.txt'
+  algorithm: sha256
+
+signs:
+  - cmd: cosign
+    env:
+      - COSIGN_EXPERIMENTAL=1
+    certificate: '${artifact}.pem'
+    args:
+      - sign-blob
+      - '--output-certificate=${certificate}'
+      - '--output-signature=${signature}'
+      - '${artifact}'
+      - '--yes'
+    artifacts: checksum
+    output: true
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+      - '^chore:'
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: Bug Fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Performance
+      regexp: '^.*?perf(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Others
+      order: 999
+
+dockers:
+  - image_templates:
+      - "ghcr.io/nexus-gateway/nexus:{{ .Version }}-amd64"
+    use: buildx
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--build-arg=VERSION={{ .Version }}"
+      - "--build-arg=COMMIT={{ .Commit }}"
+      - "--build-arg=BUILD_DATE={{ .Date }}"
+  - image_templates:
+      - "ghcr.io/nexus-gateway/nexus:{{ .Version }}-arm64"
+    use: buildx
+    goarch: arm64
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--build-arg=VERSION={{ .Version }}"
+      - "--build-arg=COMMIT={{ .Commit }}"
+      - "--build-arg=BUILD_DATE={{ .Date }}"
+
+docker_manifests:
+  - name_template: "ghcr.io/nexus-gateway/nexus:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/nexus-gateway/nexus:{{ .Version }}-amd64"
+      - "ghcr.io/nexus-gateway/nexus:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/nexus-gateway/nexus:latest"
+    image_templates:
+      - "ghcr.io/nexus-gateway/nexus:{{ .Version }}-amd64"
+      - "ghcr.io/nexus-gateway/nexus:{{ .Version }}-arm64"
+
+release:
+  github:
+    owner: nexus-gateway
+    name: nexus
+  draft: false
+  prerelease: auto
+  name_template: "{{ .ProjectName }} v{{ .Version }}"
