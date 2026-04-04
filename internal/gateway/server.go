@@ -44,8 +44,31 @@ func New(cfg *config.Config, logger *slog.Logger) *Server {
 	}
 
 	// Init cache
-	exactCache := cache.NewExactCache(cfg.Cache.TTL, cfg.Cache.MaxEntries)
-	s.cache = cache.NewStore(exactCache, cfg.Cache.L1Enabled)
+	s.cache = cache.NewStore(cache.StoreConfig{
+		L1Enabled:         cfg.Cache.L1Enabled || cfg.Cache.L1.Enabled,
+		L1TTL:             cfg.Cache.L1.TTL,
+		L1MaxEntries:      cfg.Cache.L1.MaxEntries,
+		L2aEnabled:        cfg.Cache.L2BM25.Enabled,
+		L2aTTL:            cfg.Cache.L2BM25.TTL,
+		L2aMaxEntries:     cfg.Cache.L2BM25.MaxEntries,
+		L2aThreshold:      cfg.Cache.L2BM25.Threshold,
+		L2bEnabled:        cfg.Cache.L2Semantic.Enabled,
+		L2bTTL:            cfg.Cache.L2Semantic.TTL,
+		L2bMaxEntries:     cfg.Cache.L2Semantic.MaxEntries,
+		L2bThreshold:      cfg.Cache.L2Semantic.Threshold,
+		L2bBackend:        cfg.Cache.L2Semantic.Backend,
+		L2bModel:          cfg.Cache.L2Semantic.Model,
+		L2bEndpoint:       cfg.Cache.L2Semantic.Endpoint,
+		L2bAPIKey:         cfg.Cache.L2Semantic.APIKey,
+		RerankerEnabled:   cfg.Cache.L2Semantic.Reranker.Enabled,
+		RerankerModel:     cfg.Cache.L2Semantic.Reranker.Model,
+		RerankerEndpoint:  cfg.Cache.L2Semantic.Reranker.Endpoint,
+		RerankerThreshold: cfg.Cache.L2Semantic.Reranker.Threshold,
+		FeedbackEnabled:   cfg.Cache.Feedback.Enabled,
+		FeedbackMaxSize:   cfg.Cache.Feedback.MaxSize,
+		ShadowEnabled:     cfg.Cache.Shadow.Enabled,
+		ShadowMaxResults:  cfg.Cache.Shadow.MaxResults,
+	})
 
 	// Init workflow tracker
 	s.tracker = workflow.NewTracker(cfg.Router.DefaultBudget, cfg.Workflow.TTL)

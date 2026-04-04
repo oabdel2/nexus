@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nexus Playground — AI Inference Optimization</title>
 <style>
-/* ── CSS Custom Properties ── */
 :root {
   --bg: #0a0a0b;
   --card: #111113;
@@ -23,6 +22,7 @@
   --radius: 12px;
   --radius-sm: 8px;
   --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+  --mono: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
   --gradient: linear-gradient(135deg, var(--accent-blue), var(--accent-purple), var(--accent-pink));
   --nav-height: 60px;
 }
@@ -69,7 +69,7 @@ a { color: inherit; text-decoration: none; }
 .nav-github { display: flex; align-items: center; gap: .35rem; }
 .nav-github svg { width: 18px; height: 18px; fill: currentColor; }
 
-/* ── Hero Header ── */
+/* ── Hero ── */
 .hero {
   text-align: center;
   padding: 3rem 1.5rem 2rem;
@@ -84,7 +84,7 @@ a { color: inherit; text-decoration: none; }
   color: var(--text-muted); font-size: clamp(.9rem, 2vw, 1.05rem);
 }
 
-/* ── Main Layout ── */
+/* ── Layout ── */
 .playground {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -97,19 +97,20 @@ a { color: inherit; text-decoration: none; }
   .playground { grid-template-columns: 1fr; }
 }
 
-/* ── Panels ── */
+/* ── Panel ── */
 .panel {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1.5rem;
+  transition: box-shadow .5s;
 }
 .panel-title {
   font-size: .8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em;
   color: var(--text-muted); margin-bottom: 1rem;
 }
 
-/* ── Input Panel ── */
+/* ── Input ── */
 .prompt-area {
   width: 100%; min-height: 140px; resize: vertical;
   background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
@@ -142,7 +143,6 @@ a { color: inherit; text-decoration: none; }
 }
 .control-group select:focus { outline: none; border-color: var(--accent-purple); }
 
-/* Analyze button */
 .btn-analyze {
   display: block; width: 100%; margin-top: 1.25rem;
   padding: .8rem; border: none; border-radius: var(--radius-sm);
@@ -159,37 +159,35 @@ a { color: inherit; text-decoration: none; }
 }
 @keyframes ripple-anim { to { transform: scale(4); opacity: 0; } }
 
-/* Example prompts */
 .examples-title {
   font-size: .75rem; font-weight: 600; text-transform: uppercase;
   letter-spacing: .08em; color: var(--text-dim); margin-top: 1.5rem; margin-bottom: .65rem;
 }
-.examples {
-  display: flex; flex-wrap: wrap; gap: .45rem;
-}
+.examples { display: flex; flex-wrap: wrap; gap: .45rem; }
 .example-chip {
   padding: .35rem .7rem; border-radius: 100px;
   background: var(--bg); border: 1px solid var(--border);
   font-size: .78rem; color: var(--text-muted); cursor: pointer;
   transition: border-color .2s, color .2s, background .2s;
   white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+  font-family: var(--font);
 }
 .example-chip:hover { border-color: var(--accent-purple); color: var(--text); background: rgba(139,92,246,.08); }
 
-/* ── Results Panel ── */
+/* ── Results ── */
 .results-empty {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   min-height: 400px; text-align: center; color: var(--text-dim);
 }
 .results-empty svg { width: 56px; height: 56px; margin-bottom: 1rem; opacity: .35; }
 .results-empty p { font-size: .95rem; max-width: 280px; }
-
 .results-content { display: none; }
 .results-content.visible { display: block; }
 
 /* Gauge */
 .gauge-wrap { display: flex; flex-direction: column; align-items: center; margin-bottom: 1.5rem; }
 .gauge-svg { width: 200px; height: 120px; }
+@media (max-width: 480px) { .gauge-svg { width: 160px; height: 96px; } }
 .gauge-score {
   font-size: 2.5rem; font-weight: 800; letter-spacing: -.03em;
   margin-top: -.2rem;
@@ -202,9 +200,10 @@ a { color: inherit; text-decoration: none; }
 /* Breakdown */
 .breakdown { margin-bottom: 1.5rem; }
 .breakdown-row {
-  display: grid; grid-template-columns: 140px 1fr 50px; align-items: center; gap: .6rem;
+  display: grid; grid-template-columns: 150px 1fr 50px; align-items: center; gap: .6rem;
   margin-bottom: .55rem;
 }
+@media (max-width: 480px) { .breakdown-row { grid-template-columns: 120px 1fr 40px; } }
 .breakdown-label { font-size: .78rem; color: var(--text-muted); }
 .breakdown-bar-bg {
   height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden;
@@ -222,34 +221,26 @@ a { color: inherit; text-decoration: none; }
   position: relative; overflow: hidden;
   transition: border-color .4s, box-shadow .4s;
   opacity: 0; transform: translateY(8px);
-  animation: none;
 }
-.tier-card.reveal {
-  animation: card-reveal .5s ease forwards;
-}
+.tier-card.reveal { animation: card-reveal .5s ease forwards; }
 @keyframes card-reveal { to { opacity: 1; transform: translateY(0); } }
 .tier-card .glow {
-  position: absolute; inset: 0; opacity: .06; pointer-events: none;
-  border-radius: inherit;
+  position: absolute; inset: 0; opacity: .06; pointer-events: none; border-radius: inherit;
 }
 .tier-name { font-size: 1.1rem; font-weight: 700; margin-bottom: .4rem; }
-.tier-models { font-size: .82rem; color: var(--text-muted); }
-.tier-models span { display: inline-block; margin-right: .75rem; }
+.tier-models { font-size: .82rem; color: var(--text-muted); line-height: 1.7; }
 .tier-models code {
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
-  font-size: .78rem; padding: .1rem .35rem; border-radius: 4px;
-  background: rgba(255,255,255,.05);
+  font-family: var(--mono); font-size: .78rem; padding: .1rem .35rem;
+  border-radius: 4px; background: rgba(255,255,255,.05);
 }
 
-/* Cost Comparison */
+/* Cost */
 .cost-section { margin-bottom: 1.25rem; }
 .cost-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: .75rem;
-  margin-bottom: .75rem;
+  display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; margin-bottom: .75rem;
 }
 .cost-box {
-  background: var(--bg); border-radius: var(--radius-sm); padding: .85rem;
-  text-align: center;
+  background: var(--bg); border-radius: var(--radius-sm); padding: .85rem; text-align: center;
 }
 .cost-box-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-dim); margin-bottom: .25rem; }
 .cost-box-value { font-size: 1.35rem; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -264,21 +255,18 @@ a { color: inherit; text-decoration: none; }
 .request-preview {
   background: var(--bg); border-radius: var(--radius-sm);
   padding: 1rem; overflow-x: auto;
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
-  font-size: .78rem; line-height: 1.65; color: var(--text-muted);
-  border: 1px solid var(--border);
-  margin-bottom: 1.25rem;
+  font-family: var(--mono); font-size: .78rem; line-height: 1.65;
+  color: var(--text-muted); border: 1px solid var(--border); margin-bottom: 1.25rem;
 }
 .request-preview .kw { color: var(--accent-blue); }
 .request-preview .str { color: var(--green); }
 .request-preview .hd { color: var(--accent-purple); }
 
-/* How Scoring Works */
+/* How scoring works */
 .scoring-toggle {
   display: flex; align-items: center; gap: .45rem;
   font-size: .8rem; color: var(--text-dim); cursor: pointer;
-  background: none; border: none; font-family: var(--font);
-  padding: .35rem 0;
+  background: none; border: none; font-family: var(--font); padding: .35rem 0;
 }
 .scoring-toggle:hover { color: var(--text-muted); }
 .scoring-toggle svg { width: 14px; height: 14px; transition: transform .25s; fill: currentColor; }
@@ -287,21 +275,16 @@ a { color: inherit; text-decoration: none; }
   max-height: 0; overflow: hidden; transition: max-height .35s ease;
   font-size: .8rem; color: var(--text-dim); line-height: 1.7;
 }
-.scoring-detail.open { max-height: 500px; }
+.scoring-detail.open { max-height: 600px; }
 .scoring-detail p { margin: .5rem 0; }
 .scoring-detail code {
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
-  background: rgba(255,255,255,.05); padding: .1rem .3rem; border-radius: 3px;
-  font-size: .76rem;
+  font-family: var(--mono); background: rgba(255,255,255,.05);
+  padding: .1rem .3rem; border-radius: 3px; font-size: .76rem;
 }
-
-/* ── Utility ── */
-.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
 </style>
 </head>
 <body>
 
-<!-- ── Navbar ── -->
 <nav class="navbar">
   <a href="index.html" class="nav-logo">Nexus</a>
   <div class="nav-links">
@@ -320,19 +303,18 @@ a { color: inherit; text-decoration: none; }
   </div>
 </nav>
 
-<!-- ── Hero ── -->
 <header class="hero">
   <h1>Nexus Playground</h1>
   <p>See how Nexus would route your prompts in real-time. No backend required — the classifier runs entirely in your browser.</p>
 </header>
 
-<!-- ── Playground Grid ── -->
 <main class="playground">
 
-  <!-- ── Input Panel ── -->
+  <!-- Input Panel -->
   <section class="panel" id="inputPanel">
     <div class="panel-title">Input</div>
-    <textarea id="promptInput" class="prompt-area" placeholder="Enter a prompt to analyze… Try asking something simple like 'What is 2+2?' or something complex like 'Design a distributed microservice architecture with event sourcing'"></textarea>
+    <textarea id="promptInput" class="prompt-area"
+      placeholder="Enter a prompt to analyze… Try asking something simple like 'What is 2+2?' or something complex like 'Design a distributed microservice architecture with event sourcing'"></textarea>
     <div class="char-count"><span id="charCount">0</span> characters</div>
 
     <div class="controls">
@@ -351,71 +333,63 @@ a { color: inherit; text-decoration: none; }
         <label for="stepSelect">Step Number</label>
         <select id="stepSelect">
           <option value="1" selected>1</option>
-          <option value="2">2</option>
-          <option value="3">3</option>
-          <option value="4">4</option>
-          <option value="5">5</option>
-          <option value="6">6</option>
-          <option value="7">7</option>
-          <option value="8">8</option>
-          <option value="9">9</option>
+          <option value="2">2</option><option value="3">3</option>
+          <option value="4">4</option><option value="5">5</option>
+          <option value="6">6</option><option value="7">7</option>
+          <option value="8">8</option><option value="9">9</option>
           <option value="10">10</option>
         </select>
       </div>
       <div class="control-group">
         <label for="budgetSelect">Budget Remaining</label>
         <select id="budgetSelect">
-          <option value="100" selected>100%</option>
-          <option value="75">75%</option>
-          <option value="50">50%</option>
-          <option value="25">25%</option>
-          <option value="15">15%</option>
-          <option value="5">5%</option>
+          <option value="100" selected>100 %</option>
+          <option value="75">75 %</option>
+          <option value="50">50 %</option>
+          <option value="25">25 %</option>
+          <option value="15">15 %</option>
+          <option value="5">5 %</option>
         </select>
       </div>
     </div>
 
-    <button class="btn-analyze" id="analyzeBtn" onclick="runAnalysis()">
-      Analyze Prompt
-    </button>
+    <button class="btn-analyze" id="analyzeBtn" onclick="runAnalysis()">Analyze Prompt</button>
 
     <div class="examples-title">Example Prompts</div>
     <div class="examples" id="examplesWrap"></div>
   </section>
 
-  <!-- ── Results Panel ── -->
+  <!-- Results Panel -->
   <section class="panel" id="resultsPanel">
     <div class="panel-title">Results</div>
 
-    <!-- Empty State -->
     <div class="results-empty" id="resultsEmpty">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+           stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="10"/>
         <path d="M12 6v6l4 2"/>
       </svg>
       <p>Enter a prompt and click <strong>Analyze</strong> to see how Nexus would route it.</p>
     </div>
 
-    <!-- Filled State -->
     <div class="results-content" id="resultsContent">
 
       <!-- Gauge -->
       <div class="gauge-wrap">
         <svg class="gauge-svg" viewBox="0 0 200 120">
           <defs>
-            <linearGradient id="gaugeGrad" x1="0" y1="0" x2="1" y2="0">
+            <linearGradient id="gG" x1="0" y1="0" x2="1" y2="0">
               <stop offset="0%" stop-color="var(--green)"/>
               <stop offset="35%" stop-color="var(--yellow)"/>
               <stop offset="65%" stop-color="var(--orange)"/>
               <stop offset="100%" stop-color="var(--red)"/>
             </linearGradient>
           </defs>
-          <!-- track -->
-          <path d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke="#1e1e22" stroke-width="14" stroke-linecap="round"/>
-          <!-- value arc -->
-          <path id="gaugeArc" d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke="url(#gaugeGrad)" stroke-width="14" stroke-linecap="round"
+          <path d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke="#1e1e22"
+                stroke-width="14" stroke-linecap="round"/>
+          <path id="gaugeArc" d="M20 100 A80 80 0 0 1 180 100" fill="none"
+                stroke="url(#gG)" stroke-width="14" stroke-linecap="round"
                 stroke-dasharray="251.33" stroke-dashoffset="251.33"/>
-          <!-- needle dot -->
           <circle id="gaugeDot" cx="20" cy="100" r="7" fill="#fff" opacity="0"/>
         </svg>
         <div class="gauge-score" id="gaugeScore">—</div>
@@ -434,7 +408,7 @@ a { color: inherit; text-decoration: none; }
         <div class="tier-models" id="tierModels"></div>
       </div>
 
-      <!-- Cost Comparison -->
+      <!-- Cost -->
       <div class="cost-section">
         <div class="panel-title" style="margin-bottom:.75rem">Cost Comparison</div>
         <div class="cost-grid">
@@ -463,13 +437,14 @@ a { color: inherit; text-decoration: none; }
         How scoring works
       </button>
       <div class="scoring-detail" id="scoringDetail">
-        <p>Nexus computes a <strong>complexity score</strong> from 0.0 to 1.0 using five weighted signals:</p>
-        <p><code>score = keyword×0.30 + length×0.15 + role×0.20 + structure×0.15 + budget×0.20</code></p>
-        <p><strong>Keyword Score</strong> — matches the prompt against high-complexity keywords (analyze, architect, security…), medium keywords (compare, explain…) and low keywords (list, hello…).</p>
-        <p><strong>Length Score</strong> — longer prompts generally require more capable models. &lt;50 chars → 0.1, &lt;200 → 0.3, &lt;500 → 0.6, &lt;1000 → 0.8, else 1.0.</p>
+        <p>Nexus computes a <strong>complexity score</strong> from 0.0 to 1.0 using six weighted signals:</p>
+        <p><code>score = keyword×0.30 + length×0.15 + role×0.15 + structure×0.15 + budget×0.10 + density×0.15</code></p>
+        <p><strong>Keyword Score</strong> — matches the prompt against high-complexity keywords (analyze, architect, security…), medium keywords (compare, explain, summarize…) and low keywords (list, hello…). A density bonus rewards prompts with many keyword matches.</p>
+        <p><strong>Length Score</strong> — longer prompts generally require more capable models. &lt;20 chars → 0.05, &lt;50 → 0.15, &lt;200 → 0.3, &lt;500 → 0.6, &lt;1000 → 0.8, else 1.0.</p>
         <p><strong>Role Weight</strong> — different roles have different baseline complexity. Security analysts (0.9) and architects (0.85) skew higher; support (0.3) skews lower.</p>
-        <p><strong>Structure Score</strong> — detects bullet points, code blocks, multi-line content, and complex punctuation.</p>
+        <p><strong>Structure Score</strong> — detects bullet points, code blocks, multi-line content, multiple clauses, and complex punctuation.</p>
         <p><strong>Budget Pressure</strong> — as budget depletes, pressure to use cheaper models rises: <code>1.0 − (remaining / 100)</code>.</p>
+        <p><strong>Keyword Density</strong> — bonus for prompts matching many complexity-indicating keywords: <code>min((highMatches + medMatches×0.5) / 3, 1.0)</code>.</p>
         <p>The final score selects a tier: <strong>Economy</strong> (&lt;0.21), <strong>Cheap</strong> (&lt;0.35), <strong>Mid</strong> (&lt;0.56), <strong>Premium</strong> (≥0.56).</p>
       </div>
     </div>
@@ -478,22 +453,27 @@ a { color: inherit; text-decoration: none; }
 
 <script>
 /* ══════════════════════════════════════════════════════════════
-   Nexus Playground — client-side classifier
+   Nexus Playground — client-side complexity classifier
    ══════════════════════════════════════════════════════════════ */
 
-// ── Constants ──
-const HIGH_KEYWORDS = ['analyze','architect','design','implement','security','vulnerability',
-  'optimize','refactor','debug','comprehensive','distributed','microservice','kubernetes',
-  'infrastructure','scalability','authentication','encryption','algorithm','performance',
-  'concurrent','parallel','async','database schema','api design','system design',
-  'machine learning','neural network','deep learning','transformer','fine-tune',
-  'deployment pipeline','ci/cd','monitoring','observability'];
-
-const MED_KEYWORDS = ['compare','explain','review','test','update','configure','deploy',
-  'integrate','migrate','validate'];
-
-const LOW_KEYWORDS = ['list','what','define','simple','basic','hello','format','count',
-  'sort','convert','translate','summarize'];
+// ── Keyword lists ──
+const HIGH_KEYWORDS = [
+  'analyze','architect','design','implement','security','vulnerability',
+  'optimize','refactor','debug','comprehensive','distributed','microservice',
+  'kubernetes','infrastructure','scalability','authentication','encryption',
+  'algorithm','performance','concurrent','parallel','async','database schema',
+  'api design','system design','machine learning','neural network',
+  'deep learning','transformer','fine-tune','deployment pipeline','ci/cd',
+  'monitoring','observability'
+];
+const MED_KEYWORDS = [
+  'compare','explain','review','test','update','configure','deploy',
+  'integrate','migrate','validate','summarize','translate','write','code'
+];
+const LOW_KEYWORDS = [
+  'list','what','define','simple','basic','hello','format','count',
+  'sort','convert'
+];
 
 const ROLE_WEIGHTS = {
   developer: 0.7, security_analyst: 0.9, architect: 0.85,
@@ -501,10 +481,26 @@ const ROLE_WEIGHTS = {
 };
 
 const TIER_META = {
-  economy: { label:'ECONOMY', color:'var(--green)', models:'llama3.2:3b <span style="color:var(--text-dim)">(Ollama)</span>', cost:0.0001 },
-  cheap:   { label:'CHEAP',   color:'var(--accent-blue)', models:'gpt-4o-mini <span style="color:var(--text-dim)">(OpenAI)</span>', cost:0.00015 },
-  mid:     { label:'MID',     color:'var(--orange)', models:'claude-3-5-haiku <span style="color:var(--text-dim)">(Anthropic)</span>', cost:0.001 },
-  premium: { label:'PREMIUM', color:'var(--accent-purple)', models:'gpt-4o <span style="color:var(--text-dim)">(OpenAI)</span> &nbsp;·&nbsp; claude-sonnet-4 <span style="color:var(--text-dim)">(Anthropic)</span>', cost:0.005 }
+  economy: {
+    label: 'ECONOMY', color: 'var(--green)',
+    models: '<code>llama3.2:3b</code> <span style="color:var(--text-dim)">(Ollama)</span>',
+    cost: 0.0001
+  },
+  cheap: {
+    label: 'CHEAP', color: 'var(--accent-blue)',
+    models: '<code>gpt-4o-mini</code> <span style="color:var(--text-dim)">(OpenAI)</span>',
+    cost: 0.00015
+  },
+  mid: {
+    label: 'MID', color: 'var(--orange)',
+    models: '<code>claude-3-5-haiku</code> <span style="color:var(--text-dim)">(Anthropic)</span>',
+    cost: 0.001
+  },
+  premium: {
+    label: 'PREMIUM', color: 'var(--accent-purple)',
+    models: '<code>gpt-4o</code> <span style="color:var(--text-dim)">(OpenAI)</span> · <code>claude-sonnet-4</code> <span style="color:var(--text-dim)">(Anthropic)</span>',
+    cost: 0.005
+  }
 };
 
 const EXAMPLES = [
@@ -519,178 +515,198 @@ const EXAMPLES = [
 ];
 
 // ── DOM refs ──
-const $prompt     = document.getElementById('promptInput');
-const $charCount  = document.getElementById('charCount');
-const $role       = document.getElementById('roleSelect');
-const $step       = document.getElementById('stepSelect');
-const $budget     = document.getElementById('budgetSelect');
-const $empty      = document.getElementById('resultsEmpty');
-const $content    = document.getElementById('resultsContent');
-const $gaugeArc   = document.getElementById('gaugeArc');
-const $gaugeDot   = document.getElementById('gaugeDot');
-const $gaugeScore = document.getElementById('gaugeScore');
-const $gaugeTier  = document.getElementById('gaugeTier');
-const $tierCard   = document.getElementById('tierCard');
-const $tierGlow   = document.getElementById('tierGlow');
-const $tierName   = document.getElementById('tierName');
-const $tierModels = document.getElementById('tierModels');
-const $costPrem   = document.getElementById('costPremium');
-const $costNexus  = document.getElementById('costNexus');
-const $savings    = document.getElementById('savingsPercent');
-const $preview    = document.getElementById('requestPreview');
-const $breakdown  = document.getElementById('breakdownWrap');
+const $ = id => document.getElementById(id);
+const $prompt = $('promptInput'), $charCount = $('charCount'),
+      $role = $('roleSelect'), $step = $('stepSelect'), $budget = $('budgetSelect'),
+      $empty = $('resultsEmpty'), $content = $('resultsContent'),
+      $gaugeArc = $('gaugeArc'), $gaugeDot = $('gaugeDot'),
+      $gaugeScore = $('gaugeScore'), $gaugeTier = $('gaugeTier'),
+      $tierCard = $('tierCard'), $tierGlow = $('tierGlow'),
+      $tierName = $('tierName'), $tierModels = $('tierModels'),
+      $costPrem = $('costPremium'), $costNexus = $('costNexus'),
+      $savings = $('savingsPercent'), $preview = $('requestPreview'),
+      $breakdown = $('breakdownWrap');
 
 // ── Build example chips ──
-(function buildExamples(){
-  const wrap = document.getElementById('examplesWrap');
+(function(){
+  const wrap = $('examplesWrap');
   EXAMPLES.forEach(ex => {
-    const chip = document.createElement('button');
-    chip.className = 'example-chip';
-    chip.textContent = ex.length > 60 ? ex.slice(0,57) + '…' : ex;
-    chip.title = ex;
-    chip.addEventListener('click', () => {
+    const b = document.createElement('button');
+    b.className = 'example-chip';
+    b.textContent = ex.length > 60 ? ex.slice(0, 57) + '…' : ex;
+    b.title = ex;
+    b.addEventListener('click', () => {
       $prompt.value = ex;
       $charCount.textContent = ex.length;
       runAnalysis();
     });
-    wrap.appendChild(chip);
+    wrap.appendChild(b);
   });
 })();
 
-// ── Character count ──
 $prompt.addEventListener('input', () => { $charCount.textContent = $prompt.value.length; });
 
-// ── Ripple on button ──
-document.getElementById('analyzeBtn').addEventListener('mousedown', function(e){
+$('analyzeBtn').addEventListener('mousedown', function(e){
   const r = document.createElement('span');
   r.className = 'ripple';
   const rect = this.getBoundingClientRect();
   const sz = Math.max(rect.width, rect.height);
   r.style.width = r.style.height = sz + 'px';
-  r.style.left = (e.clientX - rect.left - sz/2) + 'px';
-  r.style.top  = (e.clientY - rect.top  - sz/2) + 'px';
+  r.style.left = (e.clientX - rect.left - sz / 2) + 'px';
+  r.style.top  = (e.clientY - rect.top  - sz / 2) + 'px';
   this.appendChild(r);
   r.addEventListener('animationend', () => r.remove());
 });
 
-// ── Scoring Functions ──
-function lengthScore(text){
+// ═══════════════════════════════════════════════════
+// Scoring functions
+// ═══════════════════════════════════════════════════
+
+function lengthScore(text) {
   const len = text.length;
-  if(len < 50)   return 0.1;
-  if(len < 200)  return 0.3;
-  if(len < 500)  return 0.6;
-  if(len < 1000) return 0.8;
+  if (len < 20)   return 0.05;
+  if (len < 50)   return 0.15;
+  if (len < 200)  return 0.3;
+  if (len < 500)  return 0.6;
+  if (len < 1000) return 0.8;
   return 1.0;
 }
 
-function keywordScore(text){
+function keywordScore(text) {
   const lower = text.toLowerCase();
   let score = 0, matches = 0;
-  HIGH_KEYWORDS.forEach(kw => { if(lower.includes(kw)){ score += 1.0; matches++; }});
-  MED_KEYWORDS.forEach(kw  => { if(lower.includes(kw)){ score += 0.5; matches++; }});
-  LOW_KEYWORDS.forEach(kw  => { if(lower.includes(kw)){ score += 0.1; matches++; }});
-  return matches > 0 ? Math.min(score / Math.max(matches,1), 1.0) : 0.3;
+
+  HIGH_KEYWORDS.forEach(kw => { if (lower.includes(kw)) { score += 1.0; matches++; } });
+  MED_KEYWORDS.forEach(kw  => { if (lower.includes(kw)) { score += 0.5; matches++; } });
+  LOW_KEYWORDS.forEach(kw  => { if (lower.includes(kw)) { score += 0.1; matches++; } });
+
+  if (matches === 0) return 0.2;
+  const avg = Math.min(score / Math.max(matches, 1), 1.0);
+  const densityBonus = Math.min(matches * 0.04, 0.3);
+  return Math.min(avg + densityBonus, 1.0);
 }
 
-function structureScore(text){
+function structureScore(text) {
   let s = 0;
-  if(text.includes('?'))  s += 0.1;
-  if(text.includes(';'))  s += 0.1;
-  if(text.includes('- ') || text.includes('* ')) s += 0.2;
-  if(text.includes('```')) s += 0.3;
-  if(text.split('\n').length > 5) s += 0.2;
-  if(text.length > 500 && text.includes(',')) s += 0.1;
+  if (text.includes('?'))  s += 0.1;
+  if (text.includes(';'))  s += 0.1;
+  if (text.includes('- ') || text.includes('* ')) s += 0.2;
+  if (text.includes('```')) s += 0.3;
+  if (text.split('\n').length > 5) s += 0.2;
+  if (text.length > 500 && text.includes(',')) s += 0.1;
+  const commas = (text.match(/,/g) || []).length;
+  if (commas >= 3) s += 0.15;
+  if (commas >= 6) s += 0.1;
+  const sentences = (text.match(/\.\s/g) || []).length + (text.endsWith('.') ? 1 : 0);
+  if (sentences >= 2) s += 0.1;
   return Math.min(s, 1.0);
 }
 
-function budgetPressure(pct){ return 1.0 - (pct / 100); }
+function budgetPressure(pct) { return 1.0 - (pct / 100); }
 
-function calculateScore(text, role, step, budgetRemaining){
-  const kw     = keywordScore(text);
-  const len    = lengthScore(text);
-  const roleW  = ROLE_WEIGHTS[role] || 0.5;
-  const struct = structureScore(text);
-  const bp     = budgetPressure(budgetRemaining);
-  const final  = kw*0.30 + len*0.15 + roleW*0.20 + struct*0.15 + bp*0.20;
-  return { final: Math.min(final,1), breakdown:{ keyword:kw, length:len, role:roleW, structure:struct, budget:bp }};
+function keywordDensity(text) {
+  const lower = text.toLowerCase();
+  let high = 0, med = 0;
+  HIGH_KEYWORDS.forEach(kw => { if (lower.includes(kw)) high++; });
+  MED_KEYWORDS.forEach(kw  => { if (lower.includes(kw)) med++; });
+  return Math.min((high + med * 0.5) / 3, 1.0);
 }
 
-function selectTier(score){
-  if(score < 0.21) return 'economy';
-  if(score < 0.35) return 'cheap';
-  if(score < 0.56) return 'mid';
+function calculateScore(text, role, step, budgetRemaining) {
+  const kw      = keywordScore(text);
+  const len     = lengthScore(text);
+  const roleW   = ROLE_WEIGHTS[role] || 0.5;
+  const struct  = structureScore(text);
+  const budget  = budgetPressure(budgetRemaining);
+  const density = keywordDensity(text);
+
+  const final = kw * 0.30 + len * 0.15 + roleW * 0.15 + struct * 0.15 + budget * 0.10 + density * 0.15;
+  return {
+    final: Math.min(final, 1),
+    breakdown: { keyword: kw, length: len, role: roleW, structure: struct, budget: budget, density: density }
+  };
+}
+
+function selectTier(score) {
+  if (score < 0.21) return 'economy';
+  if (score < 0.35) return 'cheap';
+  if (score < 0.56) return 'mid';
   return 'premium';
 }
 
-// ── Gauge helpers ──
-const ARC_LEN = 251.33; // half-circle arc length for r=80
-function setGauge(pct){
-  // pct 0..1
+// ═══════════════════════════════════════════════════
+// Rendering helpers
+// ═══════════════════════════════════════════════════
+
+const ARC_LEN = 251.33;
+
+function setGauge(pct) {
   const offset = ARC_LEN * (1 - pct);
   $gaugeArc.style.transition = 'stroke-dashoffset 1s cubic-bezier(.22,1,.36,1)';
   $gaugeArc.setAttribute('stroke-dashoffset', offset);
-
-  // position dot along arc
-  const angle = Math.PI + Math.PI * pct;  // π (left) to 2π (right)
-  const cx = 100 + 80 * Math.cos(angle);
-  const cy = 100 + 80 * Math.sin(angle);
-  $gaugeDot.setAttribute('cx', cx);
-  $gaugeDot.setAttribute('cy', cy);
+  const angle = Math.PI + Math.PI * pct;
+  $gaugeDot.setAttribute('cx', 100 + 80 * Math.cos(angle));
+  $gaugeDot.setAttribute('cy', 100 + 80 * Math.sin(angle));
   $gaugeDot.style.transition = 'opacity .3s .7s';
   $gaugeDot.setAttribute('opacity', '1');
 }
 
-function resetGauge(){
+function resetGauge() {
   $gaugeArc.style.transition = 'none';
   $gaugeArc.setAttribute('stroke-dashoffset', ARC_LEN);
   $gaugeDot.setAttribute('opacity', '0');
 }
 
-// ── Count-up animation ──
-function animateValue(el, end, prefix, suffix, duration){
-  const start = 0;
-  const startTime = performance.now();
-  function tick(now){
-    const t = Math.min((now - startTime) / duration, 1);
+function animateValue(el, end, prefix, suffix, duration) {
+  const t0 = performance.now();
+  (function tick(now) {
+    const t = Math.min((now - t0) / duration, 1);
     const ease = 1 - Math.pow(1 - t, 3);
-    const val = start + (end - start) * ease;
-    el.textContent = prefix + val.toFixed(suffix === '%' ? 0 : 4) + suffix;
-    if(t < 1) requestAnimationFrame(tick);
-  }
-  requestAnimationFrame(tick);
+    el.textContent = prefix + (end * ease).toFixed(suffix === '%' ? 0 : 4) + suffix;
+    if (t < 1) requestAnimationFrame(tick);
+  })(t0);
 }
 
-// ── Build breakdown rows (once) ──
+// Breakdown rows
 const BREAKDOWN_ITEMS = [
-  { id:'keyword',   label:'Keyword Score',   weight:'×0.30' },
-  { id:'length',    label:'Length Score',     weight:'×0.15' },
-  { id:'role',      label:'Role Weight',     weight:'×0.20' },
-  { id:'structure', label:'Structure Score',  weight:'×0.15' },
-  { id:'budget',    label:'Budget Pressure',  weight:'×0.20' }
+  { id: 'keyword',   label: 'Keyword Score',    weight: '×0.30' },
+  { id: 'length',    label: 'Length Score',      weight: '×0.15' },
+  { id: 'role',      label: 'Role Weight',       weight: '×0.15' },
+  { id: 'structure', label: 'Structure Score',    weight: '×0.15' },
+  { id: 'budget',    label: 'Budget Pressure',    weight: '×0.10' },
+  { id: 'density',   label: 'Keyword Density',    weight: '×0.15' }
 ];
 let breakdownBuilt = false;
-function ensureBreakdownRows(){
-  if(breakdownBuilt) return;
+function ensureBreakdownRows() {
+  if (breakdownBuilt) return;
   breakdownBuilt = true;
   BREAKDOWN_ITEMS.forEach(item => {
     const row = document.createElement('div');
     row.className = 'breakdown-row';
-    row.innerHTML = `
-      <div class="breakdown-label">${item.label} <span style="color:var(--text-dim);font-size:.72rem">${item.weight}</span></div>
-      <div class="breakdown-bar-bg"><div class="breakdown-bar" id="bar-${item.id}" style="background:var(--gradient)"></div></div>
-      <div class="breakdown-val" id="val-${item.id}">0.00</div>`;
+    row.innerHTML =
+      '<div class="breakdown-label">' + item.label +
+        ' <span style="color:var(--text-dim);font-size:.72rem">' + item.weight + '</span></div>' +
+      '<div class="breakdown-bar-bg"><div class="breakdown-bar" id="bar-' + item.id + '" style="background:var(--gradient)"></div></div>' +
+      '<div class="breakdown-val" id="val-' + item.id + '">0.00</div>';
     $breakdown.appendChild(row);
   });
 }
 
-// ── Main Analysis ──
-function runAnalysis(){
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ═══════════════════════════════════════════════════
+// Main analysis
+// ═══════════════════════════════════════════════════
+
+function runAnalysis() {
   const text = $prompt.value.trim();
-  if(!text) return;
+  if (!text) return;
 
   const role   = $role.value;
-  const step   = parseInt($step.value,10);
-  const budget = parseInt($budget.value,10);
+  const step   = parseInt($step.value, 10);
+  const budget = parseInt($budget.value, 10);
 
   const { final, breakdown } = calculateScore(text, role, step, budget);
   const tier = selectTier(final);
@@ -701,15 +717,12 @@ function runAnalysis(){
   $content.classList.add('visible');
   ensureBreakdownRows();
 
-  // Reset gauge then animate
+  // Gauge
   resetGauge();
   requestAnimationFrame(() => requestAnimationFrame(() => setGauge(final)));
 
-  // Score number
   $gaugeScore.textContent = final.toFixed(2);
   $gaugeScore.style.color = meta.color;
-
-  // Tier label
   $gaugeTier.textContent = meta.label;
   $gaugeTier.style.color = meta.color;
 
@@ -730,57 +743,49 @@ function runAnalysis(){
 
   // Tier card
   $tierCard.classList.remove('reveal');
-  void $tierCard.offsetWidth; // reflow
+  void $tierCard.offsetWidth;
   $tierCard.classList.add('reveal');
   $tierCard.style.borderColor = meta.color;
-  $tierCard.style.boxShadow = '0 0 30px ' + meta.color.replace('var(','').replace(')','') + '15';
   $tierGlow.style.background = meta.color;
   $tierName.textContent = meta.label + ' Tier';
   $tierName.style.color = meta.color;
   $tierModels.innerHTML = 'Recommended: ' + meta.models;
 
   // Glow on results panel
-  const rp = document.getElementById('resultsPanel');
-  rp.style.boxShadow = '0 0 40px rgba(0,0,0,.3), inset 0 0 60px ' + meta.color.replace('var(','').replace(')','') + '08';
+  $('resultsPanel').style.boxShadow =
+    '0 0 40px rgba(0,0,0,.3)';
 
   // Cost comparison
-  const estimatedTokens = Math.max(text.length / 4, 20); // rough estimate
-  const premiumCost = (estimatedTokens / 1000) * TIER_META.premium.cost;
-  const nexusCost   = (estimatedTokens / 1000) * meta.cost;
-  const savingsPct  = premiumCost > 0 ? ((1 - nexusCost / premiumCost) * 100) : 0;
+  const estTokens = Math.max(text.length / 4, 20);
+  const premCost  = (estTokens / 1000) * TIER_META.premium.cost;
+  const nexCost   = (estTokens / 1000) * meta.cost;
+  const savPct    = premCost > 0 ? ((1 - nexCost / premCost) * 100) : 0;
 
-  animateValue($costPrem,  premiumCost, '$', '', 800);
-  animateValue($costNexus, nexusCost,   '$', '', 800);
-  animateValue($savings,   savingsPct,  '',  '%', 1000);
+  animateValue($costPrem,  premCost, '$', '',  800);
+  animateValue($costNexus, nexCost,  '$', '',  800);
+  animateValue($savings,   savPct,   '',  '%', 1000);
 
   // Request preview
-  const promptEsc = escapeHtml(text.length > 200 ? text.slice(0,197) + '...' : text);
+  const pEsc = escapeHtml(text.length > 200 ? text.slice(0, 197) + '...' : text);
   $preview.innerHTML =
-    `<span class="kw">POST</span> <span class="str">/v1/chat/completions</span> HTTP/1.1\n` +
-    `<span class="hd">Host:</span> localhost:8080\n` +
-    `<span class="hd">X-Workflow-ID:</span> playground-demo\n` +
-    `<span class="hd">X-Step-Number:</span> ${step}\n` +
-    `<span class="hd">Content-Type:</span> application/json\n\n` +
-    `{\n` +
-    `  <span class="kw">"messages"</span>: [\n` +
-    `    {\n` +
-    `      <span class="kw">"role"</span>: <span class="str">"user"</span>,\n` +
-    `      <span class="kw">"content"</span>: <span class="str">"${promptEsc}"</span>\n` +
-    `    }\n` +
-    `  ]\n` +
-    `}`;
+    '<span class="kw">POST</span> <span class="str">/v1/chat/completions</span> HTTP/1.1\n' +
+    '<span class="hd">Host:</span> localhost:8080\n' +
+    '<span class="hd">X-Workflow-ID:</span> playground-demo\n' +
+    '<span class="hd">X-Step-Number:</span> ' + step + '\n' +
+    '<span class="hd">Content-Type:</span> application/json\n\n' +
+    '{\n' +
+    '  <span class="kw">"messages"</span>: [\n' +
+    '    {\n' +
+    '      <span class="kw">"role"</span>: <span class="str">"user"</span>,\n' +
+    '      <span class="kw">"content"</span>: <span class="str">"' + pEsc + '"</span>\n' +
+    '    }\n' +
+    '  ]\n' +
+    '}';
 }
 
-function escapeHtml(s){
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-// ── Scoring toggle ──
-function toggleScoring(){
-  const btn = document.getElementById('scoringToggle');
-  const det = document.getElementById('scoringDetail');
-  btn.classList.toggle('open');
-  det.classList.toggle('open');
+function toggleScoring() {
+  $('scoringToggle').classList.toggle('open');
+  $('scoringDetail').classList.toggle('open');
 }
 </script>
 </body>

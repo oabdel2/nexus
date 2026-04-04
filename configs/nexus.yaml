@@ -101,6 +101,34 @@ cache:
   ttl: 1h
   max_entries: 10000
   similarity_min: 0.95
+  l1:
+    enabled: true
+    ttl: 15m
+    max_entries: 10000
+  l2_bm25:
+    enabled: true
+    ttl: 1h
+    max_entries: 50000
+    threshold: 15.0
+  l2_semantic:
+    enabled: true
+    ttl: 1h
+    max_entries: 50000
+    threshold: 0.70
+    backend: "ollama"
+    model: "bge-m3"
+    endpoint: "http://localhost:11434"
+    reranker:
+      enabled: false
+      model: "bge-reranker-v2-m3"
+      endpoint: "http://localhost:11434"
+      threshold: 0.5
+  feedback:
+    enabled: true
+    max_size: 10000
+  shadow:
+    enabled: false
+    max_results: 1000
 
 workflow:
   ttl: 1h

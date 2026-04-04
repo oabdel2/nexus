@@ -63,6 +63,53 @@ type CacheConfig struct {
 	TTL           time.Duration `yaml:"ttl"`
 	MaxEntries    int           `yaml:"max_entries"`
 	SimilarityMin float64       `yaml:"similarity_min"`
+	L1            L1CacheConfig `yaml:"l1"`
+	L2BM25        L2BM25Config  `yaml:"l2_bm25"`
+	L2Semantic    L2SemanticConfig `yaml:"l2_semantic"`
+	Feedback      FeedbackConfig `yaml:"feedback"`
+	Shadow        ShadowConfig   `yaml:"shadow"`
+}
+
+type FeedbackConfig struct {
+	Enabled bool `yaml:"enabled"`
+	MaxSize int  `yaml:"max_size"`
+}
+
+type ShadowConfig struct {
+	Enabled    bool `yaml:"enabled"`
+	MaxResults int  `yaml:"max_results"`
+}
+
+type L1CacheConfig struct {
+	Enabled    bool          `yaml:"enabled"`
+	TTL        time.Duration `yaml:"ttl"`
+	MaxEntries int           `yaml:"max_entries"`
+}
+
+type L2BM25Config struct {
+	Enabled    bool          `yaml:"enabled"`
+	TTL        time.Duration `yaml:"ttl"`
+	MaxEntries int           `yaml:"max_entries"`
+	Threshold  float64       `yaml:"threshold"`
+}
+
+type L2SemanticConfig struct {
+	Enabled    bool          `yaml:"enabled"`
+	TTL        time.Duration `yaml:"ttl"`
+	MaxEntries int           `yaml:"max_entries"`
+	Threshold  float64       `yaml:"threshold"`
+	Backend    string        `yaml:"backend"`
+	Model      string        `yaml:"model"`
+	Endpoint   string        `yaml:"endpoint"`
+	APIKey     string        `yaml:"api_key"`
+	Reranker   RerankerYAMLConfig `yaml:"reranker"`
+}
+
+type RerankerYAMLConfig struct {
+	Enabled   bool    `yaml:"enabled"`
+	Model     string  `yaml:"model"`
+	Endpoint  string  `yaml:"endpoint"`
+	Threshold float64 `yaml:"threshold"`
 }
 
 type WorkflowConfig struct {
@@ -134,6 +181,42 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.Cache.SimilarityMin == 0 {
 		cfg.Cache.SimilarityMin = 0.95
+	}
+	// L1 defaults
+	if cfg.Cache.L1.TTL == 0 {
+		cfg.Cache.L1.TTL = 15 * time.Minute
+	}
+	if cfg.Cache.L1.MaxEntries == 0 {
+		cfg.Cache.L1.MaxEntries = 10000
+	}
+	// L2 BM25 defaults
+	if cfg.Cache.L2BM25.TTL == 0 {
+		cfg.Cache.L2BM25.TTL = 1 * time.Hour
+	}
+	if cfg.Cache.L2BM25.MaxEntries == 0 {
+		cfg.Cache.L2BM25.MaxEntries = 50000
+	}
+	if cfg.Cache.L2BM25.Threshold == 0 {
+		cfg.Cache.L2BM25.Threshold = 15.0
+	}
+	// L2 Semantic defaults
+	if cfg.Cache.L2Semantic.TTL == 0 {
+		cfg.Cache.L2Semantic.TTL = 1 * time.Hour
+	}
+	if cfg.Cache.L2Semantic.MaxEntries == 0 {
+		cfg.Cache.L2Semantic.MaxEntries = 50000
+	}
+	if cfg.Cache.L2Semantic.Threshold == 0 {
+		cfg.Cache.L2Semantic.Threshold = 0.92
+	}
+	if cfg.Cache.L2Semantic.Backend == "" {
+		cfg.Cache.L2Semantic.Backend = "ollama"
+	}
+	if cfg.Cache.L2Semantic.Model == "" {
+		cfg.Cache.L2Semantic.Model = "bge-m3"
+	}
+	if cfg.Cache.L2Semantic.Endpoint == "" {
+		cfg.Cache.L2Semantic.Endpoint = "http://localhost:11434"
 	}
 	if cfg.Workflow.TTL == 0 {
 		cfg.Workflow.TTL = 1 * time.Hour
