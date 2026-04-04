@@ -1,0 +1,6 @@
+nexus.exe
+.git
+*.md
+!README.md
+benchmarks/
+monitoring/grafana/data/

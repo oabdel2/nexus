@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus Dashboard</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;
+  --text-dim:#8b949e;--green:#3fb950;--blue:#58a6ff;--yellow:#d29922;
+  --red:#f85149;--purple:#bc8cff;--accent:#1f6feb;
+}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5}
+a{color:var(--blue);text-decoration:none}
+
+.header{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--border);background:var(--surface)}
+.header-left{display:flex;align-items:center;gap:12px}
+.logo{font-size:22px;font-weight:700;color:var(--text);letter-spacing:-0.5px}
+.logo span{color:var(--blue)}
+.subtitle{color:var(--text-dim);font-size:12px}
+.status{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--red);transition:background .3s}
+.dot.live{background:var(--green);box-shadow:0 0 6px var(--green)}
+
+.container{padding:20px 24px;display:flex;flex-direction:column;gap:16px}
+
+/* Stats cards */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px 20px}
+.card-label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);margin-bottom:6px}
+.card-value{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums}
+.card-sub{font-size:11px;color:var(--text-dim);margin-top:4px}
+.card-value.green{color:var(--green)}
+.card-value.blue{color:var(--blue)}
+
+.donut-wrap{display:flex;align-items:center;gap:14px}
+.donut-wrap canvas{flex-shrink:0}
+
+/* Main grid */
+.main-grid{display:grid;grid-template-columns:280px 1fr 260px;gap:14px}
+
+/* Panel styles */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.panel-header{padding:12px 16px;font-size:13px;font-weight:600;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+
+/* Routing distribution */
+.tier-bars{padding:14px 16px;display:flex;flex-direction:column;gap:12px}
+.tier-row{display:flex;flex-direction:column;gap:4px}
+.tier-label{display:flex;justify-content:space-between;font-size:12px}
+.tier-bar{height:10px;border-radius:5px;background:var(--border);overflow:hidden}
+.tier-fill{height:100%;border-radius:5px;transition:width .5s ease}
+.tier-fill.economy{background:var(--green)}
+.tier-fill.cheap{background:var(--blue)}
+.tier-fill.mid{background:var(--yellow)}
+.tier-fill.premium{background:var(--red)}
+
+/* Request feed table */
+.feed-wrap{overflow-y:auto;max-height:360px}
+.feed-table{width:100%;border-collapse:collapse;font-size:12px}
+.feed-table th{position:sticky;top:0;background:var(--surface);padding:8px 10px;text-align:left;font-weight:600;color:var(--text-dim);border-bottom:1px solid var(--border)}
+.feed-table td{padding:6px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+.feed-table tr:hover{background:#1c2128}
+.feed-table .cache-yes{color:var(--green);font-weight:600}
+.feed-table .cache-no{color:var(--text-dim)}
+.tier-badge{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600}
+.tier-badge.economy{background:rgba(63,185,80,.15);color:var(--green)}
+.tier-badge.cheap{background:rgba(88,166,255,.15);color:var(--blue)}
+.tier-badge.mid{background:rgba(210,153,34,.15);color:var(--yellow)}
+.tier-badge.premium{background:rgba(248,81,73,.15);color:var(--red)}
+.tier-badge.cached{background:rgba(188,140,255,.15);color:var(--purple)}
+
+/* Budget monitor */
+.budget-list{padding:12px 16px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;max-height:360px}
+.budget-item{display:flex;flex-direction:column;gap:4px}
+.budget-id{font-size:11px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px}
+.budget-bar{height:8px;border-radius:4px;background:var(--border);overflow:hidden}
+.budget-fill{height:100%;border-radius:4px;transition:width .5s,background .5s}
+.budget-meta{display:flex;justify-content:space-between;font-size:10px;color:var(--text-dim)}
+.budget-empty{padding:40px 16px;text-align:center;color:var(--text-dim);font-size:12px}
+
+/* Savings chart */
+.savings-panel{height:220px;position:relative}
+.savings-panel canvas{width:100%!important;height:180px!important;padding:10px 16px}
+
+@media(max-width:900px){
+  .stats-row{grid-template-columns:repeat(2,1fr)}
+  .main-grid{grid-template-columns:1fr}
+}
+@media(max-width:500px){
+  .stats-row{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="logo"><span>⬡</span> Nexus</div>
+    <div class="subtitle">Inference Optimization Gateway</div>
+  </div>
+  <div class="status">
+    <div class="dot" id="statusDot"></div>
+    <span id="statusText">Connecting...</span>
+  </div>
+</div>
+
+<div class="container">
+  <!-- Stats Row -->
+  <div class="stats-row">
+    <div class="card">
+      <div class="card-label">Total Requests</div>
+      <div class="card-value" id="totalReqs">0</div>
+      <div class="card-sub"><span id="reqRate">0</span> req/min</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Cache Hit Rate</div>
+      <div class="donut-wrap">
+        <canvas id="donutCanvas" width="48" height="48"></canvas>
+        <div>
+          <div class="card-value green" id="cacheRate">0%</div>
+          <div class="card-sub"><span id="cacheHits">0</span> hits</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-label">Cost / Savings</div>
+      <div class="card-value" id="totalCost">$0.00</div>
+      <div class="card-sub">Saved <span class="green" id="totalSavings">$0.00</span></div>
+    </div>
+    <div class="card">
+      <div class="card-label">Avg Latency</div>
+      <div class="card-value blue" id="avgLatency">0</div>
+      <div class="card-sub">milliseconds</div>
+    </div>
+  </div>
+
+  <!-- Main Grid -->
+  <div class="main-grid">
+    <!-- Routing Distribution -->
+    <div class="panel">
+      <div class="panel-header">Routing Distribution</div>
+      <div class="tier-bars">
+        <div class="tier-row">
+          <div class="tier-label"><span>Economy</span><span id="econPct">0%</span></div>
+          <div class="tier-bar"><div class="tier-fill economy" id="econBar" style="width:0%"></div></div>
+        </div>
+        <div class="tier-row">
+          <div class="tier-label"><span>Cheap</span><span id="cheapPct">0%</span></div>
+          <div class="tier-bar"><div class="tier-fill cheap" id="cheapBar" style="width:0%"></div></div>
+        </div>
+        <div class="tier-row">
+          <div class="tier-label"><span>Mid</span><span id="midPct">0%</span></div>
+          <div class="tier-bar"><div class="tier-fill mid" id="midBar" style="width:0%"></div></div>
+        </div>
+        <div class="tier-row">
+          <div class="tier-label"><span>Premium</span><span id="premPct">0%</span></div>
+          <div class="tier-bar"><div class="tier-fill premium" id="premBar" style="width:0%"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Request Feed -->
+    <div class="panel">
+      <div class="panel-header">Live Request Feed <span id="feedCount" style="color:var(--text-dim);font-weight:400">0 requests</span></div>
+      <div class="feed-wrap" id="feedWrap">
+        <table class="feed-table">
+          <thead><tr>
+            <th>Time</th><th>Workflow</th><th>Step</th><th>Score</th><th>Tier</th><th>Model</th><th>Latency</th><th>Cost</th><th>Cache</th>
+          </tr></thead>
+          <tbody id="feedBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Budget Monitor -->
+    <div class="panel">
+      <div class="panel-header">Budget Monitor</div>
+      <div class="budget-list" id="budgetList">
+        <div class="budget-empty">No active workflows</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Savings Chart -->
+  <div class="panel savings-panel">
+    <div class="panel-header">Cumulative Cost Savings</div>
+    <canvas id="savingsCanvas"></canvas>
+  </div>
+</div>
+
+<script>
+(function(){
+  // State
+  const state = {
+    stats: {total_requests:0,cache_hits:0,cache_hit_rate:0,total_cost:0,total_savings:0,avg_latency:0,economy_count:0,cheap_count:0,mid_count:0,premium_count:0},
+    requests: [],
+    workflows: [],
+    savingsHistory: [],
+    costHistory: [],
+    reqTimestamps: []
+  };
+
+  // DOM refs
+  const $ = id => document.getElementById(id);
+  const dot = $('statusDot'), statusText = $('statusText');
+  const totalReqs=$('totalReqs'), reqRate=$('reqRate'), cacheRate=$('cacheRate'), cacheHits=$('cacheHits');
+  const totalCost=$('totalCost'), totalSavings=$('totalSavings'), avgLatency=$('avgLatency');
+  const econPct=$('econPct'), cheapPct=$('cheapPct'), midPct=$('midPct'), premPct=$('premPct');
+  const econBar=$('econBar'), cheapBar=$('cheapBar'), midBar=$('midBar'), premBar=$('premBar');
+  const feedBody=$('feedBody'), feedWrap=$('feedWrap'), feedCount=$('feedCount');
+  const budgetList=$('budgetList');
+
+  // Animated counter
+  function animateValue(el, end, prefix, suffix, decimals) {
+    prefix = prefix||''; suffix = suffix||''; decimals = decimals||0;
+    const start = parseFloat(el.dataset.val||'0');
+    const diff = end - start;
+    if (Math.abs(diff) < 0.001) { el.textContent = prefix + end.toFixed(decimals) + suffix; el.dataset.val = end; return; }
+    const duration = 400;
+    const startTime = performance.now();
+    function tick(now) {
+      const t = Math.min((now - startTime) / duration, 1);
+      const ease = t < 0.5 ? 2*t*t : -1+(4-2*t)*t;
+      const v = start + diff * ease;
+      el.textContent = prefix + v.toFixed(decimals) + suffix;
+      if (t < 1) requestAnimationFrame(tick);
+      else el.dataset.val = end;
+    }
+    requestAnimationFrame(tick);
+  }
+
+  // Donut chart
+  function drawDonut(rate) {
+    const c = $('donutCanvas'), ctx = c.getContext('2d');
+    const s = 48, cx = s/2, cy = s/2, r = 18, lw = 6;
+    ctx.clearRect(0,0,s,s);
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.strokeStyle='#30363d'; ctx.lineWidth=lw; ctx.stroke();
+    if (rate > 0) {
+      ctx.beginPath(); ctx.arc(cx,cy,r,-Math.PI/2,-Math.PI/2+Math.PI*2*rate); ctx.strokeStyle='#3fb950'; ctx.lineWidth=lw; ctx.lineCap='round'; ctx.stroke();
+    }
+  }
+
+  // Savings chart
+  const savingsCanvas = $('savingsCanvas');
+  function drawSavings() {
+    const c = savingsCanvas, ctx = c.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = c.parentElement.getBoundingClientRect();
+    const w = rect.width - 32, h = 160;
+    c.width = w * dpr; c.height = h * dpr;
+    c.style.width = w + 'px'; c.style.height = h + 'px';
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0,0,w,h);
+
+    const sh = state.savingsHistory, ch = state.costHistory;
+    if (sh.length < 2) {
+      ctx.fillStyle = '#8b949e'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('Waiting for data...', w/2, h/2);
+      return;
+    }
+
+    const maxVal = Math.max(...sh, ...ch, 0.001);
+    const pad = {t:20,b:24,l:50,r:16};
+    const pw = w-pad.l-pad.r, ph = h-pad.t-pad.b;
+    const step = pw / (sh.length - 1);
+
+    function yPos(v) { return pad.t + ph - (v / maxVal) * ph; }
+
+    // Fill area between
+    ctx.beginPath();
+    for (let i=0;i<sh.length;i++) ctx.lineTo(pad.l+i*step, yPos(sh[i]));
+    for (let i=sh.length-1;i>=0;i--) ctx.lineTo(pad.l+i*step, yPos(ch[i]));
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(63,185,80,0.1)';
+    ctx.fill();
+
+    // Premium line (what you would have paid)
+    ctx.beginPath();
+    for (let i=0;i<sh.length;i++) { i===0?ctx.moveTo(pad.l,yPos(sh[i])):ctx.lineTo(pad.l+i*step,yPos(sh[i])); }
+    ctx.strokeStyle = '#8b949e'; ctx.lineWidth = 1.5; ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
+
+    // Actual cost line
+    ctx.beginPath();
+    for (let i=0;i<ch.length;i++) { i===0?ctx.moveTo(pad.l,yPos(ch[i])):ctx.lineTo(pad.l+i*step,yPos(ch[i])); }
+    ctx.strokeStyle = '#3fb950'; ctx.lineWidth = 2; ctx.stroke();
+
+    // Y axis labels
+    ctx.fillStyle = '#8b949e'; ctx.font = '10px sans-serif'; ctx.textAlign = 'right';
+    for (let i=0;i<=4;i++) {
+      const v = maxVal * i / 4;
+      ctx.fillText('$'+v.toFixed(3), pad.l-6, yPos(v)+3);
+    }
+
+    // Legend
+    ctx.font = '10px sans-serif'; ctx.textAlign = 'left';
+    const lx = pad.l + 10, ly = pad.t + 6;
+    ctx.strokeStyle = '#8b949e'; ctx.lineWidth = 1.5; ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(lx,ly); ctx.lineTo(lx+20,ly); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#8b949e'; ctx.fillText('Premium cost', lx+24, ly+3);
+    ctx.strokeStyle = '#3fb950'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(lx+110,ly); ctx.lineTo(lx+130,ly); ctx.stroke();
+    ctx.fillStyle = '#3fb950'; ctx.fillText('Actual cost', lx+134, ly+3);
+  }
+
+  // Update stats
+  function updateStats(s) {
+    state.stats = s;
+    animateValue(totalReqs, s.total_requests, '', '', 0);
+    animateValue(cacheHits, s.cache_hits, '', '', 0);
+    cacheRate.textContent = (s.cache_hit_rate * 100).toFixed(1) + '%';
+    drawDonut(s.cache_hit_rate);
+    animateValue(totalCost, s.total_cost, '$', '', 4);
+    animateValue(totalSavings, s.total_savings, '$', '', 4);
+    animateValue(avgLatency, s.avg_latency, '', '', 0);
+
+    // Tier bars
+    const total = s.economy_count + s.cheap_count + s.mid_count + s.premium_count || 1;
+    const ep = s.economy_count/total*100, cp = s.cheap_count/total*100, mp = s.mid_count/total*100, pp = s.premium_count/total*100;
+    econBar.style.width = ep+'%'; econPct.textContent = ep.toFixed(1)+'%';
+    cheapBar.style.width = cp+'%'; cheapPct.textContent = cp.toFixed(1)+'%';
+    midBar.style.width = mp+'%'; midPct.textContent = mp.toFixed(1)+'%';
+    premBar.style.width = pp+'%'; premPct.textContent = pp.toFixed(1)+'%';
+
+    // Req rate (requests in last 60s)
+    const now = Date.now();
+    state.reqTimestamps.push(now);
+    state.reqTimestamps = state.reqTimestamps.filter(t => now - t < 60000);
+    reqRate.textContent = state.reqTimestamps.length;
+  }
+
+  // Add request to feed
+  function addRequest(req) {
+    state.requests.push(req);
+    if (state.requests.length > 50) state.requests.shift();
+
+    // Update savings history (cumulative)
+    const prevSaving = state.savingsHistory.length ? state.savingsHistory[state.savingsHistory.length-1] : 0;
+    const prevCost = state.costHistory.length ? state.costHistory[state.costHistory.length-1] : 0;
+    let premEst = req.cost * 3;
+    if (req.cache_hit) premEst = 0.005;
+    else if (req.tier_selected === 'premium') premEst = req.cost;
+    else if (req.tier_selected === 'mid') premEst = req.cost * 1.8;
+    else if (req.tier_selected === 'economy') premEst = req.cost * 5;
+    state.savingsHistory.push(prevSaving + premEst);
+    state.costHistory.push(prevCost + req.cost);
+    if (state.savingsHistory.length > 200) { state.savingsHistory.shift(); state.costHistory.shift(); }
+
+    // Render table row
+    const tr = document.createElement('tr');
+    const ts = new Date(req.timestamp);
+    const time = ts.toLocaleTimeString();
+    const wfShort = req.workflow_id.length > 12 ? req.workflow_id.slice(0,12)+'…' : req.workflow_id;
+    const tierClass = req.cache_hit ? 'cached' : req.tier_selected;
+    const tierLabel = req.cache_hit ? 'CACHED' : req.tier_selected.toUpperCase();
+    tr.innerHTML = `<td>${time}</td><td title="${req.workflow_id}">${wfShort}</td><td>${req.step}</td><td>${req.complexity_score.toFixed(2)}</td><td><span class="tier-badge ${tierClass}">${tierLabel}</span></td><td>${req.model_used}</td><td>${req.latency_ms}ms</td><td>$${req.cost.toFixed(4)}</td><td class="${req.cache_hit?'cache-yes':'cache-no'}">${req.cache_hit?'HIT':'—'}</td>`;
+    tr.style.animation = 'fadeIn .3s';
+    feedBody.prepend(tr);
+
+    // Trim to 50 rows
+    while (feedBody.children.length > 50) feedBody.removeChild(feedBody.lastChild);
+    feedCount.textContent = state.requests.length + ' requests';
+
+    drawSavings();
+  }
+
+  // Update workflows
+  function updateWorkflows(wfs) {
+    state.workflows = wfs || [];
+    if (!state.workflows.length) {
+      budgetList.innerHTML = '<div class="budget-empty">No active workflows</div>';
+      return;
+    }
+    budgetList.innerHTML = '';
+    state.workflows.forEach(w => {
+      const pct = Math.max(0, Math.min(1, w.budget_ratio)) * 100;
+      let color = '#3fb950';
+      if (pct < 15) color = '#f85149';
+      else if (pct < 50) color = '#d29922';
+      const div = document.createElement('div');
+      div.className = 'budget-item';
+      const wfId = w.id.length > 24 ? w.id.slice(0,24)+'…' : w.id;
+      div.innerHTML = `<div class="budget-id" title="${w.id}">${wfId}</div><div class="budget-bar"><div class="budget-fill" style="width:${pct}%;background:${color}"></div></div><div class="budget-meta"><span>Step ${w.current_step}</span><span>${pct.toFixed(0)}% left</span></div>`;
+      budgetList.appendChild(div);
+    });
+  }
+
+  // SSE connection
+  let retryDelay = 1000;
+  function connect() {
+    const evtSource = new EventSource('/dashboard/events');
+    evtSource.onopen = () => {
+      dot.classList.add('live');
+      statusText.textContent = 'Live';
+      retryDelay = 1000;
+    };
+    evtSource.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.stats) updateStats(data.stats);
+        if (data.request) addRequest(data.request);
+        if (data.workflows) updateWorkflows(data.workflows);
+      } catch(err) { console.error('SSE parse error', err); }
+    };
+    evtSource.onerror = () => {
+      dot.classList.remove('live');
+      statusText.textContent = 'Reconnecting...';
+      evtSource.close();
+      setTimeout(connect, retryDelay);
+      retryDelay = Math.min(retryDelay * 2, 30000);
+    };
+  }
+
+  // Init
+  drawDonut(0);
+  drawSavings();
+  connect();
+
+  // Responsive savings redraw
+  window.addEventListener('resize', drawSavings);
+
+  // Inject animation keyframe
+  const style = document.createElement('style');
+  style.textContent = '@keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}';
+  document.head.appendChild(style);
+})();
+</script>
+</body>
+</html>

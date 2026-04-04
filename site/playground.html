@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus Playground — AI Inference Optimization</title>
+<style>
+/* ── CSS Custom Properties ── */
+:root {
+  --bg: #0a0a0b;
+  --card: #111113;
+  --border: #1e1e22;
+  --text: #e4e4e7;
+  --text-muted: #71717a;
+  --text-dim: #52525b;
+  --accent-blue: #3b82f6;
+  --accent-purple: #8b5cf6;
+  --accent-pink: #ec4899;
+  --green: #22c55e;
+  --yellow: #eab308;
+  --orange: #f97316;
+  --red: #ef4444;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+  --gradient: linear-gradient(135deg, var(--accent-blue), var(--accent-purple), var(--accent-pink));
+  --nav-height: 60px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; text-decoration: none; }
+
+/* ── Navbar ── */
+.navbar {
+  position: sticky; top: 0; z-index: 100;
+  height: var(--nav-height);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 clamp(1rem, 4vw, 3rem);
+  background: rgba(10,10,11,.82);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+}
+.nav-logo {
+  font-size: 1.35rem; font-weight: 700; letter-spacing: -.02em;
+  background: var(--gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.nav-links { display: flex; gap: 1.5rem; align-items: center; }
+.nav-links a {
+  font-size: .875rem; color: var(--text-muted); transition: color .2s;
+}
+.nav-links a:hover { color: var(--text); }
+.nav-links a.active {
+  color: var(--text);
+  position: relative;
+}
+.nav-links a.active::after {
+  content: ''; position: absolute; bottom: -4px; left: 0; right: 0; height: 2px;
+  background: var(--gradient); border-radius: 2px;
+}
+.nav-github { display: flex; align-items: center; gap: .35rem; }
+.nav-github svg { width: 18px; height: 18px; fill: currentColor; }
+
+/* ── Hero Header ── */
+.hero {
+  text-align: center;
+  padding: 3rem 1.5rem 2rem;
+}
+.hero h1 {
+  font-size: clamp(2rem, 5vw, 3rem); font-weight: 800; letter-spacing: -.03em;
+  background: var(--gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.hero p {
+  max-width: 640px; margin: .75rem auto 0;
+  color: var(--text-muted); font-size: clamp(.9rem, 2vw, 1.05rem);
+}
+
+/* ── Main Layout ── */
+.playground {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 0 clamp(1rem, 4vw, 3rem) 4rem;
+}
+@media (max-width: 900px) {
+  .playground { grid-template-columns: 1fr; }
+}
+
+/* ── Panels ── */
+.panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+}
+.panel-title {
+  font-size: .8rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--text-muted); margin-bottom: 1rem;
+}
+
+/* ── Input Panel ── */
+.prompt-area {
+  width: 100%; min-height: 140px; resize: vertical;
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text); font-family: var(--font); font-size: .95rem;
+  padding: .85rem 1rem; line-height: 1.5;
+  transition: border-color .2s;
+}
+.prompt-area::placeholder { color: var(--text-dim); }
+.prompt-area:focus { outline: none; border-color: var(--accent-purple); }
+.char-count {
+  text-align: right; font-size: .75rem; color: var(--text-dim); margin-top: .35rem;
+}
+.controls {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem;
+  margin-top: 1rem;
+}
+@media (max-width: 480px) { .controls { grid-template-columns: 1fr; } }
+.control-group label {
+  display: block; font-size: .75rem; font-weight: 600; color: var(--text-muted);
+  margin-bottom: .3rem; text-transform: uppercase; letter-spacing: .06em;
+}
+.control-group select {
+  width: 100%; padding: .5rem .7rem;
+  background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); font-size: .85rem; font-family: var(--font);
+  cursor: pointer; transition: border-color .2s;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2371717a'%3E%3Cpath d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right .65rem center;
+}
+.control-group select:focus { outline: none; border-color: var(--accent-purple); }
+
+/* Analyze button */
+.btn-analyze {
+  display: block; width: 100%; margin-top: 1.25rem;
+  padding: .8rem; border: none; border-radius: var(--radius-sm);
+  background: var(--gradient); color: #fff; font-family: var(--font);
+  font-size: 1rem; font-weight: 700; letter-spacing: .02em;
+  cursor: pointer; position: relative; overflow: hidden;
+  transition: transform .15s, box-shadow .25s;
+}
+.btn-analyze:hover { transform: translateY(-1px); box-shadow: 0 4px 24px rgba(139,92,246,.35); }
+.btn-analyze:active { transform: translateY(0); }
+.btn-analyze .ripple {
+  position: absolute; border-radius: 50%; background: rgba(255,255,255,.25);
+  transform: scale(0); animation: ripple-anim .5s ease-out;
+}
+@keyframes ripple-anim { to { transform: scale(4); opacity: 0; } }
+
+/* Example prompts */
+.examples-title {
+  font-size: .75rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--text-dim); margin-top: 1.5rem; margin-bottom: .65rem;
+}
+.examples {
+  display: flex; flex-wrap: wrap; gap: .45rem;
+}
+.example-chip {
+  padding: .35rem .7rem; border-radius: 100px;
+  background: var(--bg); border: 1px solid var(--border);
+  font-size: .78rem; color: var(--text-muted); cursor: pointer;
+  transition: border-color .2s, color .2s, background .2s;
+  white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+}
+.example-chip:hover { border-color: var(--accent-purple); color: var(--text); background: rgba(139,92,246,.08); }
+
+/* ── Results Panel ── */
+.results-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 400px; text-align: center; color: var(--text-dim);
+}
+.results-empty svg { width: 56px; height: 56px; margin-bottom: 1rem; opacity: .35; }
+.results-empty p { font-size: .95rem; max-width: 280px; }
+
+.results-content { display: none; }
+.results-content.visible { display: block; }
+
+/* Gauge */
+.gauge-wrap { display: flex; flex-direction: column; align-items: center; margin-bottom: 1.5rem; }
+.gauge-svg { width: 200px; height: 120px; }
+.gauge-score {
+  font-size: 2.5rem; font-weight: 800; letter-spacing: -.03em;
+  margin-top: -.2rem;
+}
+.gauge-tier {
+  font-size: .85rem; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; margin-top: .15rem;
+}
+
+/* Breakdown */
+.breakdown { margin-bottom: 1.5rem; }
+.breakdown-row {
+  display: grid; grid-template-columns: 140px 1fr 50px; align-items: center; gap: .6rem;
+  margin-bottom: .55rem;
+}
+.breakdown-label { font-size: .78rem; color: var(--text-muted); }
+.breakdown-bar-bg {
+  height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden;
+}
+.breakdown-bar {
+  height: 100%; border-radius: 4px; width: 0%;
+  transition: width .8s cubic-bezier(.22,1,.36,1);
+}
+.breakdown-val { font-size: .78rem; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Tier Card */
+.tier-card {
+  border-radius: var(--radius-sm); padding: 1.1rem 1.25rem;
+  border: 1px solid var(--border); margin-bottom: 1.25rem;
+  position: relative; overflow: hidden;
+  transition: border-color .4s, box-shadow .4s;
+  opacity: 0; transform: translateY(8px);
+  animation: none;
+}
+.tier-card.reveal {
+  animation: card-reveal .5s ease forwards;
+}
+@keyframes card-reveal { to { opacity: 1; transform: translateY(0); } }
+.tier-card .glow {
+  position: absolute; inset: 0; opacity: .06; pointer-events: none;
+  border-radius: inherit;
+}
+.tier-name { font-size: 1.1rem; font-weight: 700; margin-bottom: .4rem; }
+.tier-models { font-size: .82rem; color: var(--text-muted); }
+.tier-models span { display: inline-block; margin-right: .75rem; }
+.tier-models code {
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: .78rem; padding: .1rem .35rem; border-radius: 4px;
+  background: rgba(255,255,255,.05);
+}
+
+/* Cost Comparison */
+.cost-section { margin-bottom: 1.25rem; }
+.cost-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: .75rem;
+  margin-bottom: .75rem;
+}
+.cost-box {
+  background: var(--bg); border-radius: var(--radius-sm); padding: .85rem;
+  text-align: center;
+}
+.cost-box-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-dim); margin-bottom: .25rem; }
+.cost-box-value { font-size: 1.35rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.savings-box {
+  background: rgba(34,197,94,.06); border: 1px solid rgba(34,197,94,.18);
+  border-radius: var(--radius-sm); padding: .65rem; text-align: center;
+}
+.savings-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--green); }
+.savings-value { font-size: 1.6rem; font-weight: 800; color: var(--green); font-variant-numeric: tabular-nums; }
+
+/* Request Preview */
+.request-preview {
+  background: var(--bg); border-radius: var(--radius-sm);
+  padding: 1rem; overflow-x: auto;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: .78rem; line-height: 1.65; color: var(--text-muted);
+  border: 1px solid var(--border);
+  margin-bottom: 1.25rem;
+}
+.request-preview .kw { color: var(--accent-blue); }
+.request-preview .str { color: var(--green); }
+.request-preview .hd { color: var(--accent-purple); }
+
+/* How Scoring Works */
+.scoring-toggle {
+  display: flex; align-items: center; gap: .45rem;
+  font-size: .8rem; color: var(--text-dim); cursor: pointer;
+  background: none; border: none; font-family: var(--font);
+  padding: .35rem 0;
+}
+.scoring-toggle:hover { color: var(--text-muted); }
+.scoring-toggle svg { width: 14px; height: 14px; transition: transform .25s; fill: currentColor; }
+.scoring-toggle.open svg { transform: rotate(90deg); }
+.scoring-detail {
+  max-height: 0; overflow: hidden; transition: max-height .35s ease;
+  font-size: .8rem; color: var(--text-dim); line-height: 1.7;
+}
+.scoring-detail.open { max-height: 500px; }
+.scoring-detail p { margin: .5rem 0; }
+.scoring-detail code {
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  background: rgba(255,255,255,.05); padding: .1rem .3rem; border-radius: 3px;
+  font-size: .76rem;
+}
+
+/* ── Utility ── */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+</style>
+</head>
+<body>
+
+<!-- ── Navbar ── -->
+<nav class="navbar">
+  <a href="index.html" class="nav-logo">Nexus</a>
+  <div class="nav-links">
+    <a href="playground.html" class="active">Playground</a>
+    <a href="docs.html">Docs</a>
+    <a href="https://github.com" target="_blank" rel="noopener" class="nav-github">
+      <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38
+        0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52
+        -.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2
+        -3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82
+        .64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92
+        .08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07
+        -.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      GitHub
+    </a>
+  </div>
+</nav>
+
+<!-- ── Hero ── -->
+<header class="hero">
+  <h1>Nexus Playground</h1>
+  <p>See how Nexus would route your prompts in real-time. No backend required — the classifier runs entirely in your browser.</p>
+</header>
+
+<!-- ── Playground Grid ── -->
+<main class="playground">
+
+  <!-- ── Input Panel ── -->
+  <section class="panel" id="inputPanel">
+    <div class="panel-title">Input</div>
+    <textarea id="promptInput" class="prompt-area" placeholder="Enter a prompt to analyze… Try asking something simple like 'What is 2+2?' or something complex like 'Design a distributed microservice architecture with event sourcing'"></textarea>
+    <div class="char-count"><span id="charCount">0</span> characters</div>
+
+    <div class="controls">
+      <div class="control-group">
+        <label for="roleSelect">Role</label>
+        <select id="roleSelect">
+          <option value="general" selected>general</option>
+          <option value="developer">developer</option>
+          <option value="security_analyst">security_analyst</option>
+          <option value="architect">architect</option>
+          <option value="data_scientist">data_scientist</option>
+          <option value="support">support</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label for="stepSelect">Step Number</label>
+        <select id="stepSelect">
+          <option value="1" selected>1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+          <option value="6">6</option>
+          <option value="7">7</option>
+          <option value="8">8</option>
+          <option value="9">9</option>
+          <option value="10">10</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label for="budgetSelect">Budget Remaining</label>
+        <select id="budgetSelect">
+          <option value="100" selected>100%</option>
+          <option value="75">75%</option>
+          <option value="50">50%</option>
+          <option value="25">25%</option>
+          <option value="15">15%</option>
+          <option value="5">5%</option>
+        </select>
+      </div>
+    </div>
+
+    <button class="btn-analyze" id="analyzeBtn" onclick="runAnalysis()">
+      Analyze Prompt
+    </button>
+
+    <div class="examples-title">Example Prompts</div>
+    <div class="examples" id="examplesWrap"></div>
+  </section>
+
+  <!-- ── Results Panel ── -->
+  <section class="panel" id="resultsPanel">
+    <div class="panel-title">Results</div>
+
+    <!-- Empty State -->
+    <div class="results-empty" id="resultsEmpty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M12 6v6l4 2"/>
+      </svg>
+      <p>Enter a prompt and click <strong>Analyze</strong> to see how Nexus would route it.</p>
+    </div>
+
+    <!-- Filled State -->
+    <div class="results-content" id="resultsContent">
+
+      <!-- Gauge -->
+      <div class="gauge-wrap">
+        <svg class="gauge-svg" viewBox="0 0 200 120">
+          <defs>
+            <linearGradient id="gaugeGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stop-color="var(--green)"/>
+              <stop offset="35%" stop-color="var(--yellow)"/>
+              <stop offset="65%" stop-color="var(--orange)"/>
+              <stop offset="100%" stop-color="var(--red)"/>
+            </linearGradient>
+          </defs>
+          <!-- track -->
+          <path d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke="#1e1e22" stroke-width="14" stroke-linecap="round"/>
+          <!-- value arc -->
+          <path id="gaugeArc" d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke="url(#gaugeGrad)" stroke-width="14" stroke-linecap="round"
+                stroke-dasharray="251.33" stroke-dashoffset="251.33"/>
+          <!-- needle dot -->
+          <circle id="gaugeDot" cx="20" cy="100" r="7" fill="#fff" opacity="0"/>
+        </svg>
+        <div class="gauge-score" id="gaugeScore">—</div>
+        <div class="gauge-tier" id="gaugeTier"></div>
+      </div>
+
+      <!-- Breakdown -->
+      <div class="breakdown" id="breakdownWrap">
+        <div class="panel-title" style="margin-bottom:.75rem">Score Breakdown</div>
+      </div>
+
+      <!-- Tier Card -->
+      <div class="tier-card" id="tierCard">
+        <div class="glow" id="tierGlow"></div>
+        <div class="tier-name" id="tierName"></div>
+        <div class="tier-models" id="tierModels"></div>
+      </div>
+
+      <!-- Cost Comparison -->
+      <div class="cost-section">
+        <div class="panel-title" style="margin-bottom:.75rem">Cost Comparison</div>
+        <div class="cost-grid">
+          <div class="cost-box">
+            <div class="cost-box-label">Always Premium</div>
+            <div class="cost-box-value" id="costPremium">$0.000</div>
+          </div>
+          <div class="cost-box">
+            <div class="cost-box-label">With Nexus</div>
+            <div class="cost-box-value" id="costNexus" style="color:var(--green)">$0.000</div>
+          </div>
+        </div>
+        <div class="savings-box">
+          <div class="savings-label">Estimated Savings</div>
+          <div class="savings-value" id="savingsPercent">0%</div>
+        </div>
+      </div>
+
+      <!-- Request Preview -->
+      <div class="panel-title" style="margin-bottom:.6rem">Request Preview</div>
+      <pre class="request-preview" id="requestPreview"></pre>
+
+      <!-- How scoring works -->
+      <button class="scoring-toggle" id="scoringToggle" onclick="toggleScoring()">
+        <svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+        How scoring works
+      </button>
+      <div class="scoring-detail" id="scoringDetail">
+        <p>Nexus computes a <strong>complexity score</strong> from 0.0 to 1.0 using five weighted signals:</p>
+        <p><code>score = keyword×0.30 + length×0.15 + role×0.20 + structure×0.15 + budget×0.20</code></p>
+        <p><strong>Keyword Score</strong> — matches the prompt against high-complexity keywords (analyze, architect, security…), medium keywords (compare, explain…) and low keywords (list, hello…).</p>
+        <p><strong>Length Score</strong> — longer prompts generally require more capable models. &lt;50 chars → 0.1, &lt;200 → 0.3, &lt;500 → 0.6, &lt;1000 → 0.8, else 1.0.</p>
+        <p><strong>Role Weight</strong> — different roles have different baseline complexity. Security analysts (0.9) and architects (0.85) skew higher; support (0.3) skews lower.</p>
+        <p><strong>Structure Score</strong> — detects bullet points, code blocks, multi-line content, and complex punctuation.</p>
+        <p><strong>Budget Pressure</strong> — as budget depletes, pressure to use cheaper models rises: <code>1.0 − (remaining / 100)</code>.</p>
+        <p>The final score selects a tier: <strong>Economy</strong> (&lt;0.21), <strong>Cheap</strong> (&lt;0.35), <strong>Mid</strong> (&lt;0.56), <strong>Premium</strong> (≥0.56).</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   Nexus Playground — client-side classifier
+   ══════════════════════════════════════════════════════════════ */
+
+// ── Constants ──
+const HIGH_KEYWORDS = ['analyze','architect','design','implement','security','vulnerability',
+  'optimize','refactor','debug','comprehensive','distributed','microservice','kubernetes',
+  'infrastructure','scalability','authentication','encryption','algorithm','performance',
+  'concurrent','parallel','async','database schema','api design','system design',
+  'machine learning','neural network','deep learning','transformer','fine-tune',
+  'deployment pipeline','ci/cd','monitoring','observability'];
+
+const MED_KEYWORDS = ['compare','explain','review','test','update','configure','deploy',
+  'integrate','migrate','validate'];
+
+const LOW_KEYWORDS = ['list','what','define','simple','basic','hello','format','count',
+  'sort','convert','translate','summarize'];
+
+const ROLE_WEIGHTS = {
+  developer: 0.7, security_analyst: 0.9, architect: 0.85,
+  data_scientist: 0.8, support: 0.3, general: 0.5
+};
+
+const TIER_META = {
+  economy: { label:'ECONOMY', color:'var(--green)', models:'llama3.2:3b <span style="color:var(--text-dim)">(Ollama)</span>', cost:0.0001 },
+  cheap:   { label:'CHEAP',   color:'var(--accent-blue)', models:'gpt-4o-mini <span style="color:var(--text-dim)">(OpenAI)</span>', cost:0.00015 },
+  mid:     { label:'MID',     color:'var(--orange)', models:'claude-3-5-haiku <span style="color:var(--text-dim)">(Anthropic)</span>', cost:0.001 },
+  premium: { label:'PREMIUM', color:'var(--accent-purple)', models:'gpt-4o <span style="color:var(--text-dim)">(OpenAI)</span> &nbsp;·&nbsp; claude-sonnet-4 <span style="color:var(--text-dim)">(Anthropic)</span>', cost:0.005 }
+};
+
+const EXAMPLES = [
+  "What is 2+2?",
+  "Summarize this paragraph in 3 bullet points",
+  "Compare React and Vue.js for a new project, considering performance, ecosystem, and learning curve",
+  "Design a distributed microservice architecture for a real-time payment processing system with event sourcing, CQRS, and exactly-once delivery guarantees. Include authentication, rate limiting, and observability.",
+  "Write a Python function to sort a list",
+  "Analyze the security vulnerabilities in this authentication flow and suggest improvements for a zero-trust architecture",
+  "Hello!",
+  "Explain the transformer architecture, including multi-head attention, positional encoding, and the differences between encoder and decoder blocks. Include code examples in PyTorch."
+];
+
+// ── DOM refs ──
+const $prompt     = document.getElementById('promptInput');
+const $charCount  = document.getElementById('charCount');
+const $role       = document.getElementById('roleSelect');
+const $step       = document.getElementById('stepSelect');
+const $budget     = document.getElementById('budgetSelect');
+const $empty      = document.getElementById('resultsEmpty');
+const $content    = document.getElementById('resultsContent');
+const $gaugeArc   = document.getElementById('gaugeArc');
+const $gaugeDot   = document.getElementById('gaugeDot');
+const $gaugeScore = document.getElementById('gaugeScore');
+const $gaugeTier  = document.getElementById('gaugeTier');
+const $tierCard   = document.getElementById('tierCard');
+const $tierGlow   = document.getElementById('tierGlow');
+const $tierName   = document.getElementById('tierName');
+const $tierModels = document.getElementById('tierModels');
+const $costPrem   = document.getElementById('costPremium');
+const $costNexus  = document.getElementById('costNexus');
+const $savings    = document.getElementById('savingsPercent');
+const $preview    = document.getElementById('requestPreview');
+const $breakdown  = document.getElementById('breakdownWrap');
+
+// ── Build example chips ──
+(function buildExamples(){
+  const wrap = document.getElementById('examplesWrap');
+  EXAMPLES.forEach(ex => {
+    const chip = document.createElement('button');
+    chip.className = 'example-chip';
+    chip.textContent = ex.length > 60 ? ex.slice(0,57) + '…' : ex;
+    chip.title = ex;
+    chip.addEventListener('click', () => {
+      $prompt.value = ex;
+      $charCount.textContent = ex.length;
+      runAnalysis();
+    });
+    wrap.appendChild(chip);
+  });
+})();
+
+// ── Character count ──
+$prompt.addEventListener('input', () => { $charCount.textContent = $prompt.value.length; });
+
+// ── Ripple on button ──
+document.getElementById('analyzeBtn').addEventListener('mousedown', function(e){
+  const r = document.createElement('span');
+  r.className = 'ripple';
+  const rect = this.getBoundingClientRect();
+  const sz = Math.max(rect.width, rect.height);
+  r.style.width = r.style.height = sz + 'px';
+  r.style.left = (e.clientX - rect.left - sz/2) + 'px';
+  r.style.top  = (e.clientY - rect.top  - sz/2) + 'px';
+  this.appendChild(r);
+  r.addEventListener('animationend', () => r.remove());
+});
+
+// ── Scoring Functions ──
+function lengthScore(text){
+  const len = text.length;
+  if(len < 50)   return 0.1;
+  if(len < 200)  return 0.3;
+  if(len < 500)  return 0.6;
+  if(len < 1000) return 0.8;
+  return 1.0;
+}
+
+function keywordScore(text){
+  const lower = text.toLowerCase();
+  let score = 0, matches = 0;
+  HIGH_KEYWORDS.forEach(kw => { if(lower.includes(kw)){ score += 1.0; matches++; }});
+  MED_KEYWORDS.forEach(kw  => { if(lower.includes(kw)){ score += 0.5; matches++; }});
+  LOW_KEYWORDS.forEach(kw  => { if(lower.includes(kw)){ score += 0.1; matches++; }});
+  return matches > 0 ? Math.min(score / Math.max(matches,1), 1.0) : 0.3;
+}
+
+function structureScore(text){
+  let s = 0;
+  if(text.includes('?'))  s += 0.1;
+  if(text.includes(';'))  s += 0.1;
+  if(text.includes('- ') || text.includes('* ')) s += 0.2;
+  if(text.includes('```')) s += 0.3;
+  if(text.split('\n').length > 5) s += 0.2;
+  if(text.length > 500 && text.includes(',')) s += 0.1;
+  return Math.min(s, 1.0);
+}
+
+function budgetPressure(pct){ return 1.0 - (pct / 100); }
+
+function calculateScore(text, role, step, budgetRemaining){
+  const kw     = keywordScore(text);
+  const len    = lengthScore(text);
+  const roleW  = ROLE_WEIGHTS[role] || 0.5;
+  const struct = structureScore(text);
+  const bp     = budgetPressure(budgetRemaining);
+  const final  = kw*0.30 + len*0.15 + roleW*0.20 + struct*0.15 + bp*0.20;
+  return { final: Math.min(final,1), breakdown:{ keyword:kw, length:len, role:roleW, structure:struct, budget:bp }};
+}
+
+function selectTier(score){
+  if(score < 0.21) return 'economy';
+  if(score < 0.35) return 'cheap';
+  if(score < 0.56) return 'mid';
+  return 'premium';
+}
+
+// ── Gauge helpers ──
+const ARC_LEN = 251.33; // half-circle arc length for r=80
+function setGauge(pct){
+  // pct 0..1
+  const offset = ARC_LEN * (1 - pct);
+  $gaugeArc.style.transition = 'stroke-dashoffset 1s cubic-bezier(.22,1,.36,1)';
+  $gaugeArc.setAttribute('stroke-dashoffset', offset);
+
+  // position dot along arc
+  const angle = Math.PI + Math.PI * pct;  // π (left) to 2π (right)
+  const cx = 100 + 80 * Math.cos(angle);
+  const cy = 100 + 80 * Math.sin(angle);
+  $gaugeDot.setAttribute('cx', cx);
+  $gaugeDot.setAttribute('cy', cy);
+  $gaugeDot.style.transition = 'opacity .3s .7s';
+  $gaugeDot.setAttribute('opacity', '1');
+}
+
+function resetGauge(){
+  $gaugeArc.style.transition = 'none';
+  $gaugeArc.setAttribute('stroke-dashoffset', ARC_LEN);
+  $gaugeDot.setAttribute('opacity', '0');
+}
+
+// ── Count-up animation ──
+function animateValue(el, end, prefix, suffix, duration){
+  const start = 0;
+  const startTime = performance.now();
+  function tick(now){
+    const t = Math.min((now - startTime) / duration, 1);
+    const ease = 1 - Math.pow(1 - t, 3);
+    const val = start + (end - start) * ease;
+    el.textContent = prefix + val.toFixed(suffix === '%' ? 0 : 4) + suffix;
+    if(t < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+// ── Build breakdown rows (once) ──
+const BREAKDOWN_ITEMS = [
+  { id:'keyword',   label:'Keyword Score',   weight:'×0.30' },
+  { id:'length',    label:'Length Score',     weight:'×0.15' },
+  { id:'role',      label:'Role Weight',     weight:'×0.20' },
+  { id:'structure', label:'Structure Score',  weight:'×0.15' },
+  { id:'budget',    label:'Budget Pressure',  weight:'×0.20' }
+];
+let breakdownBuilt = false;
+function ensureBreakdownRows(){
+  if(breakdownBuilt) return;
+  breakdownBuilt = true;
+  BREAKDOWN_ITEMS.forEach(item => {
+    const row = document.createElement('div');
+    row.className = 'breakdown-row';
+    row.innerHTML = `
+      <div class="breakdown-label">${item.label} <span style="color:var(--text-dim);font-size:.72rem">${item.weight}</span></div>
+      <div class="breakdown-bar-bg"><div class="breakdown-bar" id="bar-${item.id}" style="background:var(--gradient)"></div></div>
+      <div class="breakdown-val" id="val-${item.id}">0.00</div>`;
+    $breakdown.appendChild(row);
+  });
+}
+
+// ── Main Analysis ──
+function runAnalysis(){
+  const text = $prompt.value.trim();
+  if(!text) return;
+
+  const role   = $role.value;
+  const step   = parseInt($step.value,10);
+  const budget = parseInt($budget.value,10);
+
+  const { final, breakdown } = calculateScore(text, role, step, budget);
+  const tier = selectTier(final);
+  const meta = TIER_META[tier];
+
+  // Show results
+  $empty.style.display = 'none';
+  $content.classList.add('visible');
+  ensureBreakdownRows();
+
+  // Reset gauge then animate
+  resetGauge();
+  requestAnimationFrame(() => requestAnimationFrame(() => setGauge(final)));
+
+  // Score number
+  $gaugeScore.textContent = final.toFixed(2);
+  $gaugeScore.style.color = meta.color;
+
+  // Tier label
+  $gaugeTier.textContent = meta.label;
+  $gaugeTier.style.color = meta.color;
+
+  // Breakdown bars (stagger)
+  BREAKDOWN_ITEMS.forEach((item, i) => {
+    const bar = document.getElementById('bar-' + item.id);
+    const val = document.getElementById('val-' + item.id);
+    const v = breakdown[item.id];
+    bar.style.transition = 'none';
+    bar.style.width = '0%';
+    val.textContent = '0.00';
+    setTimeout(() => {
+      bar.style.transition = 'width .8s cubic-bezier(.22,1,.36,1)';
+      bar.style.width = (v * 100) + '%';
+      val.textContent = v.toFixed(2);
+    }, 200 + i * 120);
+  });
+
+  // Tier card
+  $tierCard.classList.remove('reveal');
+  void $tierCard.offsetWidth; // reflow
+  $tierCard.classList.add('reveal');
+  $tierCard.style.borderColor = meta.color;
+  $tierCard.style.boxShadow = '0 0 30px ' + meta.color.replace('var(','').replace(')','') + '15';
+  $tierGlow.style.background = meta.color;
+  $tierName.textContent = meta.label + ' Tier';
+  $tierName.style.color = meta.color;
+  $tierModels.innerHTML = 'Recommended: ' + meta.models;
+
+  // Glow on results panel
+  const rp = document.getElementById('resultsPanel');
+  rp.style.boxShadow = '0 0 40px rgba(0,0,0,.3), inset 0 0 60px ' + meta.color.replace('var(','').replace(')','') + '08';
+
+  // Cost comparison
+  const estimatedTokens = Math.max(text.length / 4, 20); // rough estimate
+  const premiumCost = (estimatedTokens / 1000) * TIER_META.premium.cost;
+  const nexusCost   = (estimatedTokens / 1000) * meta.cost;
+  const savingsPct  = premiumCost > 0 ? ((1 - nexusCost / premiumCost) * 100) : 0;
+
+  animateValue($costPrem,  premiumCost, '$', '', 800);
+  animateValue($costNexus, nexusCost,   '$', '', 800);
+  animateValue($savings,   savingsPct,  '',  '%', 1000);
+
+  // Request preview
+  const promptEsc = escapeHtml(text.length > 200 ? text.slice(0,197) + '...' : text);
+  $preview.innerHTML =
+    `<span class="kw">POST</span> <span class="str">/v1/chat/completions</span> HTTP/1.1\n` +
+    `<span class="hd">Host:</span> localhost:8080\n` +
+    `<span class="hd">X-Workflow-ID:</span> playground-demo\n` +
+    `<span class="hd">X-Step-Number:</span> ${step}\n` +
+    `<span class="hd">Content-Type:</span> application/json\n\n` +
+    `{\n` +
+    `  <span class="kw">"messages"</span>: [\n` +
+    `    {\n` +
+    `      <span class="kw">"role"</span>: <span class="str">"user"</span>,\n` +
+    `      <span class="kw">"content"</span>: <span class="str">"${promptEsc}"</span>\n` +
+    `    }\n` +
+    `  ]\n` +
+    `}`;
+}
+
+function escapeHtml(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Scoring toggle ──
+function toggleScoring(){
+  const btn = document.getElementById('scoringToggle');
+  const det = document.getElementById('scoringDetail');
+  btn.classList.toggle('open');
+  det.classList.toggle('open');
+}
+</script>
+</body>
+</html>

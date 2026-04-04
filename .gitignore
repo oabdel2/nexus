@@ -1,0 +1,39 @@
+# Go binaries & build artifacts
+nexus.exe
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.venv/
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Docker / Monitoring
+monitoring/grafana/data/
+
+# Environment & Secrets
+.env
+*.key
+*.pem
+
+# OS
+.DS_Store
+Thumbs.db

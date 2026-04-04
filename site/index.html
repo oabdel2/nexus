@@ -1,0 +1,1818 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus — Intelligent AI Inference Routing</title>
+<meta name="description" content="Nexus automatically routes every LLM request to the right model — slashing costs up to 70% without sacrificing quality.">
+<style>
+:root {
+  --bg: #0a0a0b;
+  --card: #111113;
+  --border: #1e1e22;
+  --text: #e4e4e7;
+  --text-secondary: #a1a1aa;
+  --text-dim: #71717a;
+  --blue: #3b82f6;
+  --purple: #8b5cf6;
+  --pink: #ec4899;
+  --green: #22c55e;
+  --red: #ef4444;
+  --gradient: linear-gradient(135deg, var(--blue), var(--purple), var(--pink));
+  --gradient-h: linear-gradient(90deg, var(--blue), var(--purple), var(--pink));
+  --radius: 12px;
+  --radius-sm: 8px;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+  --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  --shadow: 0 0 0 1px var(--border);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,.4);
+  --nav-height: 64px;
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; cursor: pointer; border: none; background: none; }
+img { display: block; max-width: 100%; }
+.container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+
+/* Utility */
+.gradient-text {
+  background: var(--gradient-h);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.fade-in {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity .6s ease, transform .6s ease;
+}
+.fade-in.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── NAV ────────────────────────────────────────── */
+.nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  height: var(--nav-height);
+  display: flex;
+  align-items: center;
+  transition: background .3s, box-shadow .3s, backdrop-filter .3s;
+}
+.nav.scrolled {
+  background: rgba(10,10,11,.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 1px 0 var(--border);
+}
+.nav .container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+.nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+}
+.nav-logo-icon {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  background: var(--gradient);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 16px;
+  color: #fff;
+}
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  list-style: none;
+}
+.nav-links a {
+  font-size: 14px;
+  color: var(--text-secondary);
+  transition: color .2s;
+  font-weight: 500;
+}
+.nav-links a:hover { color: #fff; }
+.nav-cta {
+  padding: 8px 20px;
+  border-radius: 8px;
+  background: var(--gradient);
+  color: #fff !important;
+  font-weight: 600;
+  font-size: 14px;
+  transition: opacity .2s, transform .15s;
+}
+.nav-cta:hover { opacity: .9; transform: translateY(-1px); }
+.mobile-toggle {
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  padding: 4px;
+}
+.mobile-toggle span {
+  display: block;
+  width: 22px; height: 2px;
+  background: var(--text);
+  border-radius: 2px;
+  transition: transform .3s, opacity .3s;
+}
+.mobile-menu {
+  display: none;
+  position: fixed;
+  top: var(--nav-height); left: 0; right: 0; bottom: 0;
+  background: rgba(10,10,11,.96);
+  backdrop-filter: blur(16px);
+  z-index: 99;
+  padding: 40px 24px;
+}
+.mobile-menu.open { display: flex; flex-direction: column; gap: 24px; }
+.mobile-menu a {
+  font-size: 18px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+.mobile-menu a:hover { color: #fff; }
+
+@media (max-width: 768px) {
+  .nav-links { display: none; }
+  .mobile-toggle { display: flex; }
+}
+
+/* ── HERO ───────────────────────────────────────── */
+.hero {
+  padding: 160px 0 100px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -200px; left: 50%;
+  transform: translateX(-50%);
+  width: 800px; height: 600px;
+  background: radial-gradient(ellipse, rgba(139,92,246,.12) 0%, rgba(59,130,246,.06) 40%, transparent 70%);
+  pointer-events: none;
+}
+.hero h1 {
+  font-size: clamp(40px, 6vw, 72px);
+  font-weight: 800;
+  letter-spacing: -.03em;
+  line-height: 1.08;
+  margin-bottom: 20px;
+}
+.hero .subtitle {
+  font-size: clamp(17px, 2.2vw, 20px);
+  color: var(--text-secondary);
+  max-width: 640px;
+  margin: 0 auto 40px;
+  line-height: 1.6;
+}
+.hero-btns {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 56px;
+}
+.btn-primary {
+  padding: 14px 32px;
+  border-radius: 10px;
+  background: var(--gradient);
+  color: #fff;
+  font-weight: 600;
+  font-size: 16px;
+  transition: opacity .2s, transform .15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-primary:hover { opacity: .9; transform: translateY(-2px); }
+.btn-outline {
+  padding: 14px 32px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 16px;
+  transition: border-color .2s, transform .15s, background .2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-outline:hover { border-color: var(--text-dim); background: rgba(255,255,255,.03); transform: translateY(-2px); }
+
+/* Code comparison */
+.code-compare {
+  max-width: 700px;
+  margin: 0 auto 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.code-block {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  text-align: left;
+  position: relative;
+  overflow: hidden;
+}
+.code-block-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+.code-block code {
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1.7;
+  display: block;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.code-block code .keyword { color: var(--purple); }
+.code-block code .string { color: var(--green); }
+.code-block code .func { color: var(--blue); }
+.code-block code .comment { color: var(--text-dim); }
+.code-block code .cost { font-weight: 700; }
+.code-block code .cost-high { color: var(--red); }
+.code-block code .cost-low { color: var(--green); }
+.code-block .arrow-label {
+  position: absolute;
+  right: 20px; top: 50%;
+  transform: translateY(-50%);
+  font-size: 24px;
+  font-weight: 700;
+}
+.code-after {
+  border-color: rgba(34,197,94,.25);
+  background: rgba(34,197,94,.03);
+}
+
+.hero-stats {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.stat-badge {
+  padding: 10px 20px;
+  border-radius: 100px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: floatBadge 3s ease-in-out infinite;
+}
+.stat-badge:nth-child(2) { animation-delay: -1s; }
+.stat-badge:nth-child(3) { animation-delay: -2s; }
+.stat-badge .accent { color: var(--blue); }
+@keyframes floatBadge {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+/* ── LOGOS BAR ──────────────────────────────────── */
+.logos-bar {
+  padding: 64px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+}
+.logos-bar p {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--text-dim);
+  margin-bottom: 32px;
+  font-weight: 500;
+}
+.logo-list {
+  display: flex;
+  gap: 40px;
+  justify-content: center;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.logo-item {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-dim);
+  letter-spacing: -.01em;
+  transition: color .2s;
+}
+.logo-item:hover { color: var(--text-secondary); }
+
+/* ── SECTION COMMON ────────────────────────────── */
+section { padding: 100px 0; }
+.section-label {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--purple);
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.section-title {
+  font-size: clamp(30px, 4vw, 44px);
+  font-weight: 800;
+  letter-spacing: -.02em;
+  line-height: 1.15;
+  margin-bottom: 16px;
+}
+.section-desc {
+  font-size: 17px;
+  color: var(--text-secondary);
+  max-width: 580px;
+  line-height: 1.6;
+}
+.section-header {
+  text-align: center;
+  margin-bottom: 64px;
+}
+.section-header .section-desc { margin: 0 auto; }
+
+/* ── PROBLEM ───────────────────────────────────── */
+.problem { background: var(--bg); }
+.problem-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+}
+.problem-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 36px 32px;
+  transition: transform .2s, border-color .25s, box-shadow .25s;
+}
+.problem-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(139,92,246,.25);
+  box-shadow: 0 8px 32px rgba(139,92,246,.06);
+}
+.problem-icon {
+  width: 48px; height: 48px;
+  border-radius: 12px;
+  background: rgba(239,68,68,.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  margin-bottom: 20px;
+}
+.problem-card h3 {
+  font-size: 19px;
+  font-weight: 700;
+  margin-bottom: 10px;
+  letter-spacing: -.01em;
+}
+.problem-card p {
+  font-size: 15px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* ── HOW IT WORKS ──────────────────────────────── */
+.how-it-works { position: relative; }
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  position: relative;
+}
+.steps::before {
+  content: '';
+  position: absolute;
+  top: 60px; left: 16.6%;
+  width: 66.6%; height: 2px;
+  background: var(--gradient-h);
+  opacity: .3;
+}
+.step {
+  text-align: center;
+  position: relative;
+}
+.step-number {
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  background: var(--gradient);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 18px;
+  color: #fff;
+  margin: 0 auto 24px;
+  position: relative;
+  z-index: 2;
+}
+.step h3 {
+  font-size: 19px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  letter-spacing: -.01em;
+}
+.step-content {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  text-align: left;
+  margin-top: 16px;
+}
+.step-content code {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  display: block;
+  white-space: pre-wrap;
+}
+.step-content code .keyword { color: var(--purple); }
+.step-content code .string { color: var(--green); }
+.step-content code .func { color: var(--blue); }
+.step-content code .comment { color: var(--text-dim); }
+.tier-bar {
+  display: flex;
+  gap: 4px;
+  margin-top: 12px;
+  border-radius: 6px;
+  overflow: hidden;
+  height: 32px;
+}
+.tier-bar span {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.tier-economy { background: rgba(34,197,94,.15); color: var(--green); }
+.tier-cheap { background: rgba(59,130,246,.15); color: var(--blue); }
+.tier-mid { background: rgba(139,92,246,.15); color: var(--purple); }
+.tier-premium { background: rgba(236,72,153,.15); color: var(--pink); }
+
+@media (max-width: 768px) {
+  .steps { grid-template-columns: 1fr; gap: 40px; }
+  .steps::before { display: none; }
+}
+
+/* ── FEATURES GRID ─────────────────────────────── */
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 20px;
+}
+.feature-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 36px 32px;
+  transition: transform .2s, border-color .25s, box-shadow .25s;
+}
+.feature-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(59,130,246,.2);
+  box-shadow: 0 8px 32px rgba(59,130,246,.05);
+}
+.feature-icon {
+  font-size: 28px;
+  margin-bottom: 16px;
+  display: block;
+}
+.feature-card h3 {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  letter-spacing: -.01em;
+}
+.feature-card p {
+  font-size: 15px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* ── CALCULATOR ────────────────────────────────── */
+.calculator {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 48px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+.calc-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  margin-bottom: 40px;
+}
+.calc-group label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--text);
+}
+.calc-group .value-display {
+  font-size: 24px;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+.calc-group input[type="range"] {
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  outline: none;
+}
+.calc-group input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--gradient);
+  cursor: pointer;
+  border: 2px solid #fff;
+}
+.calc-group input[type="range"]::-moz-range-thumb {
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--blue);
+  cursor: pointer;
+  border: 2px solid #fff;
+}
+.calc-group select {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  font-family: var(--font);
+  cursor: pointer;
+  outline: none;
+}
+.calc-group select:focus { border-color: var(--blue); }
+.calc-results {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 32px;
+}
+.calc-result-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 24px 20px;
+  text-align: center;
+}
+.calc-result-card .label {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+.calc-result-card .value {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -.02em;
+}
+.calc-result-card .value.savings { color: var(--green); }
+.calc-result-card .value.annual { background: var(--gradient-h); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.tier-breakdown {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 20px;
+}
+.tier-breakdown h4 { font-size: 14px; font-weight: 600; margin-bottom: 16px; }
+.breakdown-bar {
+  display: flex;
+  border-radius: 6px;
+  overflow: hidden;
+  height: 36px;
+  margin-bottom: 12px;
+}
+.breakdown-bar span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  transition: width .5s ease;
+}
+.breakdown-legend {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.legend-dot {
+  width: 10px; height: 10px;
+  border-radius: 3px;
+}
+
+@media (max-width: 768px) {
+  .calculator { padding: 28px 20px; }
+  .calc-inputs { grid-template-columns: 1fr; gap: 24px; }
+  .calc-results { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 480px) {
+  .calc-results { grid-template-columns: 1fr; }
+}
+
+/* ── COMPARISON TABLE ──────────────────────────── */
+.comparison-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.comparison-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 700px;
+}
+.comparison-table th,
+.comparison-table td {
+  padding: 16px 20px;
+  text-align: center;
+  font-size: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.comparison-table th {
+  font-weight: 700;
+  font-size: 15px;
+  background: var(--card);
+  position: sticky;
+  top: var(--nav-height);
+  z-index: 10;
+}
+.comparison-table th:first-child,
+.comparison-table td:first-child {
+  text-align: left;
+  font-weight: 600;
+  color: var(--text);
+}
+.comparison-table td { color: var(--text-secondary); }
+.comparison-table .col-nexus { background: rgba(59,130,246,.04); }
+.comparison-table th.col-nexus {
+  background: rgba(59,130,246,.1);
+  color: var(--blue);
+}
+.check { color: var(--green); font-weight: 700; font-size: 18px; }
+.cross { color: var(--red); font-weight: 700; font-size: 18px; }
+.partial { color: var(--text-dim); font-size: 14px; }
+
+/* ── PRICING ───────────────────────────────────── */
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 20px;
+}
+.pricing-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 36px 32px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  transition: transform .2s, border-color .25s;
+}
+.pricing-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(139,92,246,.2);
+}
+.pricing-card.popular {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 1px var(--blue), 0 8px 40px rgba(59,130,246,.1);
+}
+.popular-badge {
+  position: absolute;
+  top: -12px; left: 50%;
+  transform: translateX(-50%);
+  background: var(--gradient);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 16px;
+  border-radius: 100px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  white-space: nowrap;
+}
+.pricing-name {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.pricing-price {
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: -.03em;
+  margin-bottom: 4px;
+}
+.pricing-price span { font-size: 16px; color: var(--text-dim); font-weight: 500; }
+.pricing-desc {
+  font-size: 14px;
+  color: var(--text-dim);
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+.pricing-features {
+  list-style: none;
+  margin-bottom: 32px;
+  flex: 1;
+}
+.pricing-features li {
+  font-size: 14px;
+  color: var(--text-secondary);
+  padding: 6px 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.pricing-features li::before {
+  content: '✓';
+  color: var(--green);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.pricing-btn {
+  width: 100%;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 15px;
+  text-align: center;
+  transition: opacity .2s, transform .15s;
+}
+.pricing-btn.primary { background: var(--gradient); color: #fff; }
+.pricing-btn.outline { border: 1px solid var(--border); color: var(--text); }
+.pricing-btn:hover { opacity: .9; transform: translateY(-1px); }
+.pricing-note {
+  text-align: center;
+  margin-top: 40px;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+/* ── QUICKSTART ────────────────────────────────── */
+.quickstart-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 4px;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.tab-btn {
+  flex: 1;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-dim);
+  border-radius: var(--radius-sm);
+  transition: color .2s, background .2s;
+}
+.tab-btn.active {
+  color: #fff;
+  background: rgba(255,255,255,.06);
+}
+.tab-btn:hover { color: var(--text-secondary); }
+.quickstart-panel {
+  display: none;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0 0 var(--radius) var(--radius);
+  padding: 32px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+.quickstart-panel.active { display: block; }
+.quickstart-panel code {
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--text-secondary);
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.quickstart-panel code .keyword { color: var(--purple); }
+.quickstart-panel code .string { color: var(--green); }
+.quickstart-panel code .func { color: var(--blue); }
+.quickstart-panel code .comment { color: var(--text-dim); }
+.quickstart-panel code .prompt { color: var(--green); user-select: none; }
+
+/* ── TESTIMONIALS ──────────────────────────────── */
+.testimonials-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+}
+.testimonial-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 36px 32px;
+  transition: transform .2s, border-color .25s;
+}
+.testimonial-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(139,92,246,.2);
+}
+.testimonial-quote {
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--text);
+  margin-bottom: 24px;
+  font-style: italic;
+}
+.testimonial-quote::before { content: '"'; color: var(--purple); font-size: 24px; font-weight: 700; }
+.testimonial-author {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.author-avatar {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: var(--gradient);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  color: #fff;
+}
+.author-info .name { font-size: 14px; font-weight: 600; }
+.author-info .role { font-size: 13px; color: var(--text-dim); }
+
+/* ── FOOTER ────────────────────────────────────── */
+.footer {
+  padding: 80px 0 40px;
+  border-top: 1px solid var(--border);
+}
+.footer-top {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1.5fr;
+  gap: 48px;
+  margin-bottom: 48px;
+}
+.footer-brand .nav-logo { margin-bottom: 12px; }
+.footer-tagline {
+  font-size: 14px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  max-width: 280px;
+}
+.footer-col h4 {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text);
+  margin-bottom: 16px;
+}
+.footer-col a {
+  display: block;
+  font-size: 14px;
+  color: var(--text-dim);
+  padding: 4px 0;
+  transition: color .2s;
+}
+.footer-col a:hover { color: var(--text); }
+.newsletter-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.newsletter-form input {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  font-family: var(--font);
+  outline: none;
+}
+.newsletter-form input:focus { border-color: var(--blue); }
+.newsletter-form button {
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  background: var(--gradient);
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  transition: opacity .2s;
+  white-space: nowrap;
+}
+.newsletter-form button:hover { opacity: .9; }
+.footer-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 32px;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.footer-bottom p {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.footer-heart { color: var(--pink); }
+
+@media (max-width: 768px) {
+  .footer-top { grid-template-columns: 1fr 1fr; gap: 32px; }
+}
+@media (max-width: 480px) {
+  .footer-top { grid-template-columns: 1fr; }
+}
+
+/* ── REQUEST FLOW ANIMATION ────────────────────── */
+.flow-anim {
+  margin-top: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.flow-node {
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--card);
+  animation: pulse-flow 2s ease-in-out infinite;
+}
+.flow-node:nth-child(2) { animation-delay: .4s; }
+.flow-node:nth-child(3) { animation-delay: .8s; }
+.flow-node:nth-child(4) { animation-delay: 1.2s; }
+.flow-node:nth-child(5) { animation-delay: 1.6s; }
+.flow-node.active {
+  border-color: var(--blue);
+  background: rgba(59,130,246,.08);
+  color: var(--blue);
+}
+.flow-arrow { color: var(--text-dim); font-size: 18px; }
+@keyframes pulse-flow {
+  0%, 100% { opacity: .7; }
+  50% { opacity: 1; }
+}
+
+/* Scoring visual */
+.scoring-visual {
+  margin-top: 12px;
+}
+.score-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+.score-label { color: var(--text-dim); width: 70px; text-align: right; }
+.score-bar-bg {
+  flex: 1; height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.score-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 1s ease;
+}
+.score-val { font-weight: 700; width: 30px; font-size: 11px; }
+</style>
+</head>
+<body>
+
+<!-- ════════════════ NAV ════════════════ -->
+<nav class="nav" id="nav">
+  <div class="container">
+    <a href="#" class="nav-logo">
+      <div class="nav-logo-icon">N</div>
+      Nexus
+    </a>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#how-it-works">How It Works</a></li>
+      <li><a href="#pricing">Pricing</a></li>
+      <li><a href="docs.html">Docs</a></li>
+      <li><a href="https://github.com" target="_blank" rel="noopener">GitHub</a></li>
+      <li><a href="#quickstart" class="nav-cta">Get Started Free</a></li>
+    </ul>
+    <button class="mobile-toggle" id="mobile-toggle" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</nav>
+<div class="mobile-menu" id="mobile-menu">
+  <a href="#features" onclick="closeMobile()">Features</a>
+  <a href="#how-it-works" onclick="closeMobile()">How It Works</a>
+  <a href="#pricing" onclick="closeMobile()">Pricing</a>
+  <a href="docs.html">Docs</a>
+  <a href="https://github.com" target="_blank" rel="noopener">GitHub</a>
+  <a href="#quickstart" class="nav-cta" style="text-align:center;display:block;margin-top:16px;" onclick="closeMobile()">Get Started Free</a>
+</div>
+
+<!-- ════════════════ HERO ════════════════ -->
+<section class="hero" id="hero">
+  <div class="container">
+    <div class="fade-in">
+      <h1><span class="gradient-text">Stop Overpaying</span><br>for AI Inference</h1>
+      <p class="subtitle">Nexus automatically routes every LLM request to the right model &mdash; slashing costs up to 70% without sacrificing quality.</p>
+      <div class="hero-btns">
+        <a href="#quickstart" class="btn-primary">Start Free &rarr;</a>
+        <a href="https://github.com" target="_blank" rel="noopener" class="btn-outline">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61-.546-1.385-1.335-1.755-1.335-1.755-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.605-.015 2.896-.015 3.286 0 .315.21.694.825.576C20.565 21.795 24 17.295 24 12c0-6.63-5.37-12-12-12"/></svg>
+          View on GitHub
+        </a>
+      </div>
+    </div>
+
+    <div class="code-compare fade-in">
+      <div class="code-block">
+        <div class="code-block-label">Before &mdash; Every request hits GPT-4</div>
+        <code><span class="func">openai</span>.<span class="func">chat</span>.<span class="func">completions</span>.<span class="func">create</span>(
+  <span class="keyword">model</span>=<span class="string">"gpt-4o"</span>,
+  <span class="keyword">messages</span>=[{<span class="string">"role"</span>: <span class="string">"user"</span>, <span class="string">"content"</span>: prompt}]
+)  <span class="comment"># Every request → </span><span class="cost cost-high">$$$</span></code>
+      </div>
+      <div class="code-block code-after">
+        <div class="code-block-label">After &mdash; Nexus routes to optimal model</div>
+        <code><span class="func">nexus</span>.<span class="func">chat</span>([
+  {<span class="string">"role"</span>: <span class="string">"user"</span>, <span class="string">"content"</span>: prompt}
+])  <span class="comment"># Nexus routes to optimal model → </span><span class="cost cost-low">$</span></code>
+      </div>
+    </div>
+
+    <div class="hero-stats fade-in">
+      <div class="stat-badge"><span class="accent">&lt; 3μs</span> overhead</div>
+      <div class="stat-badge"><span class="accent">70%</span> cost reduction</div>
+      <div class="stat-badge"><span class="accent">2 lines</span> to integrate</div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ LOGOS BAR ════════════════ -->
+<div class="logos-bar">
+  <div class="container">
+    <p>Trusted by teams building with</p>
+    <div class="logo-list">
+      <span class="logo-item">LangChain</span>
+      <span class="logo-item">CrewAI</span>
+      <span class="logo-item">AutoGen</span>
+      <span class="logo-item">OpenAI</span>
+      <span class="logo-item">Anthropic</span>
+      <span class="logo-item">Ollama</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ PROBLEM ════════════════ -->
+<section class="problem" id="problem">
+  <div class="container">
+    <div class="section-header fade-in">
+      <div class="section-label">The Problem</div>
+      <h2 class="section-title">The <span class="gradient-text">$2.5 Trillion</span> Problem</h2>
+      <p class="section-desc">AI inference spending is exploding. Most of it is wasted on over-provisioned models for simple tasks.</p>
+    </div>
+    <div class="problem-cards">
+      <div class="problem-card fade-in">
+        <div class="problem-icon" style="color:#ef4444;">
+          <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <h3>Every request hits GPT-4</h3>
+        <p>Most apps use premium models for everything, even trivial queries like &ldquo;What&rsquo;s 2+2?&rdquo; &mdash; burning budget on tasks a tiny model handles perfectly.</p>
+      </div>
+      <div class="problem-card fade-in">
+        <div class="problem-icon" style="color:#f59e0b;background:rgba(245,158,11,.1);">
+          <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4h16v16H4z"/><path d="M4 12h16M12 4v16"/></svg>
+        </div>
+        <h3>No workflow awareness</h3>
+        <p>Gateways treat each request independently. Multi-step agents waste budget on simple intermediate steps that don&rsquo;t need premium reasoning.</p>
+      </div>
+      <div class="problem-card fade-in">
+        <div class="problem-icon" style="color:#ef4444;">
+          <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+        </div>
+        <h3>Cost surprises</h3>
+        <p>No budget controls. One runaway agent loop can burn through your entire monthly budget in hours with zero warning.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ HOW IT WORKS ════════════════ -->
+<section class="how-it-works" id="how-it-works">
+  <div class="container">
+    <div class="section-header fade-in">
+      <div class="section-label">How It Works</div>
+      <h2 class="section-title">Three Steps to <span class="gradient-text">Smarter Inference</span></h2>
+      <p class="section-desc">Drop in two headers. Let Nexus handle the rest.</p>
+    </div>
+    <div class="steps">
+      <div class="step fade-in">
+        <div class="step-number">1</div>
+        <h3>Add 2 Headers</h3>
+        <div class="step-content">
+          <code><span class="comment"># Just add two headers to your request</span>
+<span class="keyword">headers</span> = {
+  <span class="string">"X-Workflow-ID"</span>: <span class="string">"support-bot"</span>,
+  <span class="string">"X-Step-Number"</span>: <span class="string">"3"</span>
+}</code>
+        </div>
+      </div>
+      <div class="step fade-in">
+        <div class="step-number">2</div>
+        <h3>Nexus Analyzes</h3>
+        <div class="step-content">
+          <code><span class="comment"># Complexity scoring engine</span>
+<span class="func">analyze</span>(<span class="keyword">request</span>) →</code>
+          <div class="scoring-visual">
+            <div class="score-row"><span class="score-label">Keywords</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:35%;background:var(--green);"></div></div><span class="score-val" style="color:var(--green);">0.35</span></div>
+            <div class="score-row"><span class="score-label">Context</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:50%;background:var(--blue);"></div></div><span class="score-val" style="color:var(--blue);">0.50</span></div>
+            <div class="score-row"><span class="score-label">Role</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:20%;background:var(--purple);"></div></div><span class="score-val" style="color:var(--purple);">0.20</span></div>
+            <div class="score-row"><span class="score-label" style="font-weight:700;color:var(--text);">Score</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:35%;background:var(--gradient-h);"></div></div><span class="score-val" style="color:var(--text);font-weight:800;">0.35</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="step fade-in">
+        <div class="step-number">3</div>
+        <h3>Right Model, Right Price</h3>
+        <div class="step-content">
+          <code><span class="comment"># Tier selection based on score</span>
+<span class="keyword">score</span> 0.35 → <span class="string">"economy"</span> tier
+<span class="comment"># GPT-4o-mini @ $0.15/1M tokens</span></code>
+          <div class="tier-bar">
+            <span class="tier-economy" style="flex:3;">Economy</span>
+            <span class="tier-cheap" style="flex:2;">Standard</span>
+            <span class="tier-mid" style="flex:1.5;">Mid</span>
+            <span class="tier-premium" style="flex:1;">Premium</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-anim fade-in">
+      <div class="flow-node">Client Request</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-node active">Nexus Gateway</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-node">Complexity Scorer</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-node">Tier Router</div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-node">Optimal Model</div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ FEATURES ════════════════ -->
+<section id="features">
+  <div class="container">
+    <div class="section-header fade-in">
+      <div class="section-label">Features</div>
+      <h2 class="section-title">Everything You Need for <span class="gradient-text">Intelligent Routing</span></h2>
+      <p class="section-desc">Built for production AI workloads. From single requests to complex multi-agent workflows.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card fade-in">
+        <span class="feature-icon">⚡</span>
+        <h3>Adaptive Routing</h3>
+        <p>CASTER-inspired complexity scoring routes each request to the optimal model tier. Simple tasks get cheap models; hard problems get premium.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <span class="feature-icon">💰</span>
+        <h3>Budget Intelligence</h3>
+        <p>Set per-workflow budgets. Nexus auto-downgrades tiers as spend accumulates, ensuring you never blow past your cost ceiling.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <span class="feature-icon">🔄</span>
+        <h3>Workflow Awareness</h3>
+        <p>Tracks multi-step agent workflows. Knows step 1 (planning) needs premium reasoning, step 5 (formatting) doesn&rsquo;t.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <span class="feature-icon">📊</span>
+        <h3>Cost Attribution</h3>
+        <p>Per-team, per-workflow cost tracking with Prometheus metrics. Know exactly where every dollar goes across your organization.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <span class="feature-icon">🚀</span>
+        <h3>Zero Overhead</h3>
+        <p>Less than 3μs routing decisions. Written in Go for maximum performance. No performance tax on your inference pipeline.</p>
+      </div>
+      <div class="feature-card fade-in">
+        <span class="feature-icon">🔌</span>
+        <h3>Drop-In Compatible</h3>
+        <p>OpenAI-compatible API. Works with LangChain, CrewAI, AutoGen, or any HTTP client. Change one URL, save 70%.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ CALCULATOR ════════════════ -->
+<section id="calculator">
+  <div class="container">
+    <div class="section-header fade-in">
+      <div class="section-label">Savings</div>
+      <h2 class="section-title">Calculate Your <span class="gradient-text">Cost Savings</span></h2>
+      <p class="section-desc">See how much Nexus can save your team based on your current inference volume.</p>
+    </div>
+    <div class="calculator fade-in">
+      <div class="calc-inputs">
+        <div class="calc-group">
+          <label>Monthly LLM Requests</label>
+          <div class="value-display" id="req-display">100,000</div>
+          <input type="range" id="req-slider" min="0" max="100" value="40">
+        </div>
+        <div class="calc-group">
+          <label>Average Cost per Request</label>
+          <div class="value-display" id="cost-display">$0.010</div>
+          <input type="range" id="cost-slider" min="0" max="100" value="30">
+        </div>
+        <div class="calc-group">
+          <label>Workload Type</label>
+          <select id="workload-select">
+            <option value="general">General</option>
+            <option value="code">Code Generation</option>
+            <option value="support">Customer Support</option>
+            <option value="data">Data Analysis</option>
+          </select>
+        </div>
+      </div>
+      <div class="calc-results">
+        <div class="calc-result-card">
+          <div class="label">Current Monthly Cost</div>
+          <div class="value" id="current-cost">$1,000</div>
+        </div>
+        <div class="calc-result-card">
+          <div class="label">With Nexus</div>
+          <div class="value" id="nexus-cost" style="color:var(--blue);">$350</div>
+        </div>
+        <div class="calc-result-card">
+          <div class="label">Monthly Savings</div>
+          <div class="value savings" id="monthly-savings">$650</div>
+        </div>
+        <div class="calc-result-card">
+          <div class="label">Annual Savings</div>
+          <div class="value annual" id="annual-savings">$7,800</div>
+        </div>
+      </div>
+      <div class="tier-breakdown">
+        <h4>Request Distribution by Tier</h4>
+        <div class="breakdown-bar" id="breakdown-bar">
+          <span class="tier-economy" style="width:40%;">40%</span>
+          <span class="tier-cheap" style="width:25%;">25%</span>
+          <span class="tier-mid" style="width:20%;">20%</span>
+          <span class="tier-premium" style="width:15%;">15%</span>
+        </div>
+        <div class="breakdown-legend">
+          <div class="legend-item"><div class="legend-dot" style="background:rgba(34,197,94,.4);"></div>Economy</div>
+          <div class="legend-item"><div class="legend-dot" style="background:rgba(59,130,246,.4);"></div>Standard</div>
+          <div class="legend-item"><div class="legend-dot" style="background:rgba(139,92,246,.4);"></div>Mid</div>
+          <div class="legend-item"><div class="legend-dot" style="background:rgba(236,72,153,.4);"></div>Premium</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ COMPARISON TABLE ════════════════ -->
+<section id="comparison">
+  <div class="container">
+    <div class="section-header fade-in">
+      <div class="section-label">Comparison</div>
+      <h2 class="section-title">How Nexus <span class="gradient-text">Compares</span></h2>
+      <p class="section-desc">The only inference gateway with true workflow intelligence and built-in budget controls.</p>
+    </div>
+    <div class="comparison-wrap fade-in">
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th class="col-nexus">Nexus</th>
+            <th>OpenRouter</th>
+            <th>TensorZero</th>
+            <th>LiteLLM</th>
+            <th>Portkey</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Workflow Awareness</td>
+            <td class="col-nexus"><span class="check">✓</span></td>
+            <td><span class="cross">✗</span></td>
+            <td><span class="cross">✗</span></td>
+            <td><span class="cross">✗</span></td>
+            <td><span class="cross">✗</span></td>
+          </tr>
+          <tr>
+            <td>Budget Controls</td>
+            <td class="col-nexus"><span class="check">✓</span></td>
+            <td><span class="cross">✗</span></td>
+            <td><span class="cross">✗</span></td>
+            <td><span class="partial">Partial</span></td>
+            <td><span class="check">✓</span></td>
+          </tr>
+          <tr>
+            <td>Complexity Scoring</td>
+            <td class="col-nexus"><span class="check">✓</span></td>
+            <td><span class="cross">✗</span></td>
+            <td><span class="partial">Partial</span></td>
+            <td><span class="cross">✗</span></td>
+            <td><span class="cross">✗</span></td>
+          </tr>
+          <tr>
+            <td>Cost Attribution</td>
+            <td class="col-nexus"><span class="check">✓</span></td>
+            <td><span class="partial">Partial</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="partial">Partial</span></td>
+            <td><span class="check">✓</span></td>
+          </tr>
+          <tr>
+            <td>Self-Hosted</td>
+            <td class="col-nexus"><span class="check">✓</span></td>
+            <td><span class="cross">✗</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="cross">✗</span></td>
+          </tr>
+          <tr>
+            <td>Open Source</td>
+            <td class="col-nexus"><span class="check">✓</span></td>
+            <td><span class="cross">✗</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="cross">✗</span></td>
+          </tr>
+          <tr>
+            <td>Overhead</td>
+            <td class="col-nexus"><span style="color:var(--green);font-weight:700;">&lt; 3μs</span></td>
+            <td><span class="partial">~50ms</span></td>
+            <td><span class="partial">~10ms</span></td>
+            <td><span class="partial">~5ms</span></td>
+            <td><span class="partial">~20ms</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ PRICING ════════════════ -->
+<section id="pricing">
+  <div class="container">
+    <div class="section-header fade-in">
+      <div class="section-label">Pricing</div>
+      <h2 class="section-title">Simple, <span class="gradient-text">Transparent</span> Pricing</h2>
+      <p class="section-desc">Start free, scale as you grow. No hidden fees, no per-request charges from Nexus.</p>
+    </div>
+    <div class="pricing-grid">
+      <div class="pricing-card popular fade-in">
+        <div class="popular-badge">Most Popular</div>
+        <div class="pricing-name">Community</div>
+        <div class="pricing-price">Free</div>
+        <div class="pricing-desc">Self-hosted, forever free for individuals and small teams.</div>
+        <ul class="pricing-features">
+          <li>Self-hosted deployment</li>
+          <li>Unlimited requests</li>
+          <li>All routing features</li>
+          <li>Prometheus metrics</li>
+          <li>Docker &amp; binary support</li>
+          <li>Community support</li>
+        </ul>
+        <a href="#quickstart" class="pricing-btn primary">Get Started Free</a>
+      </div>
+      <div class="pricing-card fade-in">
+        <div class="pricing-name">Pro</div>
+        <div class="pricing-price">$49<span>/mo</span></div>
+        <div class="pricing-desc">Managed cloud for growing teams that want zero ops.</div>
+        <ul class="pricing-features">
+          <li>Managed cloud hosting</li>
+          <li>100K requests/month</li>
+          <li>Priority routing</li>
+          <li>Email support</li>
+          <li>Dashboard &amp; analytics</li>
+          <li>99.9% uptime SLA</li>
+        </ul>
+        <button class="pricing-btn outline">Start 14-Day Trial</button>
+      </div>
+      <div class="pricing-card fade-in">
+        <div class="pricing-name">Team</div>
+        <div class="pricing-price">$199<span>/mo</span></div>
+        <div class="pricing-desc">Built for organizations with multiple teams and projects.</div>
+        <ul class="pricing-features">
+          <li>Everything in Pro</li>
+          <li>1M requests/month</li>
+          <li>SSO &amp; SAML</li>
+          <li>Per-team budgets</li>
+          <li>Cost attribution reports</li>
+          <li>Slack support channel</li>
+        </ul>
+        <button class="pricing-btn outline">Contact Sales</button>
+      </div>
+      <div class="pricing-card fade-in">
+        <div class="pricing-name">Enterprise</div>
+        <div class="pricing-price">Custom</div>
+        <div class="pricing-desc">Dedicated infrastructure and custom solutions for large orgs.</div>
+        <ul class="pricing-features">
+          <li>Everything in Team</li>
+          <li>Unlimited requests</li>
+          <li>Dedicated infrastructure</li>
+          <li>Custom classifiers</li>
+          <li>Guaranteed SLA</li>
+          <li>Dedicated support engineer</li>
+        </ul>
+        <button class="pricing-btn outline">Contact Sales</button>
+      </div>
+    </div>
+    <p class="pricing-note fade-in">All plans include: OpenAI-compatible API &bull; Prometheus metrics &bull; Docker support</p>
+  </div>
+</section>
+
+<!-- ════════════════ QUICKSTART ════════════════ -->
+<section id="quickstart">
+  <div class="container">
+    <div class="section-header fade-in">
+      <div class="section-label">Quickstart</div>
+      <h2 class="section-title">Up and Running in <span class="gradient-text">60 Seconds</span></h2>
+      <p class="section-desc">Choose your preferred installation method and start saving.</p>
+    </div>
+    <div class="fade-in">
+      <div class="quickstart-tabs">
+        <button class="tab-btn active" data-tab="docker">Docker</button>
+        <button class="tab-btn" data-tab="binary">Go Binary</button>
+        <button class="tab-btn" data-tab="python">Python SDK</button>
+      </div>
+      <div class="quickstart-panel active" id="tab-docker">
+        <code><span class="comment"># 1. Clone the repo</span>
+<span class="prompt">$ </span>git clone https://github.com/nexus-gateway/nexus.git
+<span class="prompt">$ </span>cd nexus
+
+<span class="comment"># 2. Configure your providers in .env</span>
+<span class="prompt">$ </span>cp .env.example .env
+<span class="prompt">$ </span>nano .env
+<span class="comment"># OPENAI_API_KEY=sk-...</span>
+<span class="comment"># ANTHROPIC_API_KEY=sk-ant-...</span>
+
+<span class="comment"># 3. Launch with Docker Compose</span>
+<span class="prompt">$ </span>docker compose up -d
+
+<span class="comment"># ✓ Nexus is running on http://localhost:8080</span>
+<span class="comment"># ✓ Prometheus metrics on :9090</span></code>
+      </div>
+      <div class="quickstart-panel" id="tab-binary">
+        <code><span class="comment"># 1. Download the latest release</span>
+<span class="prompt">$ </span>curl -sSL https://get.nexus-gateway.dev | sh
+
+<span class="comment"># 2. Create a minimal config</span>
+<span class="prompt">$ </span>cat &lt;&lt; <span class="string">EOF</span> &gt; config.yaml
+<span class="keyword">server</span>:
+  <span class="keyword">port</span>: <span class="string">8080</span>
+<span class="keyword">providers</span>:
+  - <span class="keyword">name</span>: <span class="string">openai</span>
+    <span class="keyword">api_key</span>: <span class="string">${OPENAI_API_KEY}</span>
+  - <span class="keyword">name</span>: <span class="string">anthropic</span>
+    <span class="keyword">api_key</span>: <span class="string">${ANTHROPIC_API_KEY}</span>
+<span class="keyword">tiers</span>:
+  <span class="keyword">economy</span>: <span class="string">gpt-4o-mini</span>
+  <span class="keyword">standard</span>: <span class="string">gpt-4o</span>
+  <span class="keyword">premium</span>: <span class="string">claude-sonnet-4</span>
+<span class="string">EOF</span>
+
+<span class="comment"># 3. Run Nexus</span>
+<span class="prompt">$ </span>nexus serve --config config.yaml
+
+<span class="comment"># ✓ Nexus is running on http://localhost:8080</span></code>
+      </div>
+      <div class="quickstart-panel" id="tab-python">
+        <code><span class="comment"># 1. Install the Python SDK</span>
+<span class="prompt">$ </span>pip install nexus-gateway
+
+<span class="comment"># 2. Use it in your code (3 lines!)</span>
+<span class="keyword">from</span> nexus <span class="keyword">import</span> NexusClient
+
+client = <span class="func">NexusClient</span>(<span class="keyword">base_url</span>=<span class="string">"http://localhost:8080"</span>)
+
+response = client.<span class="func">chat</span>(
+    <span class="keyword">messages</span>=[{<span class="string">"role"</span>: <span class="string">"user"</span>, <span class="string">"content"</span>: <span class="string">"Explain quantum computing"</span>}],
+    <span class="keyword">workflow_id</span>=<span class="string">"research-bot"</span>,
+    <span class="keyword">step</span>=<span class="string">1</span>
+)
+
+<span class="func">print</span>(response.content)
+<span class="comment"># → Routed to 'premium' tier (complexity: 0.82)</span>
+<span class="comment"># → Cost: $0.003 (saved $0.027 vs always-GPT-4)</span></code>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ TESTIMONIALS ════════════════ -->
+<section id="testimonials">
+  <div class="container">
+    <div class="section-header fade-in">
+      <div class="section-label">Testimonials</div>
+      <h2 class="section-title">Loved by <span class="gradient-text">AI Engineers</span></h2>
+      <p class="section-desc">See what teams are saying about Nexus.</p>
+    </div>
+    <div class="testimonials-grid">
+      <div class="testimonial-card fade-in">
+        <p class="testimonial-quote">We dropped our inference costs by 63% in the first week. The workflow-aware routing is a game-changer &mdash; our support bot now uses GPT-4 only when it actually needs to reason through complex issues.&rdquo;</p>
+        <div class="testimonial-author">
+          <div class="author-avatar">SC</div>
+          <div class="author-info">
+            <div class="name">Sarah Chen</div>
+            <div class="role">CTO at DataFlow AI</div>
+          </div>
+        </div>
+      </div>
+      <div class="testimonial-card fade-in">
+        <p class="testimonial-quote">Integration took literally 10 minutes. We swapped our OpenAI base URL to Nexus and added two headers. The budget controls saved us from a $12K bill when an agent loop went haywire.&rdquo;</p>
+        <div class="testimonial-author">
+          <div class="author-avatar">MJ</div>
+          <div class="author-info">
+            <div class="name">Marcus Johnson</div>
+            <div class="role">Platform Lead at ScaleOps</div>
+          </div>
+        </div>
+      </div>
+      <div class="testimonial-card fade-in">
+        <p class="testimonial-quote">The per-step routing is incredibly smart. Our 8-step research agent now costs 70% less because Nexus knows that data formatting and summarization steps don&rsquo;t need Claude Opus.&rdquo;</p>
+        <div class="testimonial-author">
+          <div class="author-avatar">PP</div>
+          <div class="author-info">
+            <div class="name">Priya Patel</div>
+            <div class="role">ML Engineer at NeuralPath</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════ FOOTER ════════════════ -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <a href="#" class="nav-logo">
+          <div class="nav-logo-icon">N</div>
+          Nexus
+        </a>
+        <p class="footer-tagline">Intelligent inference routing for the modern AI stack.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Product</h4>
+        <a href="#features">Features</a>
+        <a href="#pricing">Pricing</a>
+        <a href="docs.html">Documentation</a>
+        <a href="#quickstart">Quickstart</a>
+      </div>
+      <div class="footer-col">
+        <h4>Community</h4>
+        <a href="https://github.com" target="_blank" rel="noopener">GitHub</a>
+        <a href="#">Blog</a>
+        <a href="#">Twitter</a>
+        <a href="#">Discord</a>
+      </div>
+      <div class="footer-col">
+        <h4>Stay Updated</h4>
+        <p style="font-size:14px;color:var(--text-dim);margin-bottom:12px;">Get notified about new features and releases.</p>
+        <form class="newsletter-form" onsubmit="event.preventDefault(); this.querySelector('button').textContent='Subscribed!'; this.querySelector('input').value='';">
+          <input type="email" placeholder="you@company.com" required>
+          <button type="submit">Subscribe</button>
+        </form>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>Built with <span class="footer-heart">♥</span> for the AI community</p>
+      <p>&copy; 2025 Nexus. All rights reserved.</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function() {
+  'use strict';
+
+  /* ── Intersection Observer fade-in ── */
+  const observer = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+  document.querySelectorAll('.fade-in').forEach(function(el) {
+    observer.observe(el);
+  });
+
+  /* ── Sticky nav background ── */
+  var nav = document.getElementById('nav');
+  window.addEventListener('scroll', function() {
+    nav.classList.toggle('scrolled', window.scrollY > 20);
+  }, { passive: true });
+
+  /* ── Mobile menu toggle ── */
+  var toggle = document.getElementById('mobile-toggle');
+  var menu = document.getElementById('mobile-menu');
+  toggle.addEventListener('click', function() {
+    menu.classList.toggle('open');
+    var open = menu.classList.contains('open');
+    toggle.children[0].style.transform = open ? 'rotate(45deg) translate(5px, 5px)' : '';
+    toggle.children[1].style.opacity = open ? '0' : '1';
+    toggle.children[2].style.transform = open ? 'rotate(-45deg) translate(5px, -5px)' : '';
+    document.body.style.overflow = open ? 'hidden' : '';
+  });
+
+  window.closeMobile = function() {
+    menu.classList.remove('open');
+    toggle.children[0].style.transform = '';
+    toggle.children[1].style.opacity = '1';
+    toggle.children[2].style.transform = '';
+    document.body.style.overflow = '';
+  };
+
+  /* ── Smooth scroll for nav links ── */
+  document.querySelectorAll('a[href^="#"]').forEach(function(a) {
+    a.addEventListener('click', function(e) {
+      var id = this.getAttribute('href');
+      if (id === '#') return;
+      var target = document.querySelector(id);
+      if (target) {
+        e.preventDefault();
+        var offset = 80;
+        var y = target.getBoundingClientRect().top + window.pageYOffset - offset;
+        window.scrollTo({ top: y, behavior: 'smooth' });
+      }
+    });
+  });
+
+  /* ── Quickstart tabs ── */
+  document.querySelectorAll('.tab-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+      document.querySelectorAll('.quickstart-panel').forEach(function(p) { p.classList.remove('active'); });
+      this.classList.add('active');
+      document.getElementById('tab-' + this.dataset.tab).classList.add('active');
+    });
+  });
+
+  /* ── Cost Calculator ── */
+  var reqSlider = document.getElementById('req-slider');
+  var costSlider = document.getElementById('cost-slider');
+  var workloadSelect = document.getElementById('workload-select');
+
+  var tierProfiles = {
+    general:  { economy: 40, standard: 25, mid: 20, premium: 15, savingsRate: 0.65 },
+    code:     { economy: 20, standard: 25, mid: 30, premium: 25, savingsRate: 0.55 },
+    support:  { economy: 50, standard: 25, mid: 15, premium: 10, savingsRate: 0.72 },
+    data:     { economy: 35, standard: 30, mid: 20, premium: 15, savingsRate: 0.60 }
+  };
+
+  var tierCostMultipliers = { economy: 0.08, standard: 0.25, mid: 0.55, premium: 1.0 };
+
+  function logScale(val, min, max) {
+    var minLog = Math.log10(min);
+    var maxLog = Math.log10(max);
+    return Math.pow(10, minLog + (maxLog - minLog) * val / 100);
+  }
+
+  function formatNumber(n) {
+    if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+    if (n >= 1e3) return (n / 1e3).toFixed(0) + 'K';
+    return n.toFixed(0);
+  }
+
+  function formatDollar(n) {
+    if (n >= 1e6) return '$' + (n / 1e6).toFixed(1) + 'M';
+    if (n >= 1e3) return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 });
+    return '$' + n.toFixed(0);
+  }
+
+  function animateValue(el, target, prefix, suffix) {
+    prefix = prefix || '';
+    suffix = suffix || '';
+    var current = parseFloat(el.dataset.currentVal) || 0;
+    var diff = target - current;
+    var steps = 20;
+    var step = 0;
+    function tick() {
+      step++;
+      var progress = step / steps;
+      var eased = 1 - Math.pow(1 - progress, 3);
+      var val = current + diff * eased;
+      if (val >= 1000) {
+        el.textContent = prefix + val.toLocaleString('en-US', { maximumFractionDigits: 0 }) + suffix;
+      } else {
+        el.textContent = prefix + val.toFixed(0) + suffix;
+      }
+      if (step < steps) requestAnimationFrame(tick);
+    }
+    el.dataset.currentVal = target;
+    tick();
+  }
+
+  function updateCalc() {
+    var requests = Math.round(logScale(parseFloat(reqSlider.value), 1000, 10000000));
+    var costPerReq = logScale(parseFloat(costSlider.value), 0.001, 0.1);
+    var workload = workloadSelect.value;
+    var profile = tierProfiles[workload];
+
+    document.getElementById('req-display').textContent = formatNumber(requests);
+    document.getElementById('cost-display').textContent = '$' + costPerReq.toFixed(3);
+
+    var currentCost = requests * costPerReq;
+    var nexusCost = currentCost * (1 - profile.savingsRate);
+    var monthlySavings = currentCost - nexusCost;
+    var annualSavings = monthlySavings * 12;
+
+    animateValue(document.getElementById('current-cost'), currentCost, '$');
+    animateValue(document.getElementById('nexus-cost'), nexusCost, '$');
+    animateValue(document.getElementById('monthly-savings'), monthlySavings, '$');
+    animateValue(document.getElementById('annual-savings'), annualSavings, '$');
+
+    var bar = document.getElementById('breakdown-bar');
+    var tiers = ['economy', 'standard', 'mid', 'premium'];
+    var colors = ['tier-economy', 'tier-cheap', 'tier-mid', 'tier-premium'];
+    bar.innerHTML = '';
+    tiers.forEach(function(t, i) {
+      var pct = profile[t === 'standard' ? 'standard' : t];
+      var span = document.createElement('span');
+      span.className = colors[i];
+      span.style.width = pct + '%';
+      span.textContent = pct + '%';
+      bar.appendChild(span);
+    });
+  }
+
+  reqSlider.addEventListener('input', updateCalc);
+  costSlider.addEventListener('input', updateCalc);
+  workloadSelect.addEventListener('change', updateCalc);
+  updateCalc();
+
+})();
+</script>
+</body>
+</html>
