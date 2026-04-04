@@ -15,6 +15,7 @@ import (
 	"github.com/nexus-gateway/nexus/internal/dashboard"
 	"github.com/nexus-gateway/nexus/internal/provider"
 	"github.com/nexus-gateway/nexus/internal/router"
+	"github.com/nexus-gateway/nexus/internal/security"
 	"github.com/nexus-gateway/nexus/internal/telemetry"
 	"github.com/nexus-gateway/nexus/internal/workflow"
 )
@@ -129,9 +130,61 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/synonyms/promote", s.handleSynonymPromote)
 	mux.HandleFunc("/api/synonyms/add", s.handleSynonymAdd)
 
-	s.httpServer= &http.Server{
+	// Build security middleware chain
+	var middlewares []security.Middleware
+
+	// Always: security headers + request ID
+	middlewares = append(middlewares, security.SecurityHeaders())
+	middlewares = append(middlewares, security.RequestID())
+
+	// CORS
+	if len(s.cfg.Security.CORS.AllowedOrigins) > 0 {
+		middlewares = append(middlewares, security.CORS(s.cfg.Security.CORS.AllowedOrigins))
+	}
+
+	// Rate limiting
+	rateLimiter := security.NewRateLimiter(security.RateLimiterConfig{
+		Enabled:    s.cfg.Security.RateLimit.Enabled,
+		DefaultRPM: s.cfg.Security.RateLimit.DefaultRPM,
+		BurstSize:  s.cfg.Security.RateLimit.BurstSize,
+	})
+	middlewares = append(middlewares, rateLimiter.Middleware())
+
+	// OIDC SSO
+	if s.cfg.Security.OIDC.Enabled {
+		oidcProvider, err := security.NewOIDCProvider(security.OIDCConfig{
+			Enabled:        true,
+			Issuer:         s.cfg.Security.OIDC.Issuer,
+			ClientID:       s.cfg.Security.OIDC.ClientID,
+			ClientSecret:   s.cfg.Security.OIDC.ClientSecret,
+			AllowedDomains: s.cfg.Security.OIDC.AllowedDomains,
+		})
+		if err == nil {
+			middlewares = append(middlewares, oidcProvider.Middleware())
+		}
+	}
+
+	// Prompt guard
+	promptGuard := security.NewPromptGuard(security.PromptGuardConfig{
+		Enabled:         s.cfg.Security.PromptGuard.Enabled,
+		Mode:            s.cfg.Security.PromptGuard.Mode,
+		MaxPromptLength: s.cfg.Security.PromptGuard.MaxPromptLength,
+		CustomPatterns:  s.cfg.Security.PromptGuard.CustomPatterns,
+		CustomPhrases:   s.cfg.Security.PromptGuard.CustomPhrases,
+	})
+	middlewares = append(middlewares, promptGuard.Middleware())
+
+	// Audit logging
+	if s.cfg.Security.AuditLog {
+		middlewares = append(middlewares, security.AuditLog(s.logger))
+	}
+
+	// Apply middleware chain
+	handler := security.Chain(mux, middlewares...)
+
+	s.httpServer = &http.Server{
 		Addr:         fmt.Sprintf(":%d", s.cfg.Server.Port),
-		Handler:      mux,
+		Handler:      handler,
 		ReadTimeout:  s.cfg.Server.ReadTimeout,
 		WriteTimeout: s.cfg.Server.WriteTimeout,
 	}
@@ -143,8 +196,27 @@ func (s *Server) Start(ctx context.Context) error {
 		"port", s.cfg.Server.Port,
 		"providers", len(s.providers),
 		"cache_l1", s.cfg.Cache.L1Enabled,
+		"tls", s.cfg.Security.TLS.Enabled,
+		"rate_limit", s.cfg.Security.RateLimit.Enabled,
+		"prompt_guard", s.cfg.Security.PromptGuard.Enabled,
+		"audit_log", s.cfg.Security.AuditLog,
 	)
 
+	if s.cfg.Security.TLS.Enabled {
+		tlsCfg, err := security.BuildTLSConfig(security.TLSConfig{
+			Enabled:    true,
+			CertFile:   s.cfg.Security.TLS.CertFile,
+			KeyFile:    s.cfg.Security.TLS.KeyFile,
+			CAFile:     s.cfg.Security.TLS.CAFile,
+			MinVersion: s.cfg.Security.TLS.MinVersion,
+			MutualTLS:  s.cfg.Security.TLS.MutualTLS,
+		})
+		if err != nil {
+			return fmt.Errorf("TLS configuration failed: %w", err)
+		}
+		s.httpServer.TLSConfig = tlsCfg
+		return s.httpServer.ListenAndServeTLS(s.cfg.Security.TLS.CertFile, s.cfg.Security.TLS.KeyFile)
+	}
 	return s.httpServer.ListenAndServe()
 }
 
@@ -186,6 +258,19 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	// Build prompt text for classification
 	promptText := extractPromptText(req.Messages)
 	contextLen := len(promptText)
+
+	// Check for prompt injection
+	if guard := security.GetPromptGuard(r.Context()); guard != nil {
+		result := guard.Check(promptText)
+		if result.Blocked {
+			s.logger.Warn("prompt injection blocked",
+				"threats", result.Threats,
+				"risk_score", result.RiskScore,
+			)
+			http.Error(w, `{"error":"prompt rejected by security filter"}`, http.StatusBadRequest)
+			return
+		}
+	}
 
 	// Check cache first
 	cacheKey := ""

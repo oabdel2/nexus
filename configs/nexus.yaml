@@ -142,3 +142,49 @@ telemetry:
   metrics_port: 9090
   log_level: info
   log_format: json
+
+security:
+  tls:
+    enabled: false
+    cert_file: ""
+    key_file: ""
+    ca_file: ""
+    min_version: "1.2"
+    mutual_tls: false
+  prompt_guard:
+    enabled: true
+    mode: "block"
+    max_prompt_length: 32000
+  oidc:
+    enabled: false
+    issuer: ""
+    client_id: ""
+    client_secret: ""
+    allowed_domains: []
+  rbac:
+    enabled: false
+    roles:
+      admin:
+        permissions: ["chat", "admin", "synonyms:read", "synonyms:write", "dashboard", "feedback"]
+      user:
+        permissions: ["chat", "feedback"]
+      viewer:
+        permissions: ["dashboard", "synonyms:read"]
+  rate_limit:
+    enabled: true
+    default_rpm: 60
+    burst_size: 10
+  cors:
+    allowed_origins: ["*"]
+  audit_log: true
+
+storage:
+  vector_backend: "memory"
+  kv_backend: "memory"
+  qdrant_host: "localhost"
+  qdrant_port: 6333
+  qdrant_collection: "nexus_cache"
+  qdrant_dimension: 1024
+  redis_addr: "localhost:6379"
+  redis_password: ""
+  redis_db: 0

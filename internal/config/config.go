@@ -8,12 +8,87 @@ import (
 )
 
 type Config struct {
-	Server    ServerConfig    `yaml:"server"`
-	Providers []ProviderConfig `yaml:"providers"`
-	Router    RouterConfig    `yaml:"router"`
-	Cache     CacheConfig     `yaml:"cache"`
-	Workflow  WorkflowConfig  `yaml:"workflow"`
-	Telemetry TelemetryConfig `yaml:"telemetry"`
+	Server    ServerConfig      `yaml:"server"`
+	Providers []ProviderConfig  `yaml:"providers"`
+	Router    RouterConfig      `yaml:"router"`
+	Cache     CacheConfig       `yaml:"cache"`
+	Workflow  WorkflowConfig    `yaml:"workflow"`
+	Telemetry TelemetryConfig   `yaml:"telemetry"`
+	Security  SecurityConfig    `yaml:"security"`
+	Storage   StorageYAMLConfig `yaml:"storage"`
+}
+
+type SecurityConfig struct {
+	TLS       TLSYAMLConfig         `yaml:"tls"`
+	PromptGuard PromptGuardYAMLConfig `yaml:"prompt_guard"`
+	OIDC      OIDCYAMLConfig        `yaml:"oidc"`
+	RBAC      RBACYAMLConfig        `yaml:"rbac"`
+	RateLimit RateLimitYAMLConfig   `yaml:"rate_limit"`
+	CORS      CORSYAMLConfig        `yaml:"cors"`
+	AuditLog  bool                  `yaml:"audit_log"`
+}
+
+type TLSYAMLConfig struct {
+	Enabled    bool   `yaml:"enabled"`
+	CertFile   string `yaml:"cert_file"`
+	KeyFile    string `yaml:"key_file"`
+	CAFile     string `yaml:"ca_file"`
+	MinVersion string `yaml:"min_version"`
+	MutualTLS  bool   `yaml:"mutual_tls"`
+}
+
+type PromptGuardYAMLConfig struct {
+	Enabled         bool     `yaml:"enabled"`
+	Mode            string   `yaml:"mode"`
+	MaxPromptLength int      `yaml:"max_prompt_length"`
+	CustomPatterns  []string `yaml:"custom_patterns"`
+	CustomPhrases   []string `yaml:"custom_phrases"`
+}
+
+type OIDCYAMLConfig struct {
+	Enabled        bool     `yaml:"enabled"`
+	Issuer         string   `yaml:"issuer"`
+	ClientID       string   `yaml:"client_id"`
+	ClientSecret   string   `yaml:"client_secret"`
+	RedirectURL    string   `yaml:"redirect_url"`
+	Scopes         []string `yaml:"scopes"`
+	AllowedDomains []string `yaml:"allowed_domains"`
+}
+
+type RBACYAMLConfig struct {
+	Enabled bool                `yaml:"enabled"`
+	Roles   map[string]RoleYAML `yaml:"roles"`
+}
+
+type RoleYAML struct {
+	Permissions  []string `yaml:"permissions"`
+	MaxRPM       int      `yaml:"max_rpm"`
+	MaxBudget    float64  `yaml:"max_budget"`
+	AllowedTiers []string `yaml:"allowed_tiers"`
+}
+
+type RateLimitYAMLConfig struct {
+	Enabled    bool `yaml:"enabled"`
+	DefaultRPM int  `yaml:"default_rpm"`
+	BurstSize  int  `yaml:"burst_size"`
+}
+
+type CORSYAMLConfig struct {
+	AllowedOrigins []string `yaml:"allowed_origins"`
+}
+
+type StorageYAMLConfig struct {
+	VectorBackend    string `yaml:"vector_backend"`
+	KVBackend        string `yaml:"kv_backend"`
+	QdrantHost       string `yaml:"qdrant_host"`
+	QdrantPort       int    `yaml:"qdrant_port"`
+	QdrantCollection string `yaml:"qdrant_collection"`
+	QdrantAPIKey     string `yaml:"qdrant_api_key"`
+	QdrantDimension  int    `yaml:"qdrant_dimension"`
+	RedisAddr        string `yaml:"redis_addr"`
+	RedisPassword    string `yaml:"redis_password"`
+	RedisDB          int    `yaml:"redis_db"`
+	RedisTLS         bool   `yaml:"redis_tls"`
 }
 
 type ServerConfig struct {
