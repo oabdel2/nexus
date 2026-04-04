@@ -184,6 +184,15 @@ security:
   cors:
     allowed_origins: ["*"]
   audit_log: true
+  body_size_limit: 1048576  # 1MB
+  request_timeout: "30s"
+  panic_recovery: true
+  ip_allowlist:
+    enabled: false
+    allowed_ips: []
+    paths: ["/api/admin/"]
+  input_validation: true
+  request_logging: true
 
 billing:
   enabled: false

@@ -193,6 +193,10 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 
 	// Build security middleware chain
+	// Order: BillingAuth → Tracing → PanicRecovery → BodySizeLimit →
+	//   RequestTimeout → SecurityHeaders → RequestID → RequestLogger →
+	//   CORS → IPAllowlist → RateLimit → OIDC → InputValidator →
+	//   PromptGuard → AuditLog
 	var middlewares []security.Middleware
 
 	// Billing API key auth: first in chain (before other security)
@@ -205,14 +209,43 @@ func (s *Server) Start(ctx context.Context) error {
 		middlewares = append(middlewares, security.Middleware(telemetry.TraceMiddleware(s.tracer)))
 	}
 
-	// Always: security headers + request ID
+	// Panic recovery
+	if s.cfg.Security.PanicRecovery {
+		middlewares = append(middlewares, security.PanicRecovery(s.logger))
+	}
+
+	// Body size limit
+	if s.cfg.Security.BodySizeLimit > 0 {
+		middlewares = append(middlewares, security.BodySizeLimit(s.cfg.Security.BodySizeLimit))
+	}
+
+	// Request timeout
+	if s.cfg.Security.RequestTimeout != "" {
+		if timeout, err := time.ParseDuration(s.cfg.Security.RequestTimeout); err == nil {
+			middlewares = append(middlewares, security.RequestTimeout(timeout))
+		}
+	}
+
+	// Security headers + request ID
 	middlewares = append(middlewares, security.SecurityHeaders())
 	middlewares = append(middlewares, security.RequestID())
+
+	// Request logger
+	if s.cfg.Security.RequestLogging {
+		middlewares = append(middlewares, security.RequestLogger(s.logger))
+	}
 
 	// CORS
 	if len(s.cfg.Security.CORS.AllowedOrigins) > 0 {
 		middlewares = append(middlewares, security.CORS(s.cfg.Security.CORS.AllowedOrigins))
 	}
+
+	// IP allowlist
+	middlewares = append(middlewares, security.IPAllowlist(security.IPAllowlistConfig{
+		Enabled:    s.cfg.Security.IPAllowlist.Enabled,
+		AllowedIPs: s.cfg.Security.IPAllowlist.AllowedIPs,
+		Paths:      s.cfg.Security.IPAllowlist.Paths,
+	}))
 
 	// Rate limiting
 	rateLimiter := security.NewRateLimiter(security.RateLimiterConfig{
@@ -234,6 +267,11 @@ func (s *Server) Start(ctx context.Context) error {
 		if err == nil {
 			middlewares = append(middlewares, oidcProvider.Middleware())
 		}
+	}
+
+	// Input validation
+	if s.cfg.Security.InputValidation {
+		middlewares = append(middlewares, security.InputValidator())
 	}
 
 	// Prompt guard

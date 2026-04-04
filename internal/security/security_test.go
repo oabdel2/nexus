@@ -1,14 +1,18 @@
 package security
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSecurityHeaders(t *testing.T) {
@@ -729,5 +733,437 @@ func TestGenerateRequestID(t *testing.T) {
 	id2 := generateRequestID()
 	if id == id2 {
 		t.Error("consecutive request IDs should be different")
+	}
+}
+
+// --- Body Size Limit Tests ---
+
+func TestBodySizeLimitUnderLimit(t *testing.T) {
+	handler := BodySizeLimit(1024)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.ReadAll(r.Body)
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	body := strings.NewReader(strings.Repeat("a", 100))
+	req := httptest.NewRequest("POST", "/", body)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestBodySizeLimitOverLimit(t *testing.T) {
+	handler := BodySizeLimit(100)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	body := strings.NewReader(strings.Repeat("a", 200))
+	req := httptest.NewRequest("POST", "/", body)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Errorf("expected 413, got %d", rec.Code)
+	}
+}
+
+// --- Request Timeout Tests ---
+
+func TestRequestTimeoutHasDeadline(t *testing.T) {
+	handler := RequestTimeout(5 * time.Second)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, ok := r.Context().Deadline()
+		if !ok {
+			t.Error("context should have a deadline")
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestRequestTimeoutFastRequest(t *testing.T) {
+	handler := RequestTimeout(5 * time.Second)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}
+
+// --- Panic Recovery Tests ---
+
+func TestPanicRecoveryReturnsFiveHundred(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := PanicRecovery(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		panic("test panic")
+	}))
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", rec.Code)
+	}
+}
+
+func TestPanicRecoveryNoStackInResponse(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := PanicRecovery(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		panic("sensitive error details")
+	}))
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if strings.Contains(body, "sensitive") {
+		t.Error("response should not contain panic message")
+	}
+	if strings.Contains(body, "goroutine") {
+		t.Error("response should not contain stack trace")
+	}
+
+	var resp map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("response should be valid JSON: %v", err)
+	}
+	if resp["error"] != "internal server error" {
+		t.Errorf("expected generic error message, got %q", resp["error"])
+	}
+}
+
+func TestPanicRecoveryNoPanicPassthrough(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := PanicRecovery(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	}))
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+	if rec.Body.String() != "ok" {
+		t.Errorf("expected 'ok', got %q", rec.Body.String())
+	}
+}
+
+// --- IP Allowlist Tests ---
+
+func TestIPAllowlistAllowedIP(t *testing.T) {
+	handler := IPAllowlist(IPAllowlistConfig{
+		Enabled:    true,
+		AllowedIPs: []string{"192.168.1.0/24"},
+		Paths:      []string{"/api/admin/"},
+	})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/api/admin/users", nil)
+	req.RemoteAddr = "192.168.1.100:12345"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 for allowed IP, got %d", rec.Code)
+	}
+}
+
+func TestIPAllowlistBlockedIP(t *testing.T) {
+	handler := IPAllowlist(IPAllowlistConfig{
+		Enabled:    true,
+		AllowedIPs: []string{"192.168.1.0/24"},
+		Paths:      []string{"/api/admin/"},
+	})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/api/admin/users", nil)
+	req.RemoteAddr = "10.0.0.1:12345"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for blocked IP, got %d", rec.Code)
+	}
+}
+
+func TestIPAllowlistNonProtectedPath(t *testing.T) {
+	handler := IPAllowlist(IPAllowlistConfig{
+		Enabled:    true,
+		AllowedIPs: []string{"192.168.1.0/24"},
+		Paths:      []string{"/api/admin/"},
+	})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/v1/chat/completions", nil)
+	req.RemoteAddr = "10.0.0.1:12345"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 for non-protected path, got %d", rec.Code)
+	}
+}
+
+func TestIPAllowlistXForwardedFor(t *testing.T) {
+	handler := IPAllowlist(IPAllowlistConfig{
+		Enabled:    true,
+		AllowedIPs: []string{"192.168.1.0/24"},
+		Paths:      []string{"/api/admin/"},
+	})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/api/admin/users", nil)
+	req.RemoteAddr = "10.0.0.1:12345"
+	req.Header.Set("X-Forwarded-For", "192.168.1.50, 10.0.0.1")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 for allowed X-Forwarded-For IP, got %d", rec.Code)
+	}
+}
+
+func TestIPAllowlistCIDRMatching(t *testing.T) {
+	handler := IPAllowlist(IPAllowlistConfig{
+		Enabled:    true,
+		AllowedIPs: []string{"10.0.0.0/8"},
+		Paths:      []string{"/api/admin/"},
+	})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// 10.255.255.255 should match 10.0.0.0/8
+	req := httptest.NewRequest("GET", "/api/admin/users", nil)
+	req.RemoteAddr = "10.255.255.255:12345"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 for IP within CIDR range, got %d", rec.Code)
+	}
+
+	// 11.0.0.1 should NOT match 10.0.0.0/8
+	req2 := httptest.NewRequest("GET", "/api/admin/users", nil)
+	req2.RemoteAddr = "11.0.0.1:12345"
+	rec2 := httptest.NewRecorder()
+	handler.ServeHTTP(rec2, req2)
+
+	if rec2.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for IP outside CIDR range, got %d", rec2.Code)
+	}
+}
+
+func TestIPAllowlistDisabled(t *testing.T) {
+	handler := IPAllowlist(IPAllowlistConfig{
+		Enabled:    false,
+		AllowedIPs: []string{"192.168.1.0/24"},
+		Paths:      []string{"/api/admin/"},
+	})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/api/admin/users", nil)
+	req.RemoteAddr = "10.0.0.1:12345"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("disabled allowlist should pass all traffic, got %d", rec.Code)
+	}
+}
+
+// --- Input Validator Tests ---
+
+func TestInputValidatorValidRequest(t *testing.T) {
+	handler := InputValidator()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	body := `{"model":"gpt-4","messages":[{"role":"user","content":"Hello"}]}`
+	req := httptest.NewRequest("POST", "/v1/chat/completions", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestInputValidatorMissingMessages(t *testing.T) {
+	handler := InputValidator()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	body := `{"model":"gpt-4"}`
+	req := httptest.NewRequest("POST", "/v1/chat/completions", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", rec.Code)
+	}
+	var resp map[string]string
+	json.Unmarshal(rec.Body.Bytes(), &resp)
+	if !strings.Contains(resp["error"], "messages") {
+		t.Errorf("error should mention 'messages', got %q", resp["error"])
+	}
+}
+
+func TestInputValidatorInvalidJSON(t *testing.T) {
+	handler := InputValidator()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	body := `{invalid json`
+	req := httptest.NewRequest("POST", "/v1/chat/completions", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestInputValidatorNonChatEndpoint(t *testing.T) {
+	handler := InputValidator()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/health", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200 for non-chat endpoint, got %d", rec.Code)
+	}
+}
+
+func TestInputValidatorBodyResetForDownstream(t *testing.T) {
+	handler := InputValidator()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("downstream should be able to read body: %v", err)
+		}
+		if len(data) == 0 {
+			t.Error("downstream body should not be empty")
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	body := `{"model":"gpt-4","messages":[{"role":"user","content":"Hello"}]}`
+	req := httptest.NewRequest("POST", "/v1/chat/completions", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+}
+
+// --- Request Logger Tests ---
+
+func TestRequestLoggerStatusCapture(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, nil))
+
+	handler := RequestLogger(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	output := buf.String()
+	if !strings.Contains(output, "404") {
+		t.Errorf("log should contain status 404, got: %s", output)
+	}
+	if !strings.Contains(output, "WARN") {
+		t.Errorf("4xx should log at WARN level, got: %s", output)
+	}
+}
+
+func TestRequestLoggerNoAuthLeak(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, nil))
+
+	handler := RequestLogger(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer super-secret-token-12345")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	output := buf.String()
+	if strings.Contains(output, "super-secret-token-12345") {
+		t.Error("log output should not contain actual auth token")
+	}
+	if !strings.Contains(output, "Bearer ***") {
+		t.Error("log output should contain sanitized auth header")
+	}
+}
+
+func TestRequestLoggerErrorLevel(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, nil))
+
+	handler := RequestLogger(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	output := buf.String()
+	if !strings.Contains(output, "ERROR") {
+		t.Errorf("5xx should log at ERROR level, got: %s", output)
+	}
+}
+
+// --- Extract Client IP Tests ---
+
+func TestExtractClientIPFromRemoteAddr(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "192.168.1.1:54321"
+
+	ip := extractClientIP(req)
+	if ip != "192.168.1.1" {
+		t.Errorf("expected 192.168.1.1, got %s", ip)
+	}
+}
+
+func TestExtractClientIPFromXForwardedFor(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "10.0.0.1:54321"
+	req.Header.Set("X-Forwarded-For", "203.0.113.50, 70.41.3.18, 150.172.238.178")
+
+	ip := extractClientIP(req)
+	if ip != "203.0.113.50" {
+		t.Errorf("expected first X-Forwarded-For IP 203.0.113.50, got %s", ip)
 	}
 }

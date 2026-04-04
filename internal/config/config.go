@@ -39,13 +39,25 @@ type NotificationConfig struct {
 }
 
 type SecurityConfig struct {
-	TLS       TLSYAMLConfig         `yaml:"tls"`
-	PromptGuard PromptGuardYAMLConfig `yaml:"prompt_guard"`
-	OIDC      OIDCYAMLConfig        `yaml:"oidc"`
-	RBAC      RBACYAMLConfig        `yaml:"rbac"`
-	RateLimit RateLimitYAMLConfig   `yaml:"rate_limit"`
-	CORS      CORSYAMLConfig        `yaml:"cors"`
-	AuditLog  bool                  `yaml:"audit_log"`
+	TLS             TLSYAMLConfig         `yaml:"tls"`
+	PromptGuard     PromptGuardYAMLConfig `yaml:"prompt_guard"`
+	OIDC            OIDCYAMLConfig        `yaml:"oidc"`
+	RBAC            RBACYAMLConfig        `yaml:"rbac"`
+	RateLimit       RateLimitYAMLConfig   `yaml:"rate_limit"`
+	CORS            CORSYAMLConfig        `yaml:"cors"`
+	AuditLog        bool                  `yaml:"audit_log"`
+	BodySizeLimit   int64                 `yaml:"body_size_limit"`
+	RequestTimeout  string                `yaml:"request_timeout"`
+	PanicRecovery   bool                  `yaml:"panic_recovery"`
+	IPAllowlist     IPAllowlistYAMLConfig `yaml:"ip_allowlist"`
+	InputValidation bool                  `yaml:"input_validation"`
+	RequestLogging  bool                  `yaml:"request_logging"`
+}
+
+type IPAllowlistYAMLConfig struct {
+	Enabled    bool     `yaml:"enabled"`
+	AllowedIPs []string `yaml:"allowed_ips"`
+	Paths      []string `yaml:"paths"`
 }
 
 type TLSYAMLConfig struct {
@@ -371,5 +383,12 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.Notification.FromName == "" {
 		cfg.Notification.FromName = "Nexus Gateway"
+	}
+	// Security hardening defaults
+	if cfg.Security.BodySizeLimit == 0 {
+		cfg.Security.BodySizeLimit = 1 << 20 // 1MB
+	}
+	if cfg.Security.RequestTimeout == "" {
+		cfg.Security.RequestTimeout = "30s"
 	}
 }
