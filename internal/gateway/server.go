@@ -27,6 +27,7 @@ type Server struct {
 	tracker      *workflow.Tracker
 	providers    map[string]provider.Provider
 	health       *provider.HealthChecker
+	cbPool       *provider.ProviderPool
 	metrics      *telemetry.Metrics
 	costTracker  *telemetry.CostTracker
 	Dashboard    *dashboard.EventBus
@@ -40,6 +41,13 @@ func New(cfg *config.Config, logger *slog.Logger) *Server {
 		providers:   make(map[string]provider.Provider),
 		metrics:     telemetry.NewMetrics(),
 		costTracker: telemetry.NewCostTracker(),
+		cbPool: provider.NewProviderPool(provider.CircuitBreakerConfig{
+			FailureThreshold: 5,
+			SuccessThreshold: 2,
+			Timeout:          30 * time.Second,
+			MaxTimeout:       5 * time.Minute,
+			HalfOpenMax:      1,
+		}),
 		Dashboard:   dashboard.NewEventBus(),
 		logger:      logger,
 	}
@@ -92,6 +100,7 @@ func New(cfg *config.Config, logger *slog.Logger) *Server {
 		if p != nil {
 			s.providers[pc.Name] = p
 			s.health.Register(p)
+			s.cbPool.Register(pc.Name)
 		}
 	}
 
@@ -131,6 +140,9 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/synonyms/learned", s.handleSynonymLearned)
 	mux.HandleFunc("/api/synonyms/promote", s.handleSynonymPromote)
 	mux.HandleFunc("/api/synonyms/add", s.handleSynonymAdd)
+
+	// Circuit breaker status
+	mux.HandleFunc("/api/circuit-breakers", s.handleCircuitBreakers)
 
 	// Build security middleware chain
 	var middlewares []security.Middleware
@@ -316,11 +328,19 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	// Route the request
 	selection := s.router.Route(promptText, agentRole, ws.GetStepRatio(), ws.GetBudgetRatio(), contextLen)
 
-	// Get the provider
+	// Get the provider with circuit breaker check
 	p, ok := s.providers[selection.Provider]
-	if !ok {
-		http.Error(w, fmt.Sprintf("provider %q not available", selection.Provider), http.StatusServiceUnavailable)
-		return
+	if !ok || !s.cbPool.IsAvailable(selection.Provider) {
+		// Try failover to any available provider with same tier
+		p, selection = s.findFallbackProvider(selection)
+		if p == nil {
+			http.Error(w, `{"error":"all providers unavailable"}`, http.StatusServiceUnavailable)
+			return
+		}
+		s.logger.Info("circuit breaker failover",
+			"original", selection.Provider,
+			"fallback", selection.Provider,
+		)
 	}
 
 	// Update request model
@@ -340,9 +360,15 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			s.logger.Error("stream error", "error", err, "provider", selection.Provider)
 			s.health.RecordFailure(selection.Provider, err)
+			if cb := s.cbPool.Get(selection.Provider); cb != nil {
+				cb.RecordFailure()
+			}
 			return
 		}
 		s.health.RecordSuccess(selection.Provider)
+		if cb := s.cbPool.Get(selection.Provider); cb != nil {
+			cb.RecordSuccess()
+		}
 
 		tokens := 0
 		if usage != nil {
@@ -376,16 +402,31 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Non-streaming request
-	resp, err := p.Send(r.Context(), req)
+	// Non-streaming request with retry
+	var resp *provider.ChatResponse
+	err = provider.RetryWithBackoff(provider.RetryConfig{
+		MaxRetries: 2,
+		BaseDelay:  100 * time.Millisecond,
+		MaxDelay:   2 * time.Second,
+	}, func() error {
+		var sendErr error
+		resp, sendErr = p.Send(r.Context(), req)
+		return sendErr
+	})
 	latencyMs := time.Since(start).Milliseconds()
 	if err != nil {
 		s.logger.Error("request error", "error", err, "provider", selection.Provider)
 		s.health.RecordFailure(selection.Provider, err)
-		http.Error(w, fmt.Sprintf("provider error: %v", err), http.StatusBadGateway)
+		if cb := s.cbPool.Get(selection.Provider); cb != nil {
+			cb.RecordFailure()
+		}
+		http.Error(w, fmt.Sprintf(`{"error":"provider error: %v"}`, err), http.StatusBadGateway)
 		return
 	}
 	s.health.RecordSuccess(selection.Provider)
+	if cb := s.cbPool.Get(selection.Provider); cb != nil {
+		cb.RecordSuccess()
+	}
 
 	tokens := resp.Usage.TotalTokens
 	cost := float64(tokens) / 1000.0 * s.router.GetModelCost(selection.Provider, selection.Model)
@@ -609,4 +650,25 @@ func (s *Server) handleSynonymAdd(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "added", "term": req.Term})
+}
+
+// findFallbackProvider tries all other available providers when the primary is circuit-broken.
+func (s *Server) findFallbackProvider(original router.ModelSelection) (provider.Provider, router.ModelSelection) {
+	for name, p := range s.providers {
+		if name == original.Provider {
+			continue
+		}
+		if s.cbPool.IsAvailable(name) {
+			// Use the first available provider with its first model
+			original.Provider = name
+			original.Reason = "circuit-breaker failover"
+			return p, original
+		}
+	}
+	return nil, original
+}
+
+func (s *Server) handleCircuitBreakers(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(s.cbPool.AllStats())
 }

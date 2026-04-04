@@ -41,7 +41,7 @@ RUN addgroup -S nexus && adduser -S nexus -G nexus
 COPY --from=builder /bin/nexus /usr/local/bin/nexus
 COPY --from=builder /src/configs/nexus.yaml /etc/nexus/nexus.yaml
 
-ENV NEXUS_CONFIG_PATH=/etc/nexus/nexus.yaml
+ENV NEXUS_CONFIG=/etc/nexus/nexus.yaml
 
 USER nexus
 
@@ -50,4 +50,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8080/health/live || exit 1
 
-CMD ["nexus", "--config", "/etc/nexus/nexus.yaml"]
+CMD ["sh", "-c", "nexus --config ${NEXUS_CONFIG}"]
