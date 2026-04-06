@@ -58,6 +58,7 @@ type Server struct {
 	pluginRegistry   *plugin.Registry
 	requestSem       chan struct{}
 	shadowSem        chan struct{} // limits concurrent shadow eval goroutines
+	warmupDone       bool         // true after startup warmup completes
 }
 
 func New(cfg *config.Config, logger *slog.Logger) *Server {
@@ -274,6 +275,7 @@ func (s *Server) Start(ctx context.Context) error {
 	validator.CheckProviderReachability(s)
 	validator.CheckOllamaModels(s)
 	validator.WarmupModels(s)
+	s.warmupDone = true
 
 	mux := http.NewServeMux()
 
@@ -506,7 +508,17 @@ func (s *Server) Start(ctx context.Context) error {
 	return s.httpServer.ListenAndServe()
 }
 
+// Shutdown gracefully drains in-flight requests and stops all subsystems.
+// It first stops accepting new HTTP connections via httpServer.Shutdown, then
+// waits for all in-flight requests (tracked by requestSem) to complete or
+// until ctx is cancelled.
 func (s *Server) Shutdown(ctx context.Context) error {
+	// Stop accepting new connections first
+	err := s.httpServer.Shutdown(ctx)
+
+	// Wait for in-flight requests to drain (each request holds a semaphore slot)
+	s.drainRequests(ctx)
+
 	if s.tracker != nil {
 		s.tracker.Stop()
 	}
@@ -536,7 +548,42 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	if s.eventBus != nil {
 		s.eventBus.Close()
 	}
-	return s.httpServer.Shutdown(ctx)
+	return err
+}
+
+// drainRequests waits until all in-flight requests have released the semaphore
+// or ctx expires. It fills the semaphore to capacity, meaning all slots are idle.
+func (s *Server) drainRequests(ctx context.Context) {
+	capacity := cap(s.requestSem)
+	drained := 0
+	for drained < capacity {
+		select {
+		case s.requestSem <- struct{}{}:
+			drained++
+		case <-ctx.Done():
+			// Drain timeout expired — release any slots we acquired
+			for i := 0; i < drained; i++ {
+				<-s.requestSem
+			}
+			s.logger.Warn("drain timeout: some requests may not have completed",
+				"drained", drained, "capacity", capacity)
+			return
+		}
+	}
+	// Release all slots we acquired
+	for i := 0; i < drained; i++ {
+		<-s.requestSem
+	}
+}
+
+// SemaphoreUsage returns the fraction of the request semaphore currently in use (0.0–1.0).
+func (s *Server) SemaphoreUsage() float64 {
+	capacity := cap(s.requestSem)
+	if capacity == 0 {
+		return 0
+	}
+	inUse := len(s.requestSem)
+	return float64(inUse) / float64(capacity)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -590,6 +637,29 @@ func (s *Server) handleReadiness(w http.ResponseWriter, r *http.Request) {
 	// Check: server is accepting connections (if we got here, it is)
 	checks["server"] = map[string]any{
 		"ok": true,
+	}
+
+	// Check: warmup complete (startup readiness delay)
+	if !s.warmupDone {
+		checks["warmup"] = map[string]any{
+			"ok": false,
+		}
+		ready = false
+	} else {
+		checks["warmup"] = map[string]any{
+			"ok": true,
+		}
+	}
+
+	// Check: semaphore load — degrade to 503 when >80% full (overloaded)
+	semUsage := s.SemaphoreUsage()
+	semOverloaded := semUsage > 0.80
+	checks["semaphore"] = map[string]any{
+		"ok":    !semOverloaded,
+		"usage": fmt.Sprintf("%.0f%%", semUsage*100),
+	}
+	if semOverloaded {
+		ready = false
 	}
 
 	status := "ok"

@@ -181,3 +181,8 @@ func GetPromptGuard(ctx context.Context) *PromptGuard {
 	pg, _ := ctx.Value(contextKey("prompt_guard")).(*PromptGuard)
 	return pg
 }
+
+// PatternCount returns the total number of compiled injection patterns (built-in + custom).
+func (pg *PromptGuard) PatternCount() int {
+	return len(pg.patterns)
+}

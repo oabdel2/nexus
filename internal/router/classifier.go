@@ -52,6 +52,8 @@ var roleWeights = map[string]float64{
 	"qa":                0.65,
 }
 
+// ComplexityScore captures the multi-dimensional complexity analysis of a prompt.
+// Each sub-score is in [0, 1]; FinalScore is the weighted combination.
 type ComplexityScore struct {
 	PromptScore   float64 `json:"prompt_score"`
 	ContextScore  float64 `json:"context_score"`
@@ -63,6 +65,9 @@ type ComplexityScore struct {
 	FinalScore    float64 `json:"final_score"`
 }
 
+// ClassifyComplexity analyzes a prompt and returns sub-scores for keyword
+// complexity, length, structure, context size, agent role, step position,
+// and budget pressure. FinalScore is NOT set here — the caller applies weights.
 func ClassifyComplexity(prompt string, role string, stepRatio float64, budgetRatio float64, contextLen int) ComplexityScore {
 	score := ComplexityScore{}
 

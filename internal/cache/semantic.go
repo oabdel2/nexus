@@ -119,6 +119,7 @@ func NewSemanticCache(ctx context.Context, ttl time.Duration, maxEntries int, th
 	return c
 }
 
+// Store embeds and indexes a prompt/response pair for semantic retrieval.
 func (c *SemanticCache) Store(prompt, model string, response []byte) {
 	expanded := expandSynonyms(prompt, c.registry)
 	emb, err := c.getEmbedding(expanded)
@@ -145,6 +146,8 @@ func (c *SemanticCache) Store(prompt, model string, response []byte) {
 	})
 }
 
+// Lookup finds the best semantically-matching cached response via cosine similarity.
+// Returns nil, false when no match exceeds the adaptive threshold.
 func (c *SemanticCache) Lookup(prompt, model string) ([]byte, bool) {
 	expanded := expandSynonyms(prompt, c.registry)
 
@@ -238,6 +241,7 @@ func (c *SemanticCache) Lookup(prompt, model string) ([]byte, bool) {
 	return resp, true
 }
 
+// Stats returns the total hits, misses, and current entry count.
 func (c *SemanticCache) Stats() (hits, misses int64, size int) {
 	c.mu.RLock()
 	size = len(c.entries)

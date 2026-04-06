@@ -382,3 +382,53 @@ func TestCombined_BoilerplateInAssistantMessages(t *testing.T) {
 	}
 	_ = result
 }
+
+// ==================== Property-Based Tests ====================
+
+// TestCompress_PropertyNeverLonger verifies that for 100 diverse inputs,
+// compressed output (via CompressMessages) is never longer than the input.
+func TestCompress_PropertyNeverLonger(t *testing.T) {
+	c := New(DefaultConfig())
+
+	inputs := [][]Message{
+		{{Role: "user", Content: "hi"}},
+		{{Role: "user", Content: ""}},
+		{{Role: "user", Content: "   \n\n\n  \t\t  "}},
+		{{Role: "user", Content: strings.Repeat("hello world ", 500)}},
+		{{Role: "system", Content: "You are helpful."}, {Role: "user", Content: "What is Go?"}},
+		{{Role: "user", Content: "explain\n\n\n\n\nthis\n\n\n\nplease"}},
+		{{Role: "user", Content: "```go\n// comment\nfunc main() {\n\t// another comment\n\tfmt.Println(\"hello\")\n}\n```"}},
+		{{Role: "assistant", Content: "Sure, I'd be happy to help you with that. Here is the answer."}},
+		{{Role: "user", Content: "{\"key\": \"value\",   \"nested\":   {\"a\":  1,  \"b\":  2}}"}},
+	}
+
+	// Generate more varied inputs
+	for i := 0; i < 91; i++ {
+		content := strings.Repeat("word ", i+1)
+		if i%3 == 0 {
+			content = "Please help me " + content + "\n\n\n" + strings.Repeat("debug ", i%10+1)
+		}
+		if i%5 == 0 {
+			content = "```python\n# comment\nprint('hello')\n```\n" + content
+		}
+		inputs = append(inputs, []Message{{Role: "user", Content: content}})
+	}
+
+	for i, msgs := range inputs {
+		originalLen := 0
+		for _, m := range msgs {
+			originalLen += len(m.Content)
+		}
+
+		compressed, _ := c.CompressMessages(msgs)
+		compressedLen := 0
+		for _, m := range compressed {
+			compressedLen += len(m.Content)
+		}
+
+		if compressedLen > originalLen {
+			t.Errorf("input %d: compressed (%d bytes) is longer than original (%d bytes)",
+				i, compressedLen, originalLen)
+		}
+	}
+}

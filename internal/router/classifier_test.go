@@ -3,6 +3,7 @@ package router
 import (
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -459,5 +460,79 @@ func BenchmarkClassify_Smart(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		sc.Classify(prompts[i%len(prompts)], "", 0.5, 0.5, 0)
+	}
+}
+
+// ==================== Property-Based Tests ====================
+
+// TestClassify_PropertyAlwaysInRange verifies that for 1000 random-style prompts,
+// the FinalScore is always in [0, 1].
+func TestClassify_PropertyAlwaysInRange(t *testing.T) {
+	cfg := defaultRouterCfg()
+	cfg.SmartClassifier = true
+	r := New(cfg, allTierProviders(), testLogger())
+
+	// Generate diverse prompts: varying lengths, keywords, special chars
+	prompts := []string{
+		"", "hi", "hello world", "what time is it",
+		"explain what a REST API is and how to use it",
+		"debug the race condition in the concurrent cache implementation with mutex",
+		"analyze this complex distributed algorithm for fault tolerance",
+		strings.Repeat("a", 5000),
+		strings.Repeat("debug security optimize ", 100),
+		"??? !!! ;;; --- ***",
+		"12345 67890",
+		strings.Repeat("explain ", 50) + strings.Repeat("debug ", 50),
+	}
+	roles := []string{"", "engineer", "architect", "logger", "unknown-role", "summarizer"}
+
+	for i := 0; i < 1000; i++ {
+		prompt := prompts[i%len(prompts)]
+		role := roles[i%len(roles)]
+		stepRatio := float64(i%11) / 10.0
+		budgetRatio := float64(i%11) / 10.0
+		contextLen := (i * 137) % 10000
+
+		sel := r.Route(prompt, role, stepRatio, budgetRatio, contextLen)
+		if sel.Score.FinalScore < 0 || sel.Score.FinalScore > 1 {
+			t.Errorf("FinalScore out of [0,1]: %.4f for prompt=%q role=%q step=%.1f budget=%.1f ctx=%d",
+				sel.Score.FinalScore, prompt, role, stepRatio, budgetRatio, contextLen)
+		}
+	}
+}
+
+// TestClassify_PropertyLongerPromptsHigherLength verifies that if prompt A is
+// longer than prompt B, LengthScore(A) >= LengthScore(B).
+func TestClassify_PropertyLongerPromptsHigherLength(t *testing.T) {
+	for i := 0; i < 200; i++ {
+		shortLen := i * 5
+		longLen := shortLen + 50 + i*3
+
+		shortPrompt := strings.Repeat("x", shortLen)
+		longPrompt := strings.Repeat("x", longLen)
+
+		shortScore := ClassifyComplexity(shortPrompt, "", 0.5, 0.5, 0)
+		longScore := ClassifyComplexity(longPrompt, "", 0.5, 0.5, 0)
+
+		if longScore.LengthScore < shortScore.LengthScore {
+			t.Errorf("longer prompt (len=%d) has lower LengthScore (%.4f) than shorter (len=%d, %.4f)",
+				longLen, longScore.LengthScore, shortLen, shortScore.LengthScore)
+		}
+	}
+}
+
+// TestClassify_PropertyBudgetMonotonic verifies that as budgetRatio decreases,
+// BudgetScore increases (inverse relationship: BudgetScore = 1 - budgetRatio).
+func TestClassify_PropertyBudgetMonotonic(t *testing.T) {
+	prev := ClassifyComplexity("test prompt", "", 0.5, 1.0, 0)
+	for i := 99; i >= 0; i-- {
+		budgetRatio := float64(i) / 100.0
+		score := ClassifyComplexity("test prompt", "", 0.5, budgetRatio, 0)
+
+		if score.BudgetScore < prev.BudgetScore {
+			t.Errorf("budget monotonicity violated: budgetRatio=%.2f → BudgetScore=%.4f, prev BudgetScore=%.4f",
+				budgetRatio, score.BudgetScore, prev.BudgetScore)
+		}
+		prev = score
 	}
 }

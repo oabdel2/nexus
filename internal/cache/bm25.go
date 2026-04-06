@@ -121,6 +121,7 @@ func termFrequency(tokens []string) map[string]int {
 	return tf
 }
 
+// Store indexes a prompt/response pair for BM25 retrieval.
 func (c *BM25Cache) Store(prompt, model string, response []byte) {
 	tokens := Tokenize(prompt)
 	tf := termFrequency(tokens)
@@ -154,6 +155,8 @@ func (c *BM25Cache) Store(prompt, model string, response []byte) {
 	}
 }
 
+// Lookup finds the best BM25-matching cached response for the given prompt.
+// Returns nil, false when no match exceeds the similarity threshold.
 func (c *BM25Cache) Lookup(prompt, model string) ([]byte, bool) {
 	queryTokens := Tokenize(prompt)
 	if len(queryTokens) == 0 {
@@ -239,6 +242,7 @@ func (c *BM25Cache) Lookup(prompt, model string) ([]byte, bool) {
 	return nil, false
 }
 
+// Stats returns the total hits, misses, and current document count.
 func (c *BM25Cache) Stats() (hits, misses int64, size int) {
 	c.mu.RLock()
 	size = len(c.docs)

@@ -9,12 +9,15 @@ import (
 	"time"
 )
 
+// CacheEntry stores a cached response along with creation time and hit count.
 type CacheEntry struct {
 	Response  []byte
 	CreatedAt time.Time
 	HitCount  atomic.Int64
 }
 
+// ExactCache provides O(1) exact-match caching with LRU eviction
+// and TTL-based expiry. Thread-safe for concurrent use.
 type ExactCache struct {
 	entries    map[string]*CacheEntry
 	lru        *lruList
@@ -39,6 +42,8 @@ func NewExactCache(ctx context.Context, ttl time.Duration, maxEntries int) *Exac
 	return c
 }
 
+// HashKey produces a deterministic SHA-256 cache key from a prompt and model name.
+// A null byte separator prevents collisions between different prompt/model splits.
 func HashKey(prompt string, model string) string {
 	h := sha256.New()
 	h.Write([]byte(prompt))
@@ -47,6 +52,7 @@ func HashKey(prompt string, model string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+// Get retrieves a cached response by key. Returns nil, false on miss or TTL expiry.
 func (c *ExactCache) Get(key string) ([]byte, bool) {
 	c.mu.RLock()
 	entry, ok := c.entries[key]
@@ -79,6 +85,7 @@ func (c *ExactCache) Get(key string) ([]byte, bool) {
 	return resp, true
 }
 
+// Set stores a response in the cache, evicting the LRU entry if at capacity.
 func (c *ExactCache) Set(key string, response []byte) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -94,6 +101,7 @@ func (c *ExactCache) Set(key string, response []byte) {
 	c.lru.Add(key)
 }
 
+// Stats returns the total hits, misses, and current entry count.
 func (c *ExactCache) Stats() (hits, misses int64, size int) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

@@ -6,6 +6,8 @@ import (
 	"github.com/nexus-gateway/nexus/internal/config"
 )
 
+// ModelSelection holds the result of a routing decision, including the
+// chosen provider, model, tier, complexity score, and human-readable reason.
 type ModelSelection struct {
 	Provider string          `json:"provider"`
 	Model    string          `json:"model"`
@@ -14,6 +16,8 @@ type ModelSelection struct {
 	Reason   string          `json:"reason"`
 }
 
+// Router selects the optimal provider and model for each request based
+// on prompt complexity, agent role, workflow position, and budget pressure.
 type Router struct {
 	cfg             config.RouterConfig
 	providers       []config.ProviderConfig
@@ -21,6 +25,7 @@ type Router struct {
 	smartClassifier *SmartClassifier
 }
 
+// New creates a Router with the given configuration and provider list.
 func New(cfg config.RouterConfig, providers []config.ProviderConfig, logger *slog.Logger) *Router {
 	r := &Router{
 		cfg:       cfg,
@@ -36,6 +41,7 @@ func New(cfg config.RouterConfig, providers []config.ProviderConfig, logger *slo
 // tierFallbackOrder defines the upgrade path when a tier has no available model.
 var tierFallbackOrder = []string{"economy", "cheap", "mid", "premium"}
 
+// Route classifies the prompt complexity and selects the best model tier.
 func (r *Router) Route(prompt string, role string, stepRatio float64, budgetRatio float64, contextLen int) ModelSelection {
 	var score ComplexityScore
 	if r.smartClassifier != nil {
@@ -150,6 +156,7 @@ func (r *Router) selectModelWithFallback(tier string) (string, string) {
 	return "", ""
 }
 
+// GetModelCost returns the per-1K-token cost for a specific provider/model pair.
 func (r *Router) GetModelCost(provider, model string) float64 {
 	for _, p := range r.providers {
 		if p.Name == provider {

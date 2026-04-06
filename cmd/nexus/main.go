@@ -8,9 +8,11 @@ import (
 "fmt"
 "io"
 "log/slog"
+"net"
 "net/http"
 "os"
 "os/signal"
+"runtime"
 "strings"
 "syscall"
 "time"
@@ -18,6 +20,7 @@ import (
 "github.com/nexus-gateway/nexus/internal/config"
 "github.com/nexus-gateway/nexus/internal/gateway"
 "github.com/nexus-gateway/nexus/internal/router"
+"github.com/nexus-gateway/nexus/internal/security"
 
 "gopkg.in/yaml.v3"
 )
@@ -63,6 +66,8 @@ case "validate":
 runValidate(os.Args[2:])
 case "inspect":
 runInspect(os.Args[2:])
+case "doctor":
+runDoctor(os.Args[2:])
 case "help", "-h", "--help":
 printUsage()
 default:
@@ -83,6 +88,7 @@ Commands:
   serve       Start the Nexus gateway server (default)
   init        Interactive configuration wizard
   status      Show gateway health and stats
+  doctor      Run system health diagnostics
   version     Show version information
   validate    Validate a configuration file
   inspect     Analyze routing for a prompt
@@ -548,4 +554,292 @@ found = append(found, kw)
 }
 }
 return found
+}
+
+func runDoctor(args []string) {
+fs := flag.NewFlagSet("doctor", flag.ExitOnError)
+configPath := fs.String("config", "configs/nexus.yaml", "path to configuration file")
+fs.Parse(args)
+
+fmt.Println()
+fmt.Println("Nexus Doctor \u2014 System Health Check")
+fmt.Println("\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501")
+fmt.Println()
+
+warnings := 0
+errors := 0
+
+// Go version
+fmt.Printf("  Go version .......... \u2705 %s\n", runtime.Version())
+
+// Config file
+cfg, cfgErr := config.Load(*configPath)
+if cfgErr != nil {
+fmt.Printf("  Config file ......... \u274c %s (%v)\n", *configPath, cfgErr)
+errors++
+cfg = config.DefaultConfig()
+} else {
+fmt.Printf("  Config file ......... \u2705 %s (valid)\n", *configPath)
+}
+
+// Providers
+fmt.Println("  Providers:")
+client := &http.Client{Timeout: 5 * time.Second}
+for _, p := range cfg.Providers {
+if !p.Enabled {
+continue
+}
+baseURL := strings.TrimSuffix(p.BaseURL, "/v1")
+reachable := checkEndpoint(client, baseURL)
+if reachable {
+fmt.Printf("    %-15s \u2705 reachable (%s)\n", p.Name, baseURL)
+} else {
+// Check if it's a cloud provider with missing API key
+apiKey := os.ExpandEnv(p.APIKey)
+if apiKey == "" || strings.HasPrefix(apiKey, "${") {
+fmt.Printf("    %-15s \u26a0\ufe0f  no API key configured\n", p.Name)
+warnings++
+} else {
+fmt.Printf("    %-15s \u274c unreachable (%s)\n", p.Name, baseURL)
+errors++
+}
+}
+}
+if len(cfg.Providers) == 0 {
+fmt.Printf("    (none configured) \u26a0\ufe0f  no providers\n")
+warnings++
+}
+
+// Embedding model
+if cfg.Cache.L2Semantic.Enabled {
+embModel := cfg.Cache.L2Semantic.Model
+embEndpoint := cfg.Cache.L2Semantic.Endpoint
+if checkOllamaModel(client, embEndpoint, embModel) {
+fmt.Printf("  Embedding model ..... \u2705 %s available\n", embModel)
+} else if checkEndpoint(client, embEndpoint) {
+fmt.Printf("  Embedding model ..... \u26a0\ufe0f  %s not found at %s\n", embModel, embEndpoint)
+warnings++
+} else {
+fmt.Printf("  Embedding model ..... \u274c endpoint unreachable (%s)\n", embEndpoint)
+errors++
+}
+} else {
+fmt.Printf("  Embedding model ..... \u26a0\ufe0f  semantic cache disabled\n")
+warnings++
+}
+
+// Chat model
+chatModelChecked := false
+for _, p := range cfg.Providers {
+if !p.Enabled || p.Type != "ollama" || len(p.Models) == 0 {
+continue
+}
+baseURL := strings.TrimSuffix(p.BaseURL, "/v1")
+model := p.Models[0].Name
+if checkOllamaModel(client, baseURL, model) {
+fmt.Printf("  Chat model .......... \u2705 %s available\n", model)
+} else {
+fmt.Printf("  Chat model .......... \u274c %s not found\n", model)
+errors++
+}
+chatModelChecked = true
+break
+}
+if !chatModelChecked {
+for _, p := range cfg.Providers {
+if !p.Enabled || len(p.Models) == 0 {
+continue
+}
+fmt.Printf("  Chat model .......... \u2705 %s configured (%s)\n", p.Models[0].Name, p.Name)
+chatModelChecked = true
+break
+}
+}
+if !chatModelChecked {
+fmt.Printf("  Chat model .......... \u274c none configured\n")
+errors++
+}
+
+// Cache
+fmt.Println("  Cache:")
+l1 := cfg.Cache.L1Enabled || cfg.Cache.L1.Enabled
+if l1 {
+fmt.Printf("    L1 exact .......... \u2705 enabled\n")
+} else {
+fmt.Printf("    L1 exact .......... \u274c disabled\n")
+}
+if cfg.Cache.L2BM25.Enabled {
+fmt.Printf("    L2 BM25 ........... \u2705 enabled\n")
+} else {
+fmt.Printf("    L2 BM25 ........... \u274c disabled\n")
+}
+if cfg.Cache.L2Semantic.Enabled {
+fmt.Printf("    L2 semantic ....... \u2705 enabled (%s @ %s)\n",
+cfg.Cache.L2Semantic.Model, cfg.Cache.L2Semantic.Endpoint)
+} else {
+fmt.Printf("    L2 semantic ....... \u274c disabled\n")
+}
+
+// Security
+fmt.Println("  Security:")
+if cfg.Security.TLS.Enabled {
+fmt.Printf("    TLS ............... \u2705 enabled\n")
+} else {
+fmt.Printf("    TLS ............... \u26a0\ufe0f  disabled (OK for development)\n")
+warnings++
+}
+if cfg.Security.RateLimit.Enabled {
+fmt.Printf("    Rate limiting ..... \u2705 %d RPM\n", cfg.Security.RateLimit.DefaultRPM)
+} else {
+fmt.Printf("    Rate limiting ..... \u274c disabled\n")
+}
+pg := security.NewPromptGuard(security.PromptGuardConfig{
+Enabled:        cfg.Security.PromptGuard.Enabled,
+CustomPatterns: cfg.Security.PromptGuard.CustomPatterns,
+})
+if cfg.Security.PromptGuard.Enabled {
+fmt.Printf("    Prompt guard ...... \u2705 %d patterns\n", pg.PatternCount())
+} else {
+fmt.Printf("    Prompt guard ...... \u274c disabled\n")
+}
+
+// Compression
+if cfg.Compression.Enabled {
+var strategies []string
+if cfg.Compression.Whitespace {
+strategies = append(strategies, "whitespace")
+}
+if cfg.Compression.CodeStrip {
+strategies = append(strategies, "code")
+}
+if cfg.Compression.HistoryTruncate {
+strategies = append(strategies, "history")
+}
+if cfg.Compression.Boilerplate {
+strategies = append(strategies, "boilerplate")
+}
+if cfg.Compression.JSONMinify {
+strategies = append(strategies, "json")
+}
+if cfg.Compression.Deduplication {
+strategies = append(strategies, "dedup")
+}
+label := "enabled"
+if len(strategies) > 0 {
+label = "enabled (" + strings.Join(strategies, " + ") + ")"
+}
+fmt.Printf("  Compression ......... \u2705 %s\n", label)
+} else {
+fmt.Printf("  Compression ......... \u274c disabled\n")
+}
+
+// Cascade routing
+if cfg.Cascade.Enabled {
+fmt.Printf("  Cascade routing ..... \u2705 enabled (threshold=%.2f)\n", cfg.Cascade.ConfidenceThreshold)
+} else {
+fmt.Printf("  Cascade routing ..... \u274c disabled\n")
+}
+
+// Eval scoring
+if cfg.Eval.Enabled {
+fmt.Printf("  Eval scoring ........ \u2705 enabled\n")
+} else {
+fmt.Printf("  Eval scoring ........ \u274c disabled\n")
+}
+
+// Data directory
+dataDir := cfg.Cache.Synonym.DataDir
+if dataDir == "" {
+dataDir = "./data"
+}
+if isDirWritable(dataDir) {
+fmt.Printf("  Data directory ...... \u2705 %s (writable)\n", dataDir)
+} else {
+fmt.Printf("  Data directory ...... \u26a0\ufe0f  %s (not writable or missing)\n", dataDir)
+warnings++
+}
+
+// Port availability
+port := cfg.Server.Port
+if isPortAvailable(port) {
+fmt.Printf("  Port %d ........... \u2705 available\n", port)
+} else {
+fmt.Printf("  Port %d ........... \u26a0\ufe0f  in use\n", port)
+warnings++
+}
+
+// Overall
+fmt.Println()
+if errors > 0 {
+fmt.Printf("  Overall: %d error(s), %d warning(s)\n", errors, warnings)
+} else if warnings > 0 {
+fmt.Printf("  Overall: Ready to start (%d warning(s))\n", warnings)
+} else {
+fmt.Printf("  Overall: Ready to start \u2705\n")
+}
+fmt.Println()
+}
+
+func checkEndpoint(client *http.Client, baseURL string) bool {
+resp, err := client.Get(baseURL)
+if err != nil {
+return false
+}
+resp.Body.Close()
+return true
+}
+
+func checkOllamaModel(client *http.Client, endpoint, model string) bool {
+resp, err := client.Get(endpoint + "/api/tags")
+if err != nil {
+return false
+}
+defer resp.Body.Close()
+
+var tags struct {
+Models []struct {
+Name string `json:"name"`
+} `json:"models"`
+}
+if err := json.NewDecoder(resp.Body).Decode(&tags); err != nil {
+return false
+}
+for _, m := range tags.Models {
+if m.Name == model || strings.HasPrefix(m.Name, model+":") {
+return true
+}
+}
+return false
+}
+
+func isDirWritable(dir string) bool {
+info, err := os.Stat(dir)
+if err != nil {
+// Try to create it
+if mkErr := os.MkdirAll(dir, 0755); mkErr != nil {
+return false
+}
+return true
+}
+if !info.IsDir() {
+return false
+}
+// Try creating a temp file to test writability
+f, err := os.CreateTemp(dir, ".nexus-doctor-*")
+if err != nil {
+return false
+}
+name := f.Name()
+f.Close()
+os.Remove(name)
+return true
+}
+
+func isPortAvailable(port int) bool {
+ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+if err != nil {
+return false
+}
+ln.Close()
+return true
 }

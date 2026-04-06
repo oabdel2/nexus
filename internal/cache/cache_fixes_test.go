@@ -2,6 +2,8 @@ package cache
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -249,5 +251,78 @@ func TestStoreStopCancelsCleanup(t *testing.T) {
 	data, ok, _ := s.Lookup("test prompt", "model")
 	if !ok || string(data) != "data" {
 		t.Error("cache should still be readable after Stop")
+	}
+}
+
+// ==================== Property-Based Tests ====================
+
+// TestLRU_PropertyEvictsOldest verifies that for N items added, Evict always
+// removes the least-recently-used (oldest untouched) entry.
+func TestLRU_PropertyEvictsOldest(t *testing.T) {
+	for n := 3; n <= 100; n++ {
+		l := newLRUList()
+		for i := 0; i < n; i++ {
+			l.Add(fmt.Sprintf("key-%d", i))
+		}
+
+		// Evict should always return key-0 (the oldest)
+		evicted := l.Evict()
+		if evicted != "key-0" {
+			t.Errorf("n=%d: expected to evict 'key-0', got '%s'", n, evicted)
+		}
+		if l.Len() != n-1 {
+			t.Errorf("n=%d: expected len %d after evict, got %d", n, n-1, l.Len())
+		}
+
+		// Touch key-1 (currently oldest), add a new key, evict again
+		// After touch, key-1 moves to front; key-2 becomes oldest
+		l.Touch("key-1")
+		l.Add(fmt.Sprintf("key-%d", n))
+		evicted = l.Evict()
+		if evicted != "key-2" {
+			t.Errorf("n=%d: after touch(key-1), expected evict 'key-2', got '%s'", n, evicted)
+		}
+	}
+
+	// Special case: verify basic eviction order for small list
+	l := newLRUList()
+	l.Add("a")
+	l.Add("b")
+	// "a" is oldest (tail)
+	if got := l.Evict(); got != "a" {
+		t.Errorf("small list: expected evict 'a', got '%s'", got)
+	}
+	if got := l.Evict(); got != "b" {
+		t.Errorf("small list: expected evict 'b', got '%s'", got)
+	}
+	if got := l.Evict(); got != "" {
+		t.Errorf("empty list: expected evict '', got '%s'", got)
+	}
+}
+
+// TestHashKey_PropertyDifferentModels verifies that for any prompt,
+// HashKey(prompt, modelA) != HashKey(prompt, modelB) when modelA != modelB.
+func TestHashKey_PropertyDifferentModels(t *testing.T) {
+	prompts := []string{
+		"", "hi", "hello world",
+		"explain quantum computing in simple terms",
+		"debug this race condition in the concurrent cache",
+		strings.Repeat("a", 5000),
+	}
+	models := []string{
+		"gpt-4", "gpt-3.5", "claude-3", "llama3.1", "qwen2.5:1.5b",
+		"model-a", "model-b", "",
+	}
+
+	for _, prompt := range prompts {
+		seen := make(map[string]string) // hash → model
+		for _, model := range models {
+			h := HashKey(prompt, model)
+			if prevModel, exists := seen[h]; exists && prevModel != model {
+				t.Errorf("HashKey collision: prompt=%q model=%q and model=%q both produce %s",
+					prompt, prevModel, model, h)
+			}
+			seen[h] = model
+		}
 	}
 }
