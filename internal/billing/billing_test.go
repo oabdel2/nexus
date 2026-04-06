@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -1028,5 +1029,356 @@ func TestAPIKeyPerKeyRateLimiting(t *testing.T) {
 	}
 	if result.Remaining != 0 {
 		t.Errorf("expected 0 remaining, got %d", result.Remaining)
+	}
+}
+
+// === NEW A+ AUDIT TESTS ===
+
+func TestGetByUserID(t *testing.T) {
+	dir := testDir(t)
+	logger := testLogger()
+	subStore := NewSubscriptionStore(dir, logger)
+
+	sub := &Subscription{
+		ID:               "sub_byuser",
+		UserID:           "target_user",
+		PlanID:           "starter",
+		Status:           "active",
+		CurrentPeriodEnd: time.Now().Add(30 * 24 * time.Hour),
+	}
+	subStore.Create(sub)
+
+	found, ok := subStore.GetByUserID("target_user")
+	if !ok || found == nil {
+		t.Fatal("expected to find subscription by user ID")
+	}
+	if found.ID != "sub_byuser" {
+		t.Errorf("expected sub_byuser, got %s", found.ID)
+	}
+
+	_, ok = subStore.GetByUserID("nonexistent_user")
+	if ok {
+		t.Error("should not find subscription for nonexistent user")
+	}
+}
+
+func TestGetByStripeCustomerID(t *testing.T) {
+	dir := testDir(t)
+	logger := testLogger()
+	subStore := NewSubscriptionStore(dir, logger)
+
+	sub := &Subscription{
+		ID:                 "sub_stripe_cust",
+		UserID:             "user1",
+		PlanID:             "team",
+		Status:             "active",
+		StripeCustomerID:   "cus_test_123",
+		CurrentPeriodEnd:   time.Now().Add(30 * 24 * time.Hour),
+	}
+	subStore.Create(sub)
+
+	found, ok := subStore.GetByStripeCustomerID("cus_test_123")
+	if !ok || found == nil {
+		t.Fatal("expected to find subscription by Stripe customer ID")
+	}
+	if found.ID != "sub_stripe_cust" {
+		t.Errorf("expected sub_stripe_cust, got %s", found.ID)
+	}
+
+	_, ok = subStore.GetByStripeCustomerID("cus_nonexistent")
+	if ok {
+		t.Error("should not find subscription for nonexistent customer")
+	}
+}
+
+func TestSubscriptionListAll(t *testing.T) {
+	dir := testDir(t)
+	logger := testLogger()
+	subStore := NewSubscriptionStore(dir, logger)
+
+	for i := 0; i < 3; i++ {
+		subStore.Create(&Subscription{
+			ID:               fmt.Sprintf("sub_%d", i),
+			UserID:           fmt.Sprintf("user_%d", i),
+			PlanID:           "free",
+			Status:           "active",
+			CurrentPeriodEnd: time.Now().Add(30 * 24 * time.Hour),
+		})
+	}
+
+	all := subStore.ListAll()
+	if len(all) != 3 {
+		t.Errorf("expected 3 subscriptions, got %d", len(all))
+	}
+}
+
+func TestSubscriptionListAll_Empty(t *testing.T) {
+	dir := testDir(t)
+	logger := testLogger()
+	subStore := NewSubscriptionStore(dir, logger)
+
+	all := subStore.ListAll()
+	if len(all) != 0 {
+		t.Errorf("expected 0 subscriptions, got %d", len(all))
+	}
+}
+
+func TestResetMonthlyUsageBySubscription(t *testing.T) {
+	dir := testDir(t)
+	logger := testLogger()
+	subStore := NewSubscriptionStore(dir, logger)
+	store := NewAPIKeyStore(dir, subStore, logger)
+
+	k1, _, _ := store.GenerateKey("user1", "sub_target", "key1", nil, false)
+	k2, _, _ := store.GenerateKey("user1", "sub_other", "key2", nil, false)
+
+	// Record usage on both keys
+	for i := 0; i < 10; i++ {
+		store.RecordUsage(k1.KeyHash)
+		store.RecordUsage(k2.KeyHash)
+	}
+
+	store.ResetMonthlyUsageBySubscription("sub_target")
+
+	store.mu.RLock()
+	usage1 := store.keys[k1.KeyHash].MonthlyUsage
+	usage2 := store.keys[k2.KeyHash].MonthlyUsage
+	store.mu.RUnlock()
+
+	if usage1 != 0 {
+		t.Errorf("target subscription usage should be 0, got %d", usage1)
+	}
+	if usage2 != 10 {
+		t.Errorf("other subscription usage should be 10, got %d", usage2)
+	}
+}
+
+func TestGetByHash_NotFound(t *testing.T) {
+	dir := testDir(t)
+	logger := testLogger()
+	subStore := NewSubscriptionStore(dir, logger)
+	store := NewAPIKeyStore(dir, subStore, logger)
+
+	_, found := store.GetByHash("nonexistent_hash")
+	if found {
+		t.Error("should not find nonexistent key")
+	}
+}
+
+func TestSubscriptionCreate_DuplicateRejected(t *testing.T) {
+	dir := testDir(t)
+	logger := testLogger()
+	subStore := NewSubscriptionStore(dir, logger)
+
+	sub := &Subscription{
+		ID:               "sub_dup",
+		UserID:           "user1",
+		PlanID:           "free",
+		Status:           "active",
+		CurrentPeriodEnd: time.Now().Add(30 * 24 * time.Hour),
+	}
+	if err := subStore.Create(sub); err != nil {
+		t.Fatalf("first create should succeed: %v", err)
+	}
+
+	err := subStore.Create(sub)
+	if err == nil {
+		t.Error("duplicate create should return error")
+	}
+}
+
+func TestSubscriptionUpdate_NotFound(t *testing.T) {
+	dir := testDir(t)
+	logger := testLogger()
+	subStore := NewSubscriptionStore(dir, logger)
+
+	err := subStore.Update(&Subscription{ID: "nonexistent"})
+	if err == nil {
+		t.Error("update of nonexistent subscription should return error")
+	}
+}
+
+func TestSubscriptionEventChannel(t *testing.T) {
+	dir := testDir(t)
+	logger := testLogger()
+	subStore := NewSubscriptionStore(dir, logger)
+
+	ch := subStore.EventChannel()
+	if ch == nil {
+		t.Fatal("event channel should not be nil")
+	}
+
+	sub := &Subscription{
+		ID:               "sub_evt",
+		UserID:           "user1",
+		PlanID:           "free",
+		Status:           "active",
+		CurrentPeriodEnd: time.Now().Add(30 * 24 * time.Hour),
+	}
+	subStore.Create(sub)
+
+	select {
+	case evt := <-ch:
+		if evt.Type != "created" {
+			t.Errorf("expected 'created' event, got %q", evt.Type)
+		}
+	default:
+		t.Error("expected event on channel after create")
+	}
+}
+
+func TestSubscriptionStop(t *testing.T) {
+	dir := testDir(t)
+	logger := testLogger()
+	subStore := NewSubscriptionStore(dir, logger)
+
+	// Stop should not panic, even called twice
+	subStore.Stop()
+	subStore.Stop()
+}
+
+func TestConcurrentKeyGeneration(t *testing.T) {
+	dir := testDir(t)
+	logger := testLogger()
+	subStore := NewSubscriptionStore(dir, logger)
+	store := NewAPIKeyStore(dir, subStore, logger)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, _, err := store.GenerateKey(
+				fmt.Sprintf("user_%d", i),
+				fmt.Sprintf("sub_%d", i),
+				fmt.Sprintf("key_%d", i),
+				nil,
+				false,
+			)
+			if err != nil {
+				t.Errorf("concurrent generate key failed: %v", err)
+			}
+		}(i)
+	}
+	wg.Wait()
+
+	// Verify all keys were created
+	for i := 0; i < 50; i++ {
+		keys := store.ListByUser(fmt.Sprintf("user_%d", i))
+		if len(keys) != 1 {
+			t.Errorf("expected 1 key for user_%d, got %d", i, len(keys))
+		}
+	}
+}
+
+func TestConcurrentQuotaChecks(t *testing.T) {
+	dir := testDir(t)
+	logger := testLogger()
+	subStore := NewSubscriptionStore(dir, logger)
+	sub := &Subscription{
+		ID:               "sub_conc",
+		UserID:           "user_conc",
+		PlanID:           "free",
+		Status:           "active",
+		CurrentPeriodEnd: time.Now().Add(30 * 24 * time.Hour),
+	}
+	subStore.Create(sub)
+
+	store := NewAPIKeyStore(dir, subStore, logger)
+	key, _, _ := store.GenerateKey("user_conc", "sub_conc", "key", nil, false)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			store.RecordUsage(key.KeyHash)
+		}()
+		go func() {
+			defer wg.Done()
+			store.CheckQuota(key.KeyHash)
+		}()
+	}
+	wg.Wait()
+}
+
+func TestDeviceListByUser(t *testing.T) {
+	dir := testDir(t)
+	logger := testLogger()
+	dt := NewDeviceTracker(dir, logger)
+
+	for i := 0; i < 3; i++ {
+		req := &http.Request{
+			Header:     http.Header{"User-Agent": {fmt.Sprintf("Agent-%d", i)}},
+			RemoteAddr: fmt.Sprintf("10.%d.0.1:1234", i),
+		}
+		dt.RecordDevice("user1", req)
+	}
+
+	devices := dt.ListByUser("user1")
+	if len(devices) != 3 {
+		t.Errorf("expected 3 devices, got %d", len(devices))
+	}
+
+	devices2 := dt.ListByUser("nonexistent")
+	if len(devices2) != 0 {
+		t.Errorf("expected 0 devices for nonexistent user, got %d", len(devices2))
+	}
+}
+
+func TestExtractIP_XForwardedFor(t *testing.T) {
+	req := &http.Request{
+		Header:     http.Header{"X-Forwarded-For": {"203.0.113.50, 10.0.0.1"}},
+		RemoteAddr: "10.0.0.1:1234",
+	}
+	ip := extractIP(req)
+	if ip != "203.0.113.50" {
+		t.Errorf("expected first XFF IP, got %s", ip)
+	}
+}
+
+func TestExtractIP_XRealIP(t *testing.T) {
+	h := make(http.Header)
+	h.Set("X-Real-IP", "1.2.3.4")
+	req := &http.Request{
+		Header:     h,
+		RemoteAddr: "10.0.0.1:1234",
+	}
+	ip := extractIP(req)
+	if ip != "1.2.3.4" {
+		t.Errorf("expected X-Real-IP, got %s", ip)
+	}
+}
+
+func TestTruncateIP_IPv4(t *testing.T) {
+	result := truncateIP("192.168.1.100")
+	if result != "192.168.1.0" {
+		t.Errorf("expected 192.168.1.0, got %s", result)
+	}
+}
+
+func TestTruncateIP_Invalid(t *testing.T) {
+	result := truncateIP("not-an-ip")
+	if result != "not-an-ip" {
+		t.Errorf("invalid IP should be returned as-is, got %s", result)
+	}
+}
+
+func TestGetPlan(t *testing.T) {
+	dir := testDir(t)
+	logger := testLogger()
+	subStore := NewSubscriptionStore(dir, logger)
+
+	plan, ok := subStore.GetPlan("free")
+	if !ok {
+		t.Fatal("free plan should exist")
+	}
+	if plan.MaxRequests != 1000 {
+		t.Errorf("expected 1000 max requests for free, got %d", plan.MaxRequests)
+	}
+
+	_, ok = subStore.GetPlan("nonexistent")
+	if ok {
+		t.Error("nonexistent plan should not be found")
 	}
 }

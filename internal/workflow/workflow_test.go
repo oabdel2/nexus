@@ -310,3 +310,165 @@ func TestWorkflowState_LastActivityUpdated(t *testing.T) {
 		t.Fatal("expected LastActivity to be updated after AddStep")
 	}
 }
+
+// === NEW A+ AUDIT TESTS ===
+
+// --- AutoDetector Tests ---
+
+func TestAutoDetector_NewWorkflow(t *testing.T) {
+	ad := NewAutoDetector(30*time.Second, 5*time.Minute)
+	wfID, step := ad.Detect("key1", "system prompt", "10.0.0.1", "agent/1.0")
+	if wfID == "" {
+		t.Error("expected non-empty workflow ID")
+	}
+	if step != 1 {
+		t.Errorf("expected step 1 for new workflow, got %d", step)
+	}
+}
+
+func TestAutoDetector_SameFingerprint_IncrementStep(t *testing.T) {
+	ad := NewAutoDetector(30*time.Second, 5*time.Minute)
+	wfID1, step1 := ad.Detect("key1", "sys", "10.0.0.1", "agent")
+	wfID2, step2 := ad.Detect("key1", "sys", "10.0.0.1", "agent")
+
+	if wfID1 != wfID2 {
+		t.Errorf("same fingerprint should produce same workflow: %s vs %s", wfID1, wfID2)
+	}
+	if step1 != 1 || step2 != 2 {
+		t.Errorf("expected steps 1 and 2, got %d and %d", step1, step2)
+	}
+}
+
+func TestAutoDetector_DifferentFingerprint_NewWorkflow(t *testing.T) {
+	ad := NewAutoDetector(30*time.Second, 5*time.Minute)
+	wfID1, _ := ad.Detect("key1", "sys", "10.0.0.1", "agent")
+	wfID2, _ := ad.Detect("key2", "sys", "10.0.0.2", "agent") // different key+IP
+
+	if wfID1 == wfID2 {
+		t.Error("different fingerprints should produce different workflow IDs")
+	}
+}
+
+func TestAutoDetector_Stats(t *testing.T) {
+	ad := NewAutoDetector(30*time.Second, 5*time.Minute)
+	ad.Detect("key1", "sys", "10.0.0.1", "agent")
+	ad.Detect("key1", "sys", "10.0.0.1", "agent") // same workflow, step 2
+	ad.Detect("key2", "sys", "10.0.0.2", "agent") // new workflow
+
+	sessions, total := ad.Stats()
+	if sessions != 2 {
+		t.Errorf("expected 2 sessions, got %d", sessions)
+	}
+	if total != 3 {
+		t.Errorf("expected 3 total steps, got %d", total)
+	}
+}
+
+func TestAutoDetector_DefaultWindow(t *testing.T) {
+	ad := NewAutoDetector(0, 0)
+	if ad.window != 30*time.Second {
+		t.Errorf("expected default window 30s, got %v", ad.window)
+	}
+	if ad.maxAge != 5*time.Minute {
+		t.Errorf("expected default maxAge 5m, got %v", ad.maxAge)
+	}
+}
+
+// --- Snapshot Tests ---
+
+func TestWorkflowState_Snapshot(t *testing.T) {
+	tr := NewTracker(10.0, time.Hour)
+	ws := tr.GetOrCreate("wf-snap")
+	ws.AddStep(StepRecord{Cost: 2.0})
+	ws.AddStep(StepRecord{Cost: 3.0})
+
+	snap := ws.Snapshot()
+	if snap.CurrentStep != 2 {
+		t.Errorf("expected step 2, got %d", snap.CurrentStep)
+	}
+	if snap.TotalCost != 5.0 {
+		t.Errorf("expected total cost 5.0, got %f", snap.TotalCost)
+	}
+	if snap.Budget != 10.0 {
+		t.Errorf("expected budget 10.0, got %f", snap.Budget)
+	}
+	if snap.BudgetLeft != 5.0 {
+		t.Errorf("expected budget left 5.0, got %f", snap.BudgetLeft)
+	}
+}
+
+func TestWorkflowState_Snapshot_Concurrent(t *testing.T) {
+	tr := NewTracker(100.0, time.Hour)
+	ws := tr.GetOrCreate("wf-snap-conc")
+
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			ws.AddStep(StepRecord{Cost: 0.01})
+		}()
+		go func() {
+			defer wg.Done()
+			_ = ws.Snapshot()
+		}()
+	}
+	wg.Wait()
+}
+
+// --- Tracker Stop Tests ---
+
+func TestTracker_Stop(t *testing.T) {
+	tr := NewTracker(10.0, time.Hour)
+	tr.GetOrCreate("wf-1")
+
+	// Stop should not panic
+	tr.Stop()
+	// Double stop should not panic
+	tr.Stop()
+}
+
+// --- FeedbackHandler edge cases ---
+
+func TestFeedbackHandler_ContentType(t *testing.T) {
+	h, tr := newTestHandler()
+	ws := tr.GetOrCreate("wf-1")
+	ws.AddStep(StepRecord{Cost: 1.0})
+
+	body, _ := json.Marshal(FeedbackRequest{WorkflowID: "wf-1", Step: 1, Outcome: "success"})
+	req := httptest.NewRequest(http.MethodPost, "/feedback", bytes.NewBuffer(body))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	ct := w.Header().Get("Content-Type")
+	if ct != "application/json" {
+		t.Errorf("expected application/json, got %s", ct)
+	}
+}
+
+func TestFeedbackHandler_MultipleOutcomes(t *testing.T) {
+	h, tr := newTestHandler()
+	ws := tr.GetOrCreate("wf-1")
+	ws.AddStep(StepRecord{Cost: 1.0})
+	ws.AddStep(StepRecord{Cost: 2.0})
+
+	outcomes := []string{"success", "failure", "0.75"}
+	for i, outcome := range outcomes {
+		body, _ := json.Marshal(FeedbackRequest{
+			WorkflowID: "wf-1",
+			Step:       i + 1,
+			Outcome:    outcome,
+		})
+		// For step 3, there's no step to update
+		req := httptest.NewRequest(http.MethodPost, "/feedback", bytes.NewBuffer(body))
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+	}
+
+	if ws.Steps[0].Outcome != "success" {
+		t.Errorf("step 1 outcome = %q, want 'success'", ws.Steps[0].Outcome)
+	}
+	if ws.Steps[1].Outcome != "failure" {
+		t.Errorf("step 2 outcome = %q, want 'failure'", ws.Steps[1].Outcome)
+	}
+}

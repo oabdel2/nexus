@@ -558,18 +558,22 @@ nexus init
 </div>
 <pre><code><span class="cm">// Request</span>
 {
-  <span class="str">"messages"</span>: [{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: <span class="str">"Explain quicksort in Python"</span>}]
+  <span class="str">"prompt"</span>: <span class="str">"Explain quicksort in Python"</span>,
+  <span class="str">"role"</span>: <span class="str">"engineer"</span>
 }
 
 <span class="cm">// Response</span>
 {
   <span class="str">"complexity_score"</span>: <span class="num">0.32</span>,
-  <span class="str">"selected_tier"</span>: <span class="str">"mid"</span>,
-  <span class="str">"selected_model"</span>: <span class="str">"gpt-4o-mini"</span>,
-  <span class="str">"cache_status"</span>: <span class="str">"miss"</span>,
-  <span class="str">"estimated_cost"</span>: <span class="num">0.0003</span>,
+  <span class="str">"tier"</span>: <span class="str">"mid"</span>,
+  <span class="str">"reason"</span>: <span class="str">"score below threshold"</span>,
   <span class="str">"would_cascade"</span>: <span class="kw">false</span>,
-  <span class="str">"experiment"</span>: <span class="kw">null</span>
+  <span class="str">"estimated_model"</span>: <span class="str">"gpt-4o-mini"</span>,
+  <span class="str">"estimated_provider"</span>: <span class="str">"openai"</span>,
+  <span class="str">"estimated_cost"</span>: <span class="num">0.0003</span>,
+  <span class="str">"cache_enabled"</span>: <span class="kw">true</span>,
+  <span class="str">"compression_enabled"</span>: <span class="kw">true</span>,
+  <span class="str">"cascade_enabled"</span>: <span class="kw">false</span>
 }</code></pre>
 
 <h3>API Key Management</h3>
@@ -613,6 +617,32 @@ nexus init
   <p class="endpoint-desc">List registered devices and their last-seen timestamps.</p>
 </div>
 
+<h3>Adaptive Routing</h3>
+<div class="endpoint">
+  <span class="endpoint-method method-get">GET</span>
+  <span class="endpoint-path">/api/adaptive/stats</span>
+  <p class="endpoint-desc">Adaptive routing statistics: current routing adjustments based on learned confidence data.</p>
+</div>
+
+<h3>Events</h3>
+<div class="endpoint">
+  <span class="endpoint-method method-get">GET</span>
+  <span class="endpoint-path">/api/events/recent</span>
+  <p class="endpoint-desc">Recent events from the event bus (budget warnings, tier downgrades, cache hits, cost anomalies).</p>
+</div>
+<div class="endpoint">
+  <span class="endpoint-method method-get">GET</span>
+  <span class="endpoint-path">/api/events/stats</span>
+  <p class="endpoint-desc">Event bus statistics: total events emitted by type, webhook delivery status.</p>
+</div>
+
+<h3>Plugins</h3>
+<div class="endpoint">
+  <span class="endpoint-method method-get">GET</span>
+  <span class="endpoint-path">/api/plugins</span>
+  <p class="endpoint-desc">List loaded plugins and their status.</p>
+</div>
+
 <!-- 3. HEADERS -->
 <h2 id="headers">Headers Reference</h2>
 
@@ -625,6 +655,8 @@ nexus init
     <tr><td><code>X-Agent-Role</code></td><td>Agent role hint. Nexus uses this for routing optimization (e.g., &ldquo;tester&rdquo; gets cheaper models).</td><td><code>engineer</code>, <code>architect</code>, <code>tester</code></td></tr>
     <tr><td><code>X-Team</code></td><td>Team identifier for per-team cost attribution and billing dashboards.</td><td><code>platform-team</code></td></tr>
     <tr><td><code>X-Nexus-Explain</code></td><td>When set to <code>true</code>, includes a detailed routing explanation in the response body.</td><td><code>true</code></td></tr>
+    <tr><td><code>X-Budget</code></td><td>Maximum USD budget for this workflow. Reserved for future per-request budget override.</td><td><code>2.50</code></td></tr>
+    <tr><td><code>X-Step-Number</code></td><td>Position in a multi-step workflow. Used for step-position scoring in the classifier.</td><td><code>3</code></td></tr>
   </tbody>
 </table>
 
@@ -633,7 +665,7 @@ nexus init
   <thead><tr><th>Header</th><th>Description</th><th>Example</th></tr></thead>
   <tbody>
     <tr><td><code>X-Nexus-Model</code></td><td>The actual model that handled the request (may differ from requested model).</td><td><code>gpt-4o-mini</code></td></tr>
-    <tr><td><code>X-Nexus-Tier</code></td><td>Which routing tier was selected: <code>premium</code>, <code>mid</code>, or <code>fast</code>.</td><td><code>mid</code></td></tr>
+    <tr><td><code>X-Nexus-Tier</code></td><td>Which routing tier was selected: <code>premium</code>, <code>mid</code>, or <code>cheap</code>.</td><td><code>mid</code></td></tr>
     <tr><td><code>X-Nexus-Provider</code></td><td>Which provider backend handled the request.</td><td><code>openai</code></td></tr>
     <tr><td><code>X-Nexus-Cost</code></td><td>Dollar cost of this individual request.</td><td><code>0.0012</code></td></tr>
     <tr><td><code>X-Nexus-Cache</code></td><td>Cache hit source. Empty on miss.</td><td><code>l1_exact</code>, <code>l2_bm25</code>, <code>l2_semantic</code></td></tr>
@@ -652,194 +684,239 @@ nexus init
 <h3>server</h3>
 <pre><code><span class="kw">server</span>:
   <span class="kw">port</span>: <span class="num">8080</span>              <span class="cm"># Listen port (default: 8080)</span>
-  <span class="kw">host</span>: <span class="str">0.0.0.0</span>          <span class="cm"># Bind address (default: 0.0.0.0)</span>
-  <span class="kw">tls</span>:
-    <span class="kw">enabled</span>: <span class="kw">true</span>
-    <span class="kw">cert</span>: <span class="str">/etc/nexus/tls/cert.pem</span>
-    <span class="kw">key</span>: <span class="str">/etc/nexus/tls/key.pem</span>
   <span class="kw">read_timeout</span>: <span class="str">30s</span>       <span class="cm"># Max request read time</span>
-  <span class="kw">write_timeout</span>: <span class="str">120s</span>     <span class="cm"># Max response write time</span>
-  <span class="kw">max_body_size</span>: <span class="str">10MB</span>     <span class="cm"># Max request body</span></code></pre>
+  <span class="kw">write_timeout</span>: <span class="str">120s</span>     <span class="cm"># Max response write time (includes LLM latency)</span>
+  <span class="kw">max_concurrent</span>: <span class="num">0</span>       <span class="cm"># Max concurrent requests (0 = unlimited)</span></code></pre>
 
 <h3>providers</h3>
 <pre><code><span class="kw">providers</span>:
   - <span class="kw">name</span>: <span class="str">openai</span>
+    <span class="kw">type</span>: <span class="str">openai</span>             <span class="cm"># openai, anthropic, or ollama</span>
+    <span class="kw">base_url</span>: <span class="str">https://api.openai.com/v1</span>
     <span class="kw">api_key</span>: <span class="vr">${OPENAI_API_KEY}</span>
-    <span class="kw">models</span>: [<span class="str">gpt-4o</span>, <span class="str">gpt-4o-mini</span>, <span class="str">gpt-4-turbo</span>]
-    <span class="kw">tier</span>: <span class="str">premium</span>            <span class="cm"># premium | mid | fast</span>
-    <span class="kw">weight</span>: <span class="num">100</span>              <span class="cm"># Load balancing weight</span>
-    <span class="kw">timeout</span>: <span class="str">60s</span>
-    <span class="kw">max_retries</span>: <span class="num">3</span>
+    <span class="kw">enabled</span>: <span class="kw">true</span>
+    <span class="kw">priority</span>: <span class="num">1</span>              <span class="cm"># Lower = preferred</span>
+    <span class="kw">models</span>:
+      - <span class="kw">name</span>: <span class="str">gpt-4o-mini</span>
+        <span class="kw">tier</span>: <span class="str">cheap</span>           <span class="cm"># economy, cheap, mid, or premium</span>
+        <span class="kw">cost_per_1k_tokens</span>: <span class="num">0.00015</span>
+        <span class="kw">max_tokens</span>: <span class="num">16384</span>
+      - <span class="kw">name</span>: <span class="str">gpt-4o</span>
+        <span class="kw">tier</span>: <span class="str">mid</span>
+        <span class="kw">cost_per_1k_tokens</span>: <span class="num">0.005</span>
+        <span class="kw">max_tokens</span>: <span class="num">16384</span>
+      - <span class="kw">name</span>: <span class="str">o3</span>
+        <span class="kw">tier</span>: <span class="str">premium</span>
+        <span class="kw">cost_per_1k_tokens</span>: <span class="num">0.01</span>
+        <span class="kw">max_tokens</span>: <span class="num">100000</span>
   - <span class="kw">name</span>: <span class="str">anthropic</span>
+    <span class="kw">type</span>: <span class="str">anthropic</span>
+    <span class="kw">base_url</span>: <span class="str">https://api.anthropic.com/v1</span>
     <span class="kw">api_key</span>: <span class="vr">${ANTHROPIC_API_KEY}</span>
-    <span class="kw">models</span>: [<span class="str">claude-sonnet-4-20250514</span>, <span class="str">claude-haiku</span>]
-    <span class="kw">tier</span>: <span class="str">mid</span>
+    <span class="kw">enabled</span>: <span class="kw">false</span>
+    <span class="kw">priority</span>: <span class="num">2</span>
+    <span class="kw">models</span>:
+      - <span class="kw">name</span>: <span class="str">claude-sonnet-4</span>
+        <span class="kw">tier</span>: <span class="str">mid</span>
+        <span class="kw">cost_per_1k_tokens</span>: <span class="num">0.003</span>
+        <span class="kw">max_tokens</span>: <span class="num">64000</span>
   - <span class="kw">name</span>: <span class="str">ollama</span>
-    <span class="kw">base_url</span>: <span class="str">http://localhost:11434</span>
-    <span class="kw">models</span>: [<span class="str">llama3</span>, <span class="str">codellama</span>]
-    <span class="kw">tier</span>: <span class="str">fast</span></code></pre>
+    <span class="kw">type</span>: <span class="str">ollama</span>
+    <span class="kw">base_url</span>: <span class="str">http://localhost:11434/v1</span>
+    <span class="kw">enabled</span>: <span class="kw">false</span>
+    <span class="kw">priority</span>: <span class="num">3</span>
+    <span class="kw">models</span>:
+      - <span class="kw">name</span>: <span class="str">llama3.1</span>
+        <span class="kw">tier</span>: <span class="str">cheap</span>
+        <span class="kw">cost_per_1k_tokens</span>: <span class="num">0.0</span>
+        <span class="kw">max_tokens</span>: <span class="num">8192</span></code></pre>
 
 <h3>router</h3>
 <pre><code><span class="kw">router</span>:
-  <span class="kw">smart_classifier</span>:
-    <span class="kw">enabled</span>: <span class="kw">true</span>
-    <span class="kw">algorithm</span>: <span class="str">tfidf</span>        <span class="cm"># TF-IDF based complexity scoring</span>
-    <span class="kw">threshold_low</span>: <span class="num">0.3</span>      <span class="cm"># Below this = fast tier</span>
-    <span class="kw">threshold_high</span>: <span class="num">0.7</span>     <span class="cm"># Above this = premium tier</span>
-    <span class="kw">features</span>:               <span class="cm"># Scoring features</span>
-      - <span class="str">token_count</span>
-      - <span class="str">vocabulary_richness</span>
-      - <span class="str">code_density</span>
-      - <span class="str">question_complexity</span>
-      - <span class="str">domain_specificity</span>
-  <span class="kw">default_tier</span>: <span class="str">mid</span>        <span class="cm"># Fallback when classifier is uncertain</span>
-  <span class="kw">agent_role_overrides</span>:    <span class="cm"># Override tier based on agent role</span>
-    <span class="kw">architect</span>: <span class="str">premium</span>
-    <span class="kw">tester</span>: <span class="str">fast</span></code></pre>
+  <span class="kw">threshold</span>: <span class="num">0.7</span>            <span class="cm"># Score above this → premium tier</span>
+  <span class="kw">default_tier</span>: <span class="str">mid</span>        <span class="cm"># Fallback when no providers match</span>
+  <span class="kw">budget_enabled</span>: <span class="kw">true</span>     <span class="cm"># Enable budget-aware routing</span>
+  <span class="kw">default_budget</span>: <span class="num">1.0</span>      <span class="cm"># Default workflow budget ($)</span>
+  <span class="kw">smart_classifier</span>: <span class="kw">true</span>   <span class="cm"># Enable TF-IDF hybrid classifier</span>
+  <span class="kw">complexity_weights</span>:       <span class="cm"># How each signal contributes to final score</span>
+    <span class="kw">prompt_complexity</span>: <span class="num">0.30</span>
+    <span class="kw">context_length</span>: <span class="num">0.15</span>
+    <span class="kw">agent_role</span>: <span class="num">0.20</span>
+    <span class="kw">step_position</span>: <span class="num">0.15</span>
+    <span class="kw">budget_pressure</span>: <span class="num">0.20</span></code></pre>
 
 <h3>cache</h3>
 <pre><code><span class="kw">cache</span>:
   <span class="kw">enabled</span>: <span class="kw">true</span>
-  <span class="kw">l1_exact</span>:               <span class="cm"># Layer 1: exact hash match (in-memory)</span>
-    <span class="kw">max_size</span>: <span class="num">10000</span>
+  <span class="kw">l1_enabled</span>: <span class="kw">true</span>          <span class="cm"># L1 exact hash match (in-memory)</span>
+  <span class="kw">l2_enabled</span>: <span class="kw">false</span>         <span class="cm"># L2 fuzzy/semantic cache</span>
+  <span class="kw">ttl</span>: <span class="str">1h</span>
+  <span class="kw">max_entries</span>: <span class="num">10000</span>
+  <span class="kw">similarity_min</span>: <span class="num">0.95</span>
+  <span class="kw">l1</span>:
+    <span class="kw">enabled</span>: <span class="kw">true</span>
+    <span class="kw">ttl</span>: <span class="str">15m</span>
+    <span class="kw">max_entries</span>: <span class="num">10000</span>
+  <span class="kw">l2_bm25</span>:                  <span class="cm"># BM25 keyword similarity</span>
+    <span class="kw">enabled</span>: <span class="kw">true</span>
     <span class="kw">ttl</span>: <span class="str">1h</span>
-  <span class="kw">l2_bm25</span>:                <span class="cm"># Layer 2: BM25 keyword match</span>
+    <span class="kw">max_entries</span>: <span class="num">50000</span>
+    <span class="kw">threshold</span>: <span class="num">15.0</span>         <span class="cm"># Min BM25 score for a match</span>
+  <span class="kw">l2_semantic</span>:               <span class="cm"># BGE-M3 embedding similarity</span>
     <span class="kw">enabled</span>: <span class="kw">true</span>
-    <span class="kw">threshold</span>: <span class="num">0.85</span>
-  <span class="kw">l2_semantic</span>:             <span class="cm"># Layer 3: semantic vector similarity</span>
+    <span class="kw">ttl</span>: <span class="str">1h</span>
+    <span class="kw">max_entries</span>: <span class="num">50000</span>
+    <span class="kw">threshold</span>: <span class="num">0.70</span>         <span class="cm"># Min cosine similarity</span>
+    <span class="kw">backend</span>: <span class="str">ollama</span>
+    <span class="kw">model</span>: <span class="str">bge-m3</span>
+    <span class="kw">endpoint</span>: <span class="str">http://localhost:11434</span>
+    <span class="kw">reranker</span>:
+      <span class="kw">enabled</span>: <span class="kw">false</span>
+      <span class="kw">model</span>: <span class="str">bge-reranker-v2-m3</span>
+      <span class="kw">threshold</span>: <span class="num">0.5</span>
+  <span class="kw">feedback</span>:
     <span class="kw">enabled</span>: <span class="kw">true</span>
-    <span class="kw">threshold</span>: <span class="num">0.92</span>
-    <span class="kw">backend</span>: <span class="str">qdrant</span>
-  <span class="kw">l3_cluster</span>:              <span class="cm"># Layer 4: cross-user cluster cache</span>
-    <span class="kw">enabled</span>: <span class="kw">true</span>
-  <span class="kw">l4_stale</span>:                <span class="cm"># Layer 5: stale-while-revalidate</span>
-    <span class="kw">enabled</span>: <span class="kw">true</span>
-    <span class="kw">max_stale</span>: <span class="str">24h</span>
-  <span class="kw">l5_prefetch</span>:             <span class="cm"># Layer 6: predictive prefetch</span>
+    <span class="kw">max_size</span>: <span class="num">10000</span>
+  <span class="kw">shadow</span>:
     <span class="kw">enabled</span>: <span class="kw">false</span>
-  <span class="kw">l6_compressed</span>:           <span class="cm"># Layer 7: compressed response cache</span>
-    <span class="kw">enabled</span>: <span class="kw">true</span>
-    <span class="kw">algorithm</span>: <span class="str">zstd</span>
-  <span class="kw">redis_url</span>: <span class="str">redis://localhost:6379</span></code></pre>
+    <span class="kw">max_results</span>: <span class="num">1000</span>
+  <span class="kw">synonym</span>:
+    <span class="kw">data_dir</span>: <span class="str">./data</span>
+    <span class="kw">promotion_threshold</span>: <span class="num">3</span></code></pre>
 
 <h3>compression</h3>
 <pre><code><span class="kw">compression</span>:
   <span class="kw">enabled</span>: <span class="kw">true</span>
-  <span class="kw">strategies</span>:
-    - <span class="str">whitespace</span>             <span class="cm"># Remove unnecessary whitespace</span>
-    - <span class="str">synonym_replace</span>        <span class="cm"># Replace verbose phrases</span>
-    - <span class="str">system_prompt_cache</span>    <span class="cm"># Deduplicate system prompts</span>
-  <span class="kw">min_tokens</span>: <span class="num">100</span>           <span class="cm"># Only compress above this</span>
-  <span class="kw">target_ratio</span>: <span class="num">0.8</span>        <span class="cm"># Target 80% of original size</span></code></pre>
+  <span class="kw">whitespace</span>: <span class="kw">true</span>           <span class="cm"># Remove unnecessary whitespace</span>
+  <span class="kw">code_strip</span>: <span class="kw">true</span>           <span class="cm"># Strip redundant code formatting</span>
+  <span class="kw">history_truncate</span>: <span class="kw">true</span>     <span class="cm"># Truncate long conversation histories</span>
+  <span class="kw">max_history_turns</span>: <span class="num">20</span>      <span class="cm"># Max conversation turns to keep</span>
+  <span class="kw">preserve_last_n</span>: <span class="num">5</span>        <span class="cm"># Always preserve N most recent turns</span></code></pre>
 
 <h3>cascade</h3>
 <pre><code><span class="kw">cascade</span>:
-  <span class="kw">enabled</span>: <span class="kw">true</span>
-  <span class="kw">confidence_threshold</span>: <span class="num">0.7</span>  <span class="cm"># Escalate if confidence &lt; this</span>
-  <span class="kw">max_escalations</span>: <span class="num">2</span>        <span class="cm"># Max tier jumps per request</span>
-  <span class="kw">timeout_per_tier</span>: <span class="str">10s</span>     <span class="cm"># Timeout before cascade</span></code></pre>
+  <span class="kw">enabled</span>: <span class="kw">false</span>
+  <span class="kw">confidence_threshold</span>: <span class="num">0.78</span> <span class="cm"># Escalate if cheap model confidence &lt; this</span>
+  <span class="kw">max_latency_ms</span>: <span class="num">5000</span>      <span class="cm"># Max latency for cheap model attempt</span>
+  <span class="kw">sample_rate</span>: <span class="num">1.0</span>          <span class="cm"># Fraction of requests eligible for cascade</span></code></pre>
 
 <h3>eval</h3>
 <pre><code><span class="kw">eval</span>:
   <span class="kw">enabled</span>: <span class="kw">true</span>
-  <span class="kw">shadow</span>:
-    <span class="kw">enabled</span>: <span class="kw">true</span>
-    <span class="kw">sample_rate</span>: <span class="num">0.05</span>      <span class="cm"># Shadow eval 5% of requests</span>
-    <span class="kw">premium_model</span>: <span class="str">gpt-4o</span>  <span class="cm"># Compare against this</span>
-  <span class="kw">confidence_decay</span>: <span class="num">0.995</span>  <span class="cm"># Confidence decays over time</span>
-  <span class="kw">min_samples</span>: <span class="num">50</span>          <span class="cm"># Min samples before trusting score</span></code></pre>
+  <span class="kw">data_dir</span>: <span class="str">./data/eval</span>
+  <span class="kw">hedging_penalty</span>: <span class="num">0.15</span>     <span class="cm"># Penalty for hedging language</span>
+  <span class="kw">sample_rate</span>: <span class="num">1.0</span>          <span class="cm"># Fraction of responses to evaluate</span>
+  <span class="kw">shadow_enabled</span>: <span class="kw">false</span>     <span class="cm"># Compare cheap vs premium in background</span>
+  <span class="kw">shadow_sample_rate</span>: <span class="num">0.10</span>  <span class="cm"># Fraction of requests for shadow eval</span></code></pre>
 
 <h3>experiment</h3>
 <pre><code><span class="kw">experiment</span>:
-  <span class="kw">enabled</span>: <span class="kw">true</span>
-  <span class="kw">auto_conclude</span>: <span class="kw">true</span>       <span class="cm"># Auto-end when significance reached</span>
-  <span class="kw">significance_level</span>: <span class="num">0.05</span>  <span class="cm"># p-value threshold</span>
-  <span class="kw">min_sample_size</span>: <span class="num">100</span></code></pre>
+  <span class="kw">enabled</span>: <span class="kw">false</span>
+  <span class="kw">auto_start</span>: <span class="kw">false</span>          <span class="cm"># Auto-start experiments on creation</span></code></pre>
+
+<h3>adaptive</h3>
+<pre><code><span class="kw">adaptive</span>:
+  <span class="kw">enabled</span>: <span class="kw">false</span>
+  <span class="kw">min_samples</span>: <span class="num">50</span>            <span class="cm"># Min samples before adjusting routing</span>
+  <span class="kw">high_confidence</span>: <span class="num">0.90</span>     <span class="cm"># Confidence above this = keep routing</span>
+  <span class="kw">low_confidence</span>: <span class="num">0.50</span>      <span class="cm"># Confidence below this = escalate tier</span></code></pre>
 
 <h3>workflow</h3>
 <pre><code><span class="kw">workflow</span>:
-  <span class="kw">enabled</span>: <span class="kw">true</span>
-  <span class="kw">max_steps</span>: <span class="num">50</span>              <span class="cm"># Max steps per workflow</span>
-  <span class="kw">step_timeout</span>: <span class="str">120s</span>
-  <span class="kw">cost_budget</span>: <span class="num">5.00</span>          <span class="cm"># Max $ per workflow</span>
-  <span class="kw">auto_downgrade</span>: <span class="kw">true</span>       <span class="cm"># Auto-downroute when nearing budget</span></code></pre>
+  <span class="kw">ttl</span>: <span class="str">1h</span>                     <span class="cm"># Workflow state expiry after last activity</span>
+  <span class="kw">max_steps</span>: <span class="num">100</span>              <span class="cm"># Maximum steps per workflow</span></code></pre>
 
 <h3>telemetry &amp; tracing</h3>
 <pre><code><span class="kw">telemetry</span>:
-  <span class="kw">enabled</span>: <span class="kw">true</span>
-  <span class="kw">prometheus</span>:
-    <span class="kw">enabled</span>: <span class="kw">true</span>
-    <span class="kw">port</span>: <span class="num">9090</span>
-  <span class="kw">log_level</span>: <span class="str">info</span>           <span class="cm"># debug | info | warn | error</span>
+  <span class="kw">metrics_enabled</span>: <span class="kw">true</span>      <span class="cm"># Enable /metrics endpoint</span>
+  <span class="kw">metrics_port</span>: <span class="num">9090</span>         <span class="cm"># Metrics listen port (0 = same as server)</span>
+  <span class="kw">log_level</span>: <span class="str">info</span>            <span class="cm"># debug | info | warn | error</span>
+  <span class="kw">log_format</span>: <span class="str">json</span>           <span class="cm"># json | text</span>
 
 <span class="kw">tracing</span>:
   <span class="kw">enabled</span>: <span class="kw">true</span>
-  <span class="kw">exporter</span>: <span class="str">otlp</span>            <span class="cm"># otlp | jaeger | zipkin</span>
-  <span class="kw">endpoint</span>: <span class="str">http://localhost:4318</span>
-  <span class="kw">sample_rate</span>: <span class="num">1.0</span>          <span class="cm"># 1.0 = trace every request</span></code></pre>
+  <span class="kw">service_name</span>: <span class="str">nexus-gateway</span>
+  <span class="kw">sample_rate</span>: <span class="num">1.0</span>           <span class="cm"># 1.0 = trace every request</span>
+  <span class="kw">log_spans</span>: <span class="kw">true</span>
+  <span class="kw">export_url</span>: <span class="str">""</span>             <span class="cm"># Set to http://jaeger:4318/v1/traces for OTLP</span></code></pre>
 
 <h3>security</h3>
 <pre><code><span class="kw">security</span>:
-  <span class="kw">api_keys</span>:
-    <span class="kw">enabled</span>: <span class="kw">true</span>
-    <span class="kw">prefix</span>: <span class="str">nxs_live_</span>
-  <span class="kw">rate_limit</span>:
-    <span class="kw">enabled</span>: <span class="kw">true</span>
-    <span class="kw">requests_per_minute</span>: <span class="num">60</span>
-    <span class="kw">burst</span>: <span class="num">10</span>
-  <span class="kw">ip_allowlist</span>: []           <span class="cm"># Empty = allow all</span>
-  <span class="kw">ip_denylist</span>: []
-  <span class="kw">cors</span>:
-    <span class="kw">enabled</span>: <span class="kw">true</span>
-    <span class="kw">origins</span>: [<span class="str">"*"</span>]
+  <span class="kw">tls</span>:
+    <span class="kw">enabled</span>: <span class="kw">false</span>
+    <span class="kw">cert_file</span>: <span class="str">""</span>
+    <span class="kw">key_file</span>: <span class="str">""</span>
+    <span class="kw">min_version</span>: <span class="str">1.2</span>
+    <span class="kw">mutual_tls</span>: <span class="kw">false</span>
   <span class="kw">prompt_guard</span>:
     <span class="kw">enabled</span>: <span class="kw">true</span>
-    <span class="kw">block_pii</span>: <span class="kw">true</span>         <span class="cm"># Detect &amp; redact PII</span>
-    <span class="kw">block_injection</span>: <span class="kw">true</span>   <span class="cm"># Block prompt injection</span>
-    <span class="kw">max_risk_score</span>: <span class="num">0.8</span>
-  <span class="kw">tls</span>:
-    <span class="kw">min_version</span>: <span class="str">1.2</span>
-  <span class="kw">audit_log</span>:
+    <span class="kw">mode</span>: <span class="str">block</span>              <span class="cm"># block or log</span>
+    <span class="kw">max_prompt_length</span>: <span class="num">32000</span>
+  <span class="kw">rate_limit</span>:
     <span class="kw">enabled</span>: <span class="kw">true</span>
-    <span class="kw">destination</span>: <span class="str">file</span>       <span class="cm"># file | syslog | webhook</span>
-  <span class="kw">hmac_signing</span>: <span class="kw">false</span>
-  <span class="kw">request_signing</span>: <span class="kw">false</span>
-  <span class="kw">header_sanitization</span>: <span class="kw">true</span>
-  <span class="kw">max_token_limit</span>: <span class="num">128000</span></code></pre>
+    <span class="kw">default_rpm</span>: <span class="num">60</span>
+    <span class="kw">burst_size</span>: <span class="num">10</span>
+  <span class="kw">cors</span>:
+    <span class="kw">allowed_origins</span>: [<span class="str">"*"</span>]
+  <span class="kw">rbac</span>:
+    <span class="kw">enabled</span>: <span class="kw">false</span>
+    <span class="kw">roles</span>:
+      <span class="kw">admin</span>:
+        <span class="kw">permissions</span>: [<span class="str">"chat"</span>, <span class="str">"admin"</span>, <span class="str">"dashboard"</span>, <span class="str">"feedback"</span>]
+      <span class="kw">user</span>:
+        <span class="kw">permissions</span>: [<span class="str">"chat"</span>, <span class="str">"feedback"</span>]
+  <span class="kw">audit_log</span>: <span class="kw">true</span>
+  <span class="kw">body_size_limit</span>: <span class="num">1048576</span>   <span class="cm"># 1MB</span>
+  <span class="kw">request_timeout</span>: <span class="str">30s</span>
+  <span class="kw">panic_recovery</span>: <span class="kw">true</span>
+  <span class="kw">ip_allowlist</span>:
+    <span class="kw">enabled</span>: <span class="kw">false</span>
+    <span class="kw">allowed_ips</span>: []
+    <span class="kw">paths</span>: [<span class="str">"/api/admin/"</span>]
+  <span class="kw">input_validation</span>: <span class="kw">true</span>
+  <span class="kw">request_logging</span>: <span class="kw">true</span></code></pre>
+
+<h3>events &amp; plugins</h3>
+<pre><code><span class="kw">events</span>:
+  <span class="kw">enabled</span>: <span class="kw">true</span>
+  <span class="kw">webhook_urls</span>: []           <span class="cm"># External webhook URLs</span>
+  <span class="kw">webhook_secret</span>: <span class="str">""</span>        <span class="cm"># HMAC secret for webhook signatures</span>
+
+<span class="kw">plugins</span>:
+  <span class="kw">enabled</span>: <span class="kw">true</span></code></pre>
 
 <h3>billing, notification &amp; storage</h3>
 <pre><code><span class="kw">billing</span>:
-  <span class="kw">provider</span>: <span class="str">stripe</span>
-  <span class="kw">webhook_secret</span>: <span class="vr">${STRIPE_WEBHOOK_SECRET}</span>
-  <span class="kw">plans</span>:
-    <span class="kw">free</span>: { <span class="kw">requests_per_day</span>: <span class="num">100</span> }
-    <span class="kw">pro</span>: { <span class="kw">requests_per_day</span>: <span class="num">10000</span> }
-    <span class="kw">enterprise</span>: { <span class="kw">requests_per_day</span>: <span class="num">-1</span> }  <span class="cm"># unlimited</span>
+  <span class="kw">enabled</span>: <span class="kw">false</span>
+  <span class="kw">data_dir</span>: <span class="str">./data/billing</span>
+  <span class="kw">stripe_webhook_secret</span>: <span class="vr">${STRIPE_WEBHOOK_SECRET}</span>
+  <span class="kw">default_plan</span>: <span class="str">free</span>
 
 <span class="kw">notification</span>:
-  <span class="kw">slack_webhook</span>: <span class="vr">${SLACK_WEBHOOK_URL}</span>
-  <span class="kw">email</span>:
-    <span class="kw">enabled</span>: <span class="kw">false</span>
-  <span class="kw">on_circuit_break</span>: <span class="kw">true</span>
-  <span class="kw">on_budget_exceed</span>: <span class="kw">true</span>
+  <span class="kw">enabled</span>: <span class="kw">false</span>
+  <span class="kw">smtp_host</span>: <span class="str">""</span>
+  <span class="kw">smtp_port</span>: <span class="num">587</span>
+  <span class="kw">from_email</span>: <span class="str">noreply@nexus-gateway.com</span>
 
 <span class="kw">storage</span>:
-  <span class="kw">backend</span>: <span class="str">sqlite</span>           <span class="cm"># sqlite | postgres</span>
-  <span class="kw">path</span>: <span class="str">./data/nexus.db</span></code></pre>
+  <span class="kw">vector_backend</span>: <span class="str">memory</span>    <span class="cm"># memory or qdrant</span>
+  <span class="kw">kv_backend</span>: <span class="str">memory</span>        <span class="cm"># memory or redis</span>
+  <span class="kw">qdrant_host</span>: <span class="str">localhost</span>
+  <span class="kw">qdrant_port</span>: <span class="num">6333</span>
+  <span class="kw">redis_addr</span>: <span class="str">localhost:6379</span></code></pre>
 
 <!-- 5. CLI -->
 <h2 id="cli">CLI Reference</h2>
 
 <h3><code>nexus</code> / <code>nexus serve</code></h3>
 <p>Start the Nexus gateway.</p>
-<pre><code>nexus serve <span class="fl">--config</span> nexus.yaml <span class="fl">--port</span> <span class="num">8080</span> <span class="fl">--log-level</span> info</code></pre>
+<pre><code>nexus serve <span class="fl">-config</span> nexus.yaml <span class="fl">-port</span> <span class="num">8080</span> <span class="fl">-log-level</span> info</code></pre>
 <table class="doc-table">
   <thead><tr><th>Flag</th><th>Default</th><th>Description</th></tr></thead>
   <tbody>
-    <tr><td><code>--config</code></td><td><code>nexus.yaml</code></td><td>Path to configuration file</td></tr>
-    <tr><td><code>--port</code></td><td><code>8080</code></td><td>Override listen port</td></tr>
-    <tr><td><code>--log-level</code></td><td><code>info</code></td><td>Log verbosity (debug, info, warn, error)</td></tr>
-    <tr><td><code>--no-cache</code></td><td><code>false</code></td><td>Disable caching for debugging</td></tr>
+    <tr><td><code>-config</code></td><td><code>nexus.yaml</code></td><td>Path to configuration file</td></tr>
+    <tr><td><code>-port</code></td><td><code>8080</code></td><td>Override listen port</td></tr>
+    <tr><td><code>-log-level</code></td><td><code>info</code></td><td>Log verbosity (debug, info, warn, error)</td></tr>
   </tbody>
 </table>
 
@@ -853,16 +930,21 @@ nexus init
 <p>Show gateway health, uptime, provider status, and savings summary.</p>
 <pre><code>nexus status
 <span class="cm"># Output:</span>
-<span class="cm"># Gateway:    &#10003; running (uptime: 4d 12h)</span>
-<span class="cm"># Providers:  openai &#10003;  anthropic &#10003;  ollama &#10003;</span>
-<span class="cm"># Requests:   12,847 (today) / 89,231 (total)</span>
-<span class="cm"># Savings:    $1,247.83 (67% reduction)</span>
-<span class="cm"># Cache Rate: 42.3% hit rate</span></code></pre>
+<span class="cm"># Nexus Gateway Status</span>
+<span class="cm"># ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</span>
+<span class="cm">#   Status:     ✅ Running</span>
+<span class="cm">#   Version:    0.1.0</span>
+<span class="cm">#   Requests:   12,847 total</span>
+<span class="cm">#   Cache Hits: 5,432 (42.3%)</span>
+<span class="cm">#   Cache Size: 8,291 entries</span></code></pre>
 
 <h3><code>nexus validate</code></h3>
 <p>Validate configuration file without starting the server.</p>
-<pre><code>nexus validate <span class="fl">--config</span> nexus.yaml
-<span class="cm"># &#10003; Configuration valid (14 providers, 7 cache layers, security enabled)</span></code></pre>
+<pre><code>nexus validate <span class="fl">-config</span> nexus.yaml
+<span class="cm"># ✅ Config is valid</span>
+<span class="cm">#   Providers: 4 configured, 1 enabled</span>
+<span class="cm">#   Cache: L1 + BM25 + Semantic enabled</span>
+<span class="cm">#   Security: rate limiting ON, prompt guard ON</span></code></pre>
 
 <h3><code>nexus inspect</code></h3>
 <p>Offline routing analysis. See exactly what Nexus would do with a prompt.</p>
@@ -874,7 +956,7 @@ nexus init
 
 <h3><code>nexus version</code></h3>
 <pre><code>nexus version
-<span class="cm"># nexus v1.0.0 (build abc123, go1.22)</span></code></pre>
+<span class="cm"># nexus v0.1.0</span></code></pre>
 
 <!-- 6. SDK -->
 <h2 id="sdk">SDK Examples</h2>
@@ -932,26 +1014,31 @@ console.<span class="fn">log</span>(response.choices[<span class="num">0</span>]
 <pre><code><span class="kw">package</span> main
 
 <span class="kw">import</span> (
-    <span class="str">"context"</span>
+    <span class="str">"bytes"</span>
+    <span class="str">"encoding/json"</span>
     <span class="str">"fmt"</span>
-    openai <span class="str">"github.com/sashabaranov/go-openai"</span>
+    <span class="str">"io"</span>
+    <span class="str">"net/http"</span>
 )
 
 <span class="kw">func</span> <span class="fn">main</span>() {
-    config := openai.<span class="fn">DefaultConfig</span>(<span class="str">"nxs_live_abc123"</span>)
-    config.BaseURL = <span class="str">"http://localhost:8080/v1"</span>
-    client := openai.<span class="fn">NewClientWithConfig</span>(config)
-
-    resp, _ := client.<span class="fn">CreateChatCompletion</span>(
-        context.<span class="fn">Background</span>(),
-        openai.ChatCompletionRequest{
-            Model: <span class="str">"gpt-4o"</span>,
-            Messages: []openai.ChatCompletionMessage{
-                {Role: <span class="str">"user"</span>, Content: <span class="str">"Explain quicksort"</span>},
-            },
+    body, _ := json.<span class="fn">Marshal</span>(<span class="kw">map</span>[<span class="kw">string</span>]<span class="kw">interface</span>{}{
+        <span class="str">"model"</span>: <span class="str">"auto"</span>,
+        <span class="str">"messages"</span>: []<span class="kw">map</span>[<span class="kw">string</span>]<span class="kw">string</span>{
+            {<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: <span class="str">"Explain quicksort"</span>},
         },
-    )
-    fmt.<span class="fn">Println</span>(resp.Choices[<span class="num">0</span>].Message.Content)
+    })
+    req, _ := http.<span class="fn">NewRequest</span>(<span class="str">"POST"</span>,
+        <span class="str">"http://localhost:8080/v1/chat/completions"</span>,
+        bytes.<span class="fn">NewReader</span>(body))
+    req.Header.Set(<span class="str">"Content-Type"</span>, <span class="str">"application/json"</span>)
+    req.Header.Set(<span class="str">"X-Workflow-ID"</span>, <span class="str">"wf-docs-demo"</span>)
+    req.Header.Set(<span class="str">"X-Team"</span>, <span class="str">"platform"</span>)
+
+    resp, _ := http.DefaultClient.Do(req)
+    <span class="kw">defer</span> resp.Body.Close()
+    data, _ := io.<span class="fn">ReadAll</span>(resp.Body)
+    fmt.<span class="fn">Println</span>(<span class="kw">string</span>(data))
 }</code></pre>
   </div>
   <div class="tab-panel" id="sdk-curl">
@@ -982,19 +1069,19 @@ console.<span class="fn">log</span>(response.choices[<span class="num">0</span>]
   <thead><tr><th>Layer</th><th>Type</th><th>Match Method</th><th>Speed</th><th>Accuracy</th></tr></thead>
   <tbody>
     <tr><td><strong>L1</strong></td><td>Exact Match</td><td>SHA-256 hash of normalized prompt</td><td>&lt; 1ms</td><td>100%</td></tr>
-    <tr><td><strong>L2a</strong></td><td>BM25 Keyword</td><td>TF-IDF keyword similarity (threshold: 0.85)</td><td>2&ndash;3ms</td><td>~95%</td></tr>
-    <tr><td><strong>L2b</strong></td><td>Semantic</td><td>Vector embedding cosine similarity (threshold: 0.92)</td><td>3&ndash;5ms</td><td>~93%</td></tr>
-    <tr><td><strong>L3</strong></td><td>Cluster</td><td>Cross-user shared cache (team/org level)</td><td>5ms</td><td>~90%</td></tr>
-    <tr><td><strong>L4</strong></td><td>Stale-While-Revalidate</td><td>Returns stale response, refreshes in background</td><td>&lt; 1ms</td><td>Varies</td></tr>
-    <tr><td><strong>L5</strong></td><td>Predictive Prefetch</td><td>Pre-fetches likely next requests in a workflow</td><td>0ms *</td><td>~85%</td></tr>
-    <tr><td><strong>L6</strong></td><td>Compressed</td><td>Zstd-compressed responses for storage efficiency</td><td>1&ndash;2ms</td><td>100%</td></tr>
+    <tr><td><strong>L2a</strong></td><td>BM25 Keyword</td><td>BM25 keyword similarity (threshold: 15.0)</td><td>2&ndash;3ms</td><td>~95%</td></tr>
+    <tr><td><strong>L2b</strong></td><td>Semantic</td><td>BGE-M3 embedding cosine similarity (threshold: 0.70)</td><td>3&ndash;5ms</td><td>~93%</td></tr>
+    <tr><td><strong>Reranker</strong></td><td>Cross-encoder</td><td>BGE-reranker-v2-m3 verification for uncertain matches</td><td>10&ndash;20ms</td><td>~97%</td></tr>
+    <tr><td><strong>Synonym</strong></td><td>Query expansion</td><td>Auto-discovered and manually added synonym mappings</td><td>&lt; 1ms</td><td>~90%</td></tr>
+    <tr><td><strong>Feedback</strong></td><td>Quality loop</td><td>Quality signals adjust cache confidence over time</td><td>0ms</td><td>Adaptive</td></tr>
+    <tr><td><strong>Shadow</strong></td><td>Validation</td><td>Compare cache vs fresh responses for quality assurance</td><td>Background</td><td>Audit</td></tr>
   </tbody>
 </table>
 
 <h3>Tuning Tips</h3>
 <ul>
-  <li><strong>Raise semantic threshold</strong> (0.92 &rarr; 0.95) if you see incorrect cache hits on similar but different prompts.</li>
-  <li><strong>Lower BM25 threshold</strong> (0.85 &rarr; 0.80) for higher hit rates on keyword-heavy prompts (e.g., code questions).</li>
+  <li><strong>Raise semantic threshold</strong> (0.70 &rarr; 0.85) if you see incorrect cache hits on similar but different prompts.</li>
+  <li><strong>Lower BM25 threshold</strong> (15.0 &rarr; 12.0) for higher hit rates on keyword-heavy prompts (e.g., code questions).</li>
   <li><strong>Enable prefetch</strong> for sequential workflows where step N+1 is predictable from step N.</li>
   <li><strong>Set TTL per use case:</strong> short (5m) for rapidly changing data, long (24h) for stable knowledge questions.</li>
 </ul>
@@ -1159,7 +1246,7 @@ console.<span class="fn">log</span>(response.choices[<span class="num">0</span>]
 
 <h3>Debug Mode</h3>
 <pre><code><span class="cm"># Start with debug logging</span>
-nexus serve <span class="fl">--log-level</span> debug
+nexus serve <span class="fl">-log-level</span> debug
 
 <span class="cm"># Or inspect a single request</span>
 <span class="fn">curl</span> <span class="fl">-v</span> <span class="fl">-H</span> <span class="str">"X-Nexus-Explain: true"</span> \

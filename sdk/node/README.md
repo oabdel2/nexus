@@ -172,4 +172,4 @@ Full documentation: [nexus-gateway/nexus](https://github.com/nexus-gateway/nexus
 
 ## License
 
-Apache-2.0
+BSL 1.1 — see [LICENSE](../../LICENSE)

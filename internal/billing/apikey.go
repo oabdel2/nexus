@@ -191,28 +191,30 @@ func (s *APIKeyStore) RecordUsage(keyHash string) {
 
 // CheckQuota verifies whether a key is within its subscription quota.
 func (s *APIKeyStore) CheckQuota(keyHash string) QuotaResult {
-	s.mu.RLock()
+	s.mu.Lock()
 	key, ok := s.keys[keyHash]
-	s.mu.RUnlock()
-
 	if !ok {
+		s.mu.Unlock()
 		return QuotaResult{Allowed: false}
 	}
 
 	// Check if monthly reset is due
 	if time.Now().After(key.MonthlyReset) {
-		s.mu.Lock()
 		key.MonthlyUsage = 0
 		key.MonthlyReset = time.Now().AddDate(0, 1, 0)
-		s.mu.Unlock()
 	}
+
+	monthlyUsage := key.MonthlyUsage
+	monthlyReset := key.MonthlyReset
+	subscriptionID := key.SubscriptionID
+	s.mu.Unlock()
 
 	// Get plan limits
 	if s.subStore == nil {
-		return QuotaResult{Allowed: true, Remaining: -1, ResetAt: key.MonthlyReset}
+		return QuotaResult{Allowed: true, Remaining: -1, ResetAt: monthlyReset}
 	}
 
-	sub, found := s.subStore.Get(key.SubscriptionID)
+	sub, found := s.subStore.Get(subscriptionID)
 	if !found {
 		return QuotaResult{Allowed: false}
 	}
@@ -224,14 +226,14 @@ func (s *APIKeyStore) CheckQuota(keyHash string) QuotaResult {
 
 	// Unlimited plan
 	if plan.MaxRequests == 0 {
-		return QuotaResult{Allowed: true, Remaining: -1, ResetAt: key.MonthlyReset}
+		return QuotaResult{Allowed: true, Remaining: -1, ResetAt: monthlyReset}
 	}
 
-	remaining := plan.MaxRequests - key.MonthlyUsage
+	remaining := plan.MaxRequests - monthlyUsage
 	return QuotaResult{
 		Allowed:   remaining > 0,
 		Remaining: remaining,
-		ResetAt:   key.MonthlyReset,
+		ResetAt:   monthlyReset,
 	}
 }
 

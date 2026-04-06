@@ -14,7 +14,7 @@ Thank you for your interest in contributing to Nexus! This guide will help you g
 
 ### Prerequisites
 
-- **Go 1.22+** — [Download](https://go.dev/dl/)
+- **Go 1.23+** — [Download](https://go.dev/dl/)
 - **Docker & Docker Compose** (for running the full stack)
 - **Git**
 
@@ -42,7 +42,7 @@ go test ./benchmarks/... -bench=.
 
 ```bash
 # Start with default configuration
-./nexus --config configs/config.yaml
+./nexus serve -config configs/nexus.yaml
 
 # Or use Docker Compose for the full stack (Prometheus, Grafana)
 docker-compose up --build

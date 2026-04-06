@@ -225,6 +225,9 @@ compression:
   whitespace: true
   code_strip: true
   history_truncate: true
+  boilerplate: true
+  json_minify: true
+  deduplication: true
   max_history_turns: 20
   preserve_last_n: 5
 
@@ -244,6 +247,16 @@ events:
   enabled: true
   webhook_urls: []
   webhook_secret: ""
+
+experiment:
+  enabled: false
+  auto_start: false
+
+adaptive:
+  enabled: false
+  min_samples: 50
+  high_confidence: 0.90
+  low_confidence: 0.50
 
 plugins:
   enabled: true

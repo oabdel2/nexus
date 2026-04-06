@@ -345,6 +345,56 @@ nexus_latency_bucket{bucket="gt10s"} 0
 
 Returns gateway information (name, version, status).
 
+### `GET /health/live`
+
+Kubernetes liveness probe. Returns `200` if the process is running.
+
+### `GET /health/ready`
+
+Kubernetes readiness probe. Returns `200` only when providers are connected.
+
+### `GET /dashboard`
+
+Real-time cost savings dashboard (HTML). Open in a browser.
+
+### `GET /dashboard/events`
+
+Server-Sent Events stream powering the live dashboard.
+
+### `GET /dashboard/api/stats`
+
+Aggregate statistics JSON: total requests, savings, cache hit rate, model distribution.
+
+### Admin & Diagnostics Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/synonyms/stats` | Synonym system statistics |
+| `GET` | `/api/synonyms/candidates` | Synonym candidates pending review |
+| `GET` | `/api/synonyms/learned` | Active learned synonyms |
+| `POST` | `/api/synonyms/promote` | Promote a candidate to active |
+| `POST` | `/api/synonyms/add` | Manually add a synonym mapping |
+| `GET` | `/api/circuit-breakers` | Circuit breaker status per provider |
+| `GET` | `/api/eval/stats` | Confidence map data per model/task type |
+| `GET` | `/api/compression/stats` | Compression metrics and config |
+| `GET` | `/api/shadow/stats` | Shadow evaluation comparison results |
+| `GET` | `/api/adaptive/stats` | Adaptive routing statistics |
+| `GET` | `/api/experiments` | List A/B experiments |
+| `POST` | `/api/experiments` | Create a new A/B experiment |
+| `GET` | `/api/experiments/{id}/results` | Results for a specific experiment |
+| `POST` | `/api/experiments/{id}/toggle` | Enable/disable an experiment |
+| `POST` | `/api/inspect` | Dry-run routing analysis (no provider call) |
+| `GET` | `/api/events/recent` | Recent event bus events |
+| `GET` | `/api/events/stats` | Event bus statistics |
+| `GET` | `/api/plugins` | List loaded plugins |
+| `POST` | `/api/keys/generate` | Generate a new API key |
+| `POST` | `/api/keys/revoke` | Revoke an API key |
+| `GET` | `/api/usage` | Usage stats by team/model/day |
+| `POST` | `/webhooks/stripe` | Stripe webhook handler |
+| `GET` | `/api/admin/subscriptions` | List active subscriptions |
+| `GET` | `/api/admin/keys` | List all API keys |
+| `GET` | `/api/admin/devices` | List registered devices |
+
 ## Configuration Reference
 
 Create a `nexus.yaml` configuration file. All fields have sensible defaults.
@@ -355,77 +405,40 @@ server:
   port: 8080              # HTTP listen port
   read_timeout: 30s       # Max time to read request
   write_timeout: 120s     # Max time to write response (includes LLM latency)
+  max_concurrent: 0       # Max concurrent requests (0 = unlimited)
 
 # ─── Providers ───────────────────────────────────────────────
 # Configure one or more LLM providers. Each provider can expose
 # multiple models at different tier levels.
 providers:
-  # GitHub Copilot (uses OpenAI-compatible API)
   - name: copilot
-    type: openai
+    type: openai              # openai, anthropic, or ollama
     base_url: https://api.githubcopilot.com
     api_key: ${GITHUB_COPILOT_TOKEN}
     enabled: true
-    priority: 1
-    headers:
+    priority: 1               # Lower = preferred
+    headers:                  # Custom headers for this provider
       Editor-Version: Nexus/0.1.0
-      Copilot-Integration-Id: nexus-gateway
     models:
       - name: gpt-4.1
-        tier: mid
-        cost_per_1k_tokens: 0.01
-        max_tokens: 4096
-      - name: gpt-4.1-mini
-        tier: cheap
+        tier: mid             # economy, cheap, mid, or premium
         cost_per_1k_tokens: 0.002
-        max_tokens: 4096
+        max_tokens: 32768
       - name: claude-sonnet-4
         tier: premium
-        cost_per_1k_tokens: 0.03
-        max_tokens: 8192
+        cost_per_1k_tokens: 0.003
+        max_tokens: 64000
 
-  # OpenAI Direct
-  - name: openai
-    type: openai
-    base_url: https://api.openai.com/v1
-    api_key: ${OPENAI_API_KEY}
-    enabled: false
-    priority: 2
-    models:
-      - name: gpt-4o
-        tier: premium
-        cost_per_1k_tokens: 0.03
-        max_tokens: 4096
-      - name: gpt-4o-mini
-        tier: cheap
-        cost_per_1k_tokens: 0.002
-        max_tokens: 4096
-
-  # Anthropic
-  - name: anthropic
-    type: anthropic
-    base_url: https://api.anthropic.com/v1
-    api_key: ${ANTHROPIC_API_KEY}
-    enabled: false
-    priority: 2
-    models:
-      - name: claude-sonnet-4-20250514
-        tier: premium
-        cost_per_1k_tokens: 0.03
-        max_tokens: 8192
-
-  # Ollama (local)
   - name: ollama
     type: ollama
     base_url: http://localhost:11434/v1
-    api_key: ollama
     enabled: false
     priority: 3
     models:
-      - name: llama3
+      - name: llama3.1
         tier: cheap
         cost_per_1k_tokens: 0.0
-        max_tokens: 4096
+        max_tokens: 8192
 
 # ─── Router ──────────────────────────────────────────────────
 router:
@@ -433,6 +446,7 @@ router:
   default_tier: mid         # Fallback when no providers match
   budget_enabled: true      # Enable budget-aware routing
   default_budget: 1.0       # Default workflow budget in dollars
+  smart_classifier: true    # Enable TF-IDF hybrid classifier
   complexity_weights:       # How each signal contributes to final score
     prompt_complexity: 0.30 # Weight of keyword-based complexity
     context_length: 0.15    # Weight of message length
@@ -444,10 +458,41 @@ router:
 cache:
   enabled: true             # Master cache toggle
   l1_enabled: true          # L1 exact-match cache (SHA-256)
-  l2_enabled: false         # L2 semantic cache (not yet implemented)
+  l2_enabled: false         # L2 fuzzy/semantic cache
   ttl: 1h                   # Cache entry time-to-live
   max_entries: 10000        # Maximum cached entries (LRU eviction)
-  similarity_min: 0.95      # Min similarity for L2 (future)
+  similarity_min: 0.95      # Min similarity for L2 matches
+  l1:
+    enabled: true
+    ttl: 15m
+    max_entries: 10000
+  l2_bm25:                  # BM25 keyword-based fuzzy cache
+    enabled: true
+    ttl: 1h
+    max_entries: 50000
+    threshold: 15.0          # Min BM25 score for a match
+  l2_semantic:               # BGE-M3 embedding similarity cache
+    enabled: true
+    ttl: 1h
+    max_entries: 50000
+    threshold: 0.70          # Min cosine similarity
+    backend: ollama          # Embedding provider
+    model: bge-m3
+    endpoint: http://localhost:11434
+    reranker:
+      enabled: false
+      model: bge-reranker-v2-m3
+      endpoint: http://localhost:11434
+      threshold: 0.5
+  feedback:
+    enabled: true
+    max_size: 10000
+  shadow:
+    enabled: false
+    max_results: 1000
+  synonym:
+    data_dir: ./data
+    promotion_threshold: 3
 
 # ─── Workflow ────────────────────────────────────────────────
 workflow:
@@ -460,6 +505,132 @@ telemetry:
   metrics_port: 9090        # Metrics listen port (0 = same as server)
   log_level: info           # Log verbosity: debug, info, warn, error
   log_format: json          # Log format: json or text
+
+# ─── Tracing ─────────────────────────────────────────────────
+tracing:
+  enabled: true
+  service_name: nexus-gateway
+  sample_rate: 1.0           # 1.0 = trace every request
+  log_spans: true
+  export_url: ""             # Set to http://jaeger:4318/v1/traces for OTLP
+
+# ─── Compression ─────────────────────────────────────────────
+compression:
+  enabled: true
+  whitespace: true           # Remove unnecessary whitespace
+  code_strip: true           # Strip redundant code formatting
+  history_truncate: true     # Truncate long message histories
+  max_history_turns: 20      # Max conversation turns to keep
+  preserve_last_n: 5         # Always preserve the N most recent turns
+
+# ─── Cascade ─────────────────────────────────────────────────
+cascade:
+  enabled: false
+  confidence_threshold: 0.78 # Escalate if cheap model confidence < this
+  max_latency_ms: 5000       # Max latency for cheap model attempt
+  sample_rate: 1.0           # Fraction of requests eligible for cascade
+
+# ─── Eval ────────────────────────────────────────────────────
+eval:
+  enabled: true
+  data_dir: ./data/eval
+  hedging_penalty: 0.15      # Penalty for hedging language
+  sample_rate: 1.0           # Fraction of responses to evaluate
+  shadow_enabled: false      # Compare cheap vs premium in background
+  shadow_sample_rate: 0.10   # Fraction of requests for shadow eval
+
+# ─── Experiment (A/B Testing) ────────────────────────────────
+experiment:
+  enabled: false
+  auto_start: false          # Auto-start experiments on creation
+
+# ─── Adaptive Routing ────────────────────────────────────────
+adaptive:
+  enabled: false
+  min_samples: 50            # Min samples before adjusting routing
+  high_confidence: 0.90      # Confidence above this = keep routing
+  low_confidence: 0.50       # Confidence below this = escalate tier
+
+# ─── Events ──────────────────────────────────────────────────
+events:
+  enabled: true
+  webhook_urls: []           # External webhook URLs for event delivery
+  webhook_secret: ""         # HMAC secret for webhook signatures
+
+# ─── Plugins ─────────────────────────────────────────────────
+plugins:
+  enabled: true
+
+# ─── Security ────────────────────────────────────────────────
+security:
+  tls:
+    enabled: false
+    cert_file: ""
+    key_file: ""
+    ca_file: ""
+    min_version: "1.2"
+    mutual_tls: false
+  prompt_guard:
+    enabled: true
+    mode: block              # block or log
+    max_prompt_length: 32000
+  oidc:
+    enabled: false
+    issuer: ""
+    client_id: ""
+    client_secret: ""
+  rbac:
+    enabled: false
+    roles:
+      admin:
+        permissions: ["chat", "admin", "synonyms:read", "synonyms:write", "dashboard", "feedback"]
+      user:
+        permissions: ["chat", "feedback"]
+  rate_limit:
+    enabled: true
+    default_rpm: 60
+    burst_size: 10
+  cors:
+    allowed_origins: ["*"]
+  audit_log: true
+  body_size_limit: 1048576   # 1MB
+  request_timeout: "30s"
+  panic_recovery: true
+  ip_allowlist:
+    enabled: false
+    allowed_ips: []
+    paths: ["/api/admin/"]
+  input_validation: true
+  request_logging: true
+
+# ─── Billing ─────────────────────────────────────────────────
+billing:
+  enabled: false
+  data_dir: ./data/billing
+  stripe_webhook_secret: ${STRIPE_WEBHOOK_SECRET}
+  default_plan: free
+
+# ─── Notification ────────────────────────────────────────────
+notification:
+  enabled: false
+  smtp_host: ""
+  smtp_port: 587
+  smtp_user: ""
+  smtp_password: ""
+  from_email: noreply@nexus-gateway.com
+  from_name: Nexus Gateway
+
+# ─── Storage ─────────────────────────────────────────────────
+storage:
+  vector_backend: memory     # memory or qdrant
+  kv_backend: memory         # memory or redis
+  qdrant_host: localhost
+  qdrant_port: 6333
+  qdrant_collection: nexus_cache
+  qdrant_dimension: 1024
+  redis_addr: localhost:6379
+  redis_password: ""
+  redis_db: 0
 ```
 
 ### Environment Variable Substitution
@@ -561,30 +732,59 @@ go test ./benchmarks/ -v -run Test
 
 ```
 nexus/
-├── cmd/nexus/main.go          # Entry point, CLI flags, banner
-├── configs/nexus.yaml         # Default configuration
+├── cmd/nexus/main.go              # Entry point, CLI subcommands, banner
+├── configs/
+│   ├── nexus.yaml                 # Full reference configuration
+│   └── nexus.minimal.yaml         # Minimal config (Ollama only)
 ├── internal/
-│   ├── config/config.go       # Configuration types + YAML loading
-│   ├── gateway/server.go      # HTTP server + request pipeline
-│   ├── router/
-│   │   ├── classifier.go      # 5-signal complexity scoring engine
-│   │   ├── router.go          # Adaptive model selection + tier mapping
-│   │   └── budget.go          # Budget tracking + downgrade logic
+│   ├── auth/                      # Authentication helpers
+│   ├── billing/                   # Subscriptions, API keys, Stripe webhooks
 │   ├── cache/
-│   │   ├── exact.go           # L1 SHA-256 exact-match cache (LRU + TTL)
-│   │   └── store.go           # Cache facade (L1 + future L2)
+│   │   ├── exact.go               # L1 SHA-256 exact-match cache (LRU + TTL)
+│   │   ├── bm25.go                # L2 BM25 keyword similarity cache
+│   │   ├── semantic.go            # L2 semantic embedding cache
+│   │   ├── reranker.go            # Cross-encoder verification
+│   │   ├── synonym.go             # Auto-discovered synonym learning
+│   │   ├── feedback.go            # Quality feedback loop
+│   │   ├── shadow.go              # Shadow mode validation
+│   │   └── store.go               # Cache facade (all layers)
+│   ├── compress/                  # Prompt compression (whitespace, code, history)
+│   ├── config/config.go           # Configuration types + YAML loading + defaults
+│   ├── dashboard/                 # Real-time SSE dashboard
+│   ├── eval/                      # 6-signal confidence scoring + learning map
+│   ├── events/                    # Event bus + webhook delivery
+│   ├── experiment/                # A/B testing framework
+│   ├── gateway/
+│   │   ├── server.go              # HTTP server, route registration, middleware
+│   │   ├── handler_chat.go        # POST /v1/chat/completions pipeline
+│   │   └── handler_admin.go       # Admin/diagnostics endpoints
+│   ├── notification/              # SMTP email notifications
+│   ├── plugin/                    # Plugin registry + hooks
 │   ├── provider/
-│   │   ├── provider.go        # Provider interface + request/response types
-│   │   ├── openai.go          # OpenAI-compatible HTTP client
-│   │   └── health.go          # Health checks + circuit breaker
-│   ├── workflow/
-│   │   ├── tracker.go         # Multi-step workflow state machine
-│   │   └── feedback.go        # POST /v1/feedback handler
-│   └── telemetry/
-│       ├── metrics.go         # Prometheus metrics + latency buckets
-│       └── cost.go            # Per-workflow + per-team cost attribution
-├── benchmarks/                # Performance benchmarks + scenario tests
-├── go.mod                     # Go module (gopkg.in/yaml.v3 only)
+│   │   ├── provider.go            # Provider interface + request/response types
+│   │   ├── openai.go              # OpenAI-compatible HTTP client
+│   │   ├── anthropic.go           # Anthropic adapter
+│   │   └── health.go              # Health checks + circuit breaker
+│   ├── router/
+│   │   ├── classifier.go          # Complexity scoring engine
+│   │   ├── router.go              # Adaptive model selection + tier mapping
+│   │   ├── budget.go              # Budget tracking + downgrade logic
+│   │   └── cascade.go             # Cascade routing (cheap → escalate)
+│   ├── security/                  # Prompt guard, RBAC, OIDC, rate limiting
+│   ├── storage/                   # Qdrant + Redis storage backends
+│   ├── telemetry/
+│   │   ├── metrics.go             # Prometheus metrics + latency buckets
+│   │   └── cost.go                # Per-workflow + per-team cost attribution
+│   └── workflow/
+│       ├── tracker.go             # Multi-step workflow state machine
+│       └── feedback.go            # POST /v1/feedback handler
+├── benchmarks/                    # Performance benchmarks + scenario tests
+├── sdk/                           # SDK quickstarts (Python, Node, Go, curl)
+├── site/                          # Landing page, docs, how-it-works, pricing
+├── deploy/                        # Helm chart, Kubernetes manifests
+├── monitoring/                    # Grafana dashboards
+├── tests/                         # E2E integration tests
+├── go.mod                         # Go module (gopkg.in/yaml.v3 only)
 └── README.md
 ```
 
@@ -619,10 +819,10 @@ CASTER optimizes individual requests. Nexus extends this with **workflow-level o
 - [x] ~~Cascade routing~~ ✅ Try cheap → escalate if confidence low
 - [x] ~~Prompt compression~~ ✅ 20-35% token reduction
 - [x] ~~Confidence scoring~~ ✅ 6-signal evaluator with learning map
+- [x] ~~Python / Node.js / Go / curl SDKs~~ ✅ OpenAI-compatible quickstarts
+- [x] ~~Anthropic native provider adapter~~ ✅ Full Anthropic support
 - [ ] ML-based classifier (upgrade from rule-based keyword matching)
 - [ ] A/B testing framework for routing strategies
-- [ ] Python / Node.js / Go SDKs
-- [ ] Anthropic native provider adapter
 - [ ] Request priority queuing
 - [ ] Admin dashboard with Clerk SSO
 
