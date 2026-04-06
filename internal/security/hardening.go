@@ -385,6 +385,16 @@ func (w *errorSanitizerWriter) Write(b []byte) (int, error) {
 	return w.ResponseWriter.Write(b)
 }
 
+// Flush delegates to the underlying writer if it supports http.Flusher,
+// ensuring SSE streaming works through the sanitizer.
+func (w *errorSanitizerWriter) Flush() {
+	if !w.sanitize {
+		if f, ok := w.ResponseWriter.(http.Flusher); ok {
+			f.Flush()
+		}
+	}
+}
+
 func (w *errorSanitizerWriter) flush() {
 	if !w.sanitize {
 		return

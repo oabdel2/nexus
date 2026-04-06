@@ -504,6 +504,9 @@ func (s *Server) Start(ctx context.Context) error {
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
+	if s.tracker != nil {
+		s.tracker.Stop()
+	}
 	if s.confidenceMap != nil {
 		cmPath := filepath.Join(s.cfg.Eval.DataDir, "confidence_map.json")
 		if err := os.MkdirAll(s.cfg.Eval.DataDir, 0755); err == nil {

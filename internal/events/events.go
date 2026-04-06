@@ -64,6 +64,8 @@ type EventBus struct {
 	// Stats counters for /api/events/stats
 	statsMu sync.RWMutex
 	stats   map[EventType]int64
+
+	closed chan struct{} // prevents double-close panic
 }
 
 // NewEventBus creates a new event bus with the given webhook configs
@@ -76,6 +78,7 @@ func NewEventBus(hooks []WebhookConfig) *EventBus {
 		queue:  make(chan Event, 1000),
 		recent: make([]Event, 0, 100),
 		stats:  make(map[EventType]int64),
+		closed: make(chan struct{}),
 	}
 	// Start worker pool for async dispatch
 	for i := 0; i < 3; i++ {
@@ -215,7 +218,13 @@ func (eb *EventBus) Stats() map[string]int64 {
 	return out
 }
 
-// Close shuts down the event bus
+// Close shuts down the event bus. Safe to call multiple times.
 func (eb *EventBus) Close() {
-	close(eb.queue)
+	select {
+	case <-eb.closed:
+		// already closed
+	default:
+		close(eb.closed)
+		close(eb.queue)
+	}
 }

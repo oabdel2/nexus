@@ -61,11 +61,32 @@ func (w *WorkflowState) GetStepRatio() float64 {
 	return float64(w.CurrentStep) / float64(w.TotalSteps)
 }
 
+// Snapshot returns a point-in-time copy of frequently-read fields,
+// avoiding repeated lock acquisitions on the hot path.
+type WorkflowSnapshot struct {
+	CurrentStep int
+	TotalCost   float64
+	Budget      float64
+	BudgetLeft  float64
+}
+
+func (w *WorkflowState) Snapshot() WorkflowSnapshot {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return WorkflowSnapshot{
+		CurrentStep: w.CurrentStep,
+		TotalCost:   w.TotalCost,
+		Budget:      w.Budget,
+		BudgetLeft:  w.BudgetLeft,
+	}
+}
+
 type Tracker struct {
 	workflows map[string]*WorkflowState
 	mu        sync.RWMutex
 	defaultBudget float64
 	ttl       time.Duration
+	stopCh    chan struct{}
 }
 
 func NewTracker(defaultBudget float64, ttl time.Duration) *Tracker {
@@ -73,6 +94,7 @@ func NewTracker(defaultBudget float64, ttl time.Duration) *Tracker {
 		workflows:     make(map[string]*WorkflowState),
 		defaultBudget: defaultBudget,
 		ttl:           ttl,
+		stopCh:        make(chan struct{}),
 	}
 	go t.cleanup()
 	return t
@@ -126,18 +148,32 @@ func (t *Tracker) RecordFeedback(workflowID string, stepNumber int, outcome stri
 	return false
 }
 
+// Stop shuts down the background cleanup goroutine.
+func (t *Tracker) Stop() {
+	select {
+	case <-t.stopCh:
+	default:
+		close(t.stopCh)
+	}
+}
+
 func (t *Tracker) cleanup() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		t.mu.Lock()
-		now := time.Now()
-		for id, ws := range t.workflows {
-			if now.Sub(ws.LastActivity) > t.ttl {
-				delete(t.workflows, id)
+	for {
+		select {
+		case <-t.stopCh:
+			return
+		case <-ticker.C:
+			t.mu.Lock()
+			now := time.Now()
+			for id, ws := range t.workflows {
+				if now.Sub(ws.LastActivity) > t.ttl {
+					delete(t.workflows, id)
+				}
 			}
+			t.mu.Unlock()
 		}
-		t.mu.Unlock()
 	}
 }

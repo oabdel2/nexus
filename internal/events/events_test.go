@@ -60,10 +60,10 @@ func TestWebhookDelivery(t *testing.T) {
 }
 
 func TestWebhookHeaders(t *testing.T) {
-	var gotEventType, gotEventID string
+	var gotEventType, gotEventID atomic.Value
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotEventType = r.Header.Get("X-Nexus-Event")
-		gotEventID = r.Header.Get("X-Nexus-Event-ID")
+		gotEventType.Store(r.Header.Get("X-Nexus-Event"))
+		gotEventID.Store(r.Header.Get("X-Nexus-Event-ID"))
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
@@ -75,18 +75,20 @@ func TestWebhookHeaders(t *testing.T) {
 	eb.Emit(RequestCompleted, nil)
 	time.Sleep(500 * time.Millisecond)
 
-	if gotEventType != string(RequestCompleted) {
-		t.Fatalf("expected event type %s, got %s", RequestCompleted, gotEventType)
+	et, _ := gotEventType.Load().(string)
+	eid, _ := gotEventID.Load().(string)
+	if et != string(RequestCompleted) {
+		t.Fatalf("expected event type %s, got %s", RequestCompleted, et)
 	}
-	if gotEventID == "" {
+	if eid == "" {
 		t.Fatal("expected non-empty event ID header")
 	}
 }
 
 func TestWebhookCustomHeaders(t *testing.T) {
-	var gotCustom string
+	var gotCustom atomic.Value
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotCustom = r.Header.Get("X-Custom")
+		gotCustom.Store(r.Header.Get("X-Custom"))
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
@@ -100,19 +102,21 @@ func TestWebhookCustomHeaders(t *testing.T) {
 	eb.Emit(RequestCompleted, nil)
 	time.Sleep(500 * time.Millisecond)
 
-	if gotCustom != "hello" {
-		t.Fatalf("expected custom header 'hello', got %q", gotCustom)
+	v, _ := gotCustom.Load().(string)
+	if v != "hello" {
+		t.Fatalf("expected custom header 'hello', got %q", v)
 	}
 }
 
 func TestHMACSignature(t *testing.T) {
 	secret := "my-webhook-secret"
-	var gotSig string
-	var gotBody []byte
+	var gotSig atomic.Value
+	var gotBody atomic.Value
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotSig = r.Header.Get("X-Nexus-Signature")
-		gotBody, _ = io.ReadAll(r.Body)
+		gotSig.Store(r.Header.Get("X-Nexus-Signature"))
+		body, _ := io.ReadAll(r.Body)
+		gotBody.Store(body)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
@@ -124,23 +128,25 @@ func TestHMACSignature(t *testing.T) {
 	eb.Emit(RequestCompleted, map[string]interface{}{"test": true})
 	time.Sleep(500 * time.Millisecond)
 
-	if gotSig == "" {
+	sig, _ := gotSig.Load().(string)
+	if sig == "" {
 		t.Fatal("expected HMAC signature header")
 	}
 
+	body, _ := gotBody.Load().([]byte)
 	// Verify the signature
 	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write(gotBody)
+	mac.Write(body)
 	expected := "sha256=" + hex.EncodeToString(mac.Sum(nil))
-	if gotSig != expected {
-		t.Fatalf("HMAC mismatch: got %s, expected %s", gotSig, expected)
+	if sig != expected {
+		t.Fatalf("HMAC mismatch: got %s, expected %s", sig, expected)
 	}
 }
 
 func TestNoSignatureWithoutSecret(t *testing.T) {
-	var gotSig string
+	var gotSig atomic.Value
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotSig = r.Header.Get("X-Nexus-Signature")
+		gotSig.Store(r.Header.Get("X-Nexus-Signature"))
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
@@ -152,8 +158,9 @@ func TestNoSignatureWithoutSecret(t *testing.T) {
 	eb.Emit(RequestCompleted, nil)
 	time.Sleep(500 * time.Millisecond)
 
-	if gotSig != "" {
-		t.Fatalf("expected no signature when secret is empty, got %s", gotSig)
+	sig, _ := gotSig.Load().(string)
+	if sig != "" {
+		t.Fatalf("expected no signature when secret is empty, got %s", sig)
 	}
 }
 
@@ -225,9 +232,10 @@ func TestEventFiltering_NoMatch(t *testing.T) {
 }
 
 func TestWebhookBodyIsValidJSON(t *testing.T) {
-	var gotBody []byte
+	var gotBody atomic.Value
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotBody, _ = io.ReadAll(r.Body)
+		body, _ := io.ReadAll(r.Body)
+		gotBody.Store(body)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
@@ -239,8 +247,9 @@ func TestWebhookBodyIsValidJSON(t *testing.T) {
 	eb.Emit(RequestCompleted, map[string]interface{}{"key": "value"})
 	time.Sleep(500 * time.Millisecond)
 
+	body, _ := gotBody.Load().([]byte)
 	var evt Event
-	if err := json.Unmarshal(gotBody, &evt); err != nil {
+	if err := json.Unmarshal(body, &evt); err != nil {
 		t.Fatalf("webhook body is not valid JSON: %v", err)
 	}
 	if evt.Type != RequestCompleted {

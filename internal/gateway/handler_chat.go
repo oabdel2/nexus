@@ -111,6 +111,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 				Tier:     "cached",
 				CacheHit: true,
 			})
+			snap := ws.Snapshot()
 
 			s.metrics.RecordRequest("cache", source, "cached", 0, 0, time.Since(start).Milliseconds(), true)
 			s.costTracker.RecordStep(workflowID, team, 0, 0, true, 0.005)
@@ -118,7 +119,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 			s.Dashboard.Push(dashboard.RequestEvent{
 				Timestamp:       time.Now(),
 				WorkflowID:      workflowID,
-				Step:            ws.CurrentStep,
+				Step:            snap.CurrentStep,
 				ComplexityScore: 0,
 				TierSelected:    "cached",
 				ModelUsed:       "cached/" + source,
@@ -127,7 +128,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 				CacheHit:        true,
 				Provider:        "cache",
 			})
-			s.Dashboard.UpdateWorkflow(workflowID, ws.Budget, ws.BudgetLeft, ws.GetBudgetRatio(), ws.CurrentStep, ws.TotalCost)
+			s.Dashboard.UpdateWorkflow(workflowID, snap.Budget, snap.BudgetLeft, ws.GetBudgetRatio(), snap.CurrentStep, snap.TotalCost)
 
 			// Emit cache hit event
 			if s.eventBus != nil {
@@ -337,6 +338,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 			Cost:      cost,
 			LatencyMs: latencyMs,
 		})
+		streamSnap := ws.Snapshot()
 
 		s.metrics.RecordRequest(selection.Provider, selection.Model, selection.Tier, tokens, cost, latencyMs, false)
 		s.costTracker.RecordStep(workflowID, team, cost, tokens, false, 0)
@@ -344,7 +346,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		s.Dashboard.Push(dashboard.RequestEvent{
 			Timestamp:       time.Now(),
 			WorkflowID:      workflowID,
-			Step:            ws.CurrentStep,
+			Step:            streamSnap.CurrentStep,
 			ComplexityScore: selection.Score.FinalScore,
 			TierSelected:    selection.Tier,
 			ModelUsed:       selection.Model,
@@ -353,7 +355,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 			CacheHit:        false,
 			Provider:        selection.Provider,
 		})
-		s.Dashboard.UpdateWorkflow(workflowID, ws.Budget, ws.BudgetLeft, ws.GetBudgetRatio(), ws.CurrentStep, ws.TotalCost)
+		s.Dashboard.UpdateWorkflow(workflowID, streamSnap.Budget, streamSnap.BudgetLeft, ws.GetBudgetRatio(), streamSnap.CurrentStep, streamSnap.TotalCost)
 
 		// Emit stream RequestCompleted event
 		if s.eventBus != nil {
@@ -373,7 +375,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		if s.pluginRegistry != nil {
 			s.pluginRegistry.EmitResponse(r.Context(), &plugin.ResponseEvent{
 				WorkflowID: workflowID,
-				Step:       ws.CurrentStep,
+				Step:       streamSnap.CurrentStep,
 				Model:      selection.Model,
 				Tier:       selection.Tier,
 				LatencyMs:  float64(latencyMs),
@@ -455,6 +457,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		Cost:      cost,
 		LatencyMs: latencyMs,
 	})
+	reqSnap := ws.Snapshot()
 
 	s.metrics.RecordRequest(selection.Provider, selection.Model, selection.Tier, tokens, cost, latencyMs, false)
 	s.costTracker.RecordStep(workflowID, team, cost, tokens, false, 0)
@@ -462,7 +465,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	s.Dashboard.Push(dashboard.RequestEvent{
 		Timestamp:       time.Now(),
 		WorkflowID:      workflowID,
-		Step:            ws.CurrentStep,
+		Step:            reqSnap.CurrentStep,
 		ComplexityScore: selection.Score.FinalScore,
 		TierSelected:    selection.Tier,
 		ModelUsed:       selection.Model,
@@ -471,7 +474,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		CacheHit:        false,
 		Provider:        selection.Provider,
 	})
-	s.Dashboard.UpdateWorkflow(workflowID, ws.Budget, ws.BudgetLeft, ws.GetBudgetRatio(), ws.CurrentStep, ws.TotalCost)
+	s.Dashboard.UpdateWorkflow(workflowID, reqSnap.Budget, reqSnap.BudgetLeft, ws.GetBudgetRatio(), reqSnap.CurrentStep, reqSnap.TotalCost)
 
 	// Score response confidence
 	var evalResult *eval.ConfidenceResult
@@ -583,7 +586,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	if s.pluginRegistry != nil {
 		s.pluginRegistry.EmitResponse(r.Context(), &plugin.ResponseEvent{
 			WorkflowID: workflowID,
-			Step:       ws.CurrentStep,
+			Step:       reqSnap.CurrentStep,
 			Model:      selection.Model,
 			Tier:       selection.Tier,
 			LatencyMs:  float64(latencyMs),
@@ -601,7 +604,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Nexus-Provider", selection.Provider)
 	w.Header().Set("X-Nexus-Cost", fmt.Sprintf("%.6f", cost))
 	w.Header().Set("X-Nexus-Workflow-ID", workflowID)
-	w.Header().Set("X-Nexus-Workflow-Step", fmt.Sprintf("%d", ws.CurrentStep))
+	w.Header().Set("X-Nexus-Workflow-Step", fmt.Sprintf("%d", reqSnap.CurrentStep))
 	w.Write(respBody)
 }
 
