@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"regexp"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -311,4 +312,89 @@ func extractClientIP(r *http.Request) string {
 		return r.RemoteAddr
 	}
 	return host
+}
+
+// sensitivePatterns matches content that should never appear in error responses.
+var sensitivePatterns = []*regexp.Regexp{
+	regexp.MustCompile(`goroutine \d+`),                         // stack traces
+	regexp.MustCompile(`(?i)panic:`),                             // panic messages
+	regexp.MustCompile(`(?i)runtime error:`),                     // runtime errors
+	regexp.MustCompile(`[A-Za-z]:\\[^\s"]+`),                     // Windows file paths
+	regexp.MustCompile(`/[a-z][a-z0-9_-]*/[a-z][a-z0-9_/-]*\.go`), // Go source paths
+	regexp.MustCompile(`(?:^|\s)(?:10|172\.(?:1[6-9]|2\d|3[01])|192\.168)\.\d{1,3}\.\d{1,3}(?:\s|:|$)`), // internal IPs
+}
+
+// errorSanitizerWriter intercepts response writes to sanitize error bodies.
+type errorSanitizerWriter struct {
+	http.ResponseWriter
+	logger      *slog.Logger
+	status      int
+	wroteHeader bool
+	buf         bytes.Buffer
+	sanitize    bool
+}
+
+func (w *errorSanitizerWriter) WriteHeader(code int) {
+	w.status = code
+	w.wroteHeader = true
+	w.sanitize = code >= 500
+	if !w.sanitize {
+		w.ResponseWriter.WriteHeader(code)
+	}
+}
+
+func (w *errorSanitizerWriter) Write(b []byte) (int, error) {
+	if !w.wroteHeader {
+		w.WriteHeader(http.StatusOK)
+	}
+	if w.sanitize {
+		w.buf.Write(b)
+		return len(b), nil
+	}
+	return w.ResponseWriter.Write(b)
+}
+
+func (w *errorSanitizerWriter) flush() {
+	if !w.sanitize {
+		return
+	}
+
+	body := w.buf.String()
+	leaked := false
+	for _, re := range sensitivePatterns {
+		if re.MatchString(body) {
+			leaked = true
+			break
+		}
+	}
+
+	if leaked {
+		w.logger.Warn("sanitized error response containing sensitive data",
+			"status", w.status,
+			"original_length", len(body),
+		)
+		w.ResponseWriter.Header().Set("Content-Type", "application/json")
+		w.ResponseWriter.WriteHeader(w.status)
+		w.ResponseWriter.Write([]byte(`{"error":"internal server error"}`))
+	} else {
+		w.ResponseWriter.WriteHeader(w.status)
+		w.ResponseWriter.Write(w.buf.Bytes())
+	}
+}
+
+// ErrorSanitizer catches error responses that might leak internal details
+// (stack traces, file paths, internal IPs) and replaces them with a generic
+// error message. Safe error bodies without sensitive patterns pass through.
+func ErrorSanitizer(logger *slog.Logger) Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			sw := &errorSanitizerWriter{
+				ResponseWriter: w,
+				logger:         logger,
+				status:         http.StatusOK,
+			}
+			next.ServeHTTP(sw, r)
+			sw.flush()
+		})
+	}
 }

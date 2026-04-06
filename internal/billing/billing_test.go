@@ -801,3 +801,232 @@ func TestSubscriptionInactiveKeyValidation(t *testing.T) {
 		t.Errorf("expected 'canceled' in error, got: %s", err.Error())
 	}
 }
+
+// --- Webhook Signature Verification Tests ---
+
+func makeValidSignature(payload []byte, secret string, ts int64) string {
+	timestamp := fmt.Sprintf("%d", ts)
+	signedPayload := timestamp + "." + string(payload)
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(signedPayload))
+	sig := hex.EncodeToString(mac.Sum(nil))
+	return fmt.Sprintf("t=%s,v1=%s", timestamp, sig)
+}
+
+func TestWebhookValidSignaturePasses(t *testing.T) {
+	secret := "whsec_test_webhook_secret"
+	payload := []byte(`{"id":"evt_test","type":"customer.subscription.created"}`)
+	sigHeader := makeValidSignature(payload, secret, time.Now().Unix())
+
+	err := VerifyStripeSignature(payload, sigHeader, secret)
+	if err != nil {
+		t.Fatalf("valid signature should pass: %v", err)
+	}
+}
+
+func TestWebhookInvalidSignatureRejected(t *testing.T) {
+	secret := "whsec_test_webhook_secret"
+	payload := []byte(`{"id":"evt_test","type":"test"}`)
+	sigHeader := fmt.Sprintf("t=%d,v1=0000000000000000000000000000000000000000000000000000000000000000", time.Now().Unix())
+
+	err := VerifyStripeSignature(payload, sigHeader, secret)
+	if err == nil {
+		t.Error("invalid signature should be rejected")
+	}
+	if !strings.Contains(err.Error(), "signature verification failed") {
+		t.Errorf("expected 'signature verification failed', got: %s", err.Error())
+	}
+}
+
+func TestWebhookMissingSignatureRejected(t *testing.T) {
+	err := VerifyStripeSignature([]byte(`{}`), "", "whsec_secret")
+	if err == nil {
+		t.Error("missing signature header should be rejected")
+	}
+	if !strings.Contains(err.Error(), "missing Stripe-Signature") {
+		t.Errorf("expected 'missing Stripe-Signature', got: %s", err.Error())
+	}
+}
+
+func TestWebhookMissingSecretRejected(t *testing.T) {
+	err := VerifyStripeSignature([]byte(`{}`), "t=123,v1=abc", "")
+	if err == nil {
+		t.Error("empty webhook secret should be rejected")
+	}
+	if !strings.Contains(err.Error(), "webhook secret not configured") {
+		t.Errorf("expected 'webhook secret not configured', got: %s", err.Error())
+	}
+}
+
+func TestWebhookReplayAttackRejected(t *testing.T) {
+	secret := "whsec_replay_test"
+	payload := []byte(`{"id":"evt_replay","type":"test"}`)
+	// Signature from 10 minutes ago (exceeds 5-minute tolerance)
+	oldTimestamp := time.Now().Add(-10 * time.Minute).Unix()
+	sigHeader := makeValidSignature(payload, secret, oldTimestamp)
+
+	err := VerifyStripeSignature(payload, sigHeader, secret)
+	if err == nil {
+		t.Error("replay attack with old timestamp should be rejected")
+	}
+	if !strings.Contains(err.Error(), "timestamp too old") {
+		t.Errorf("expected 'timestamp too old', got: %s", err.Error())
+	}
+}
+
+func TestWebhookFutureTimestampRejected(t *testing.T) {
+	secret := "whsec_future_test"
+	payload := []byte(`{"id":"evt_future","type":"test"}`)
+	futureTimestamp := time.Now().Add(10 * time.Minute).Unix()
+	sigHeader := makeValidSignature(payload, secret, futureTimestamp)
+
+	err := VerifyStripeSignature(payload, sigHeader, secret)
+	if err == nil {
+		t.Error("future timestamp beyond tolerance should be rejected")
+	}
+}
+
+func TestWebhookMalformedSignatureHeader(t *testing.T) {
+	tests := []struct {
+		name      string
+		sigHeader string
+		wantErr   string
+	}{
+		{"missing timestamp", "v1=abc123", "missing timestamp"},
+		{"missing v1 sig", "t=123456", "missing v1 signature"},
+		{"invalid timestamp", "t=notanumber,v1=abc", "invalid timestamp"},
+		{"garbage data", "garbage", "missing timestamp"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := VerifyStripeSignature([]byte(`{}`), tt.sigHeader, "secret")
+			if err == nil {
+				t.Error("malformed signature should be rejected")
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("expected error containing %q, got: %s", tt.wantErr, err.Error())
+			}
+		})
+	}
+}
+
+func TestWebhookTamperedPayloadRejected(t *testing.T) {
+	secret := "whsec_tamper_test"
+	originalPayload := []byte(`{"id":"evt_original","type":"test"}`)
+	sigHeader := makeValidSignature(originalPayload, secret, time.Now().Unix())
+
+	// Tamper with the payload
+	tamperedPayload := []byte(`{"id":"evt_original","type":"test","extra":"hacked"}`)
+	err := VerifyStripeSignature(tamperedPayload, sigHeader, secret)
+	if err == nil {
+		t.Error("tampered payload should be rejected")
+	}
+}
+
+func TestWebhookWrongSecretRejected(t *testing.T) {
+	payload := []byte(`{"id":"evt_test","type":"test"}`)
+	sigHeader := makeValidSignature(payload, "correct_secret", time.Now().Unix())
+
+	err := VerifyStripeSignature(payload, sigHeader, "wrong_secret")
+	if err == nil {
+		t.Error("wrong secret should be rejected")
+	}
+}
+
+// --- API Key Hashing Verification ---
+
+func TestAPIKeyNeverStoredPlaintext(t *testing.T) {
+	dir := testDir(t)
+	logger := testLogger()
+	subStore := NewSubscriptionStore(dir, logger)
+	store := NewAPIKeyStore(dir, subStore, logger)
+
+	key, rawKey, err := store.GenerateKey("user1", "sub1", "plaintext test", nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The Key field should be empty (never persisted)
+	if key.Key != "" {
+		t.Error("raw key should not be stored in APIKey struct")
+	}
+
+	// KeyHash should be SHA-256 of the raw key
+	expectedHash := HashKey(rawKey)
+	if key.KeyHash != expectedHash {
+		t.Error("key hash should match SHA-256 of raw key")
+	}
+
+	// Verify hash length (SHA-256 = 64 hex chars)
+	if len(key.KeyHash) != 64 {
+		t.Errorf("key hash should be 64 hex chars, got %d", len(key.KeyHash))
+	}
+
+	// KeyHash should not contain the raw key
+	if strings.Contains(key.KeyHash, rawKey) {
+		t.Error("key hash should not contain the raw key")
+	}
+}
+
+func TestAPIKeyPrefixValidation(t *testing.T) {
+	dir := testDir(t)
+	logger := testLogger()
+	subStore := NewSubscriptionStore(dir, logger)
+	store := NewAPIKeyStore(dir, subStore, logger)
+
+	// Live key prefix
+	_, liveKey, _ := store.GenerateKey("u1", "s1", "live", nil, false)
+	if !strings.HasPrefix(liveKey, "nxs_live_") {
+		t.Errorf("live key should have nxs_live_ prefix, got %s", liveKey[:12])
+	}
+
+	// Test key prefix
+	_, testKey, _ := store.GenerateKey("u1", "s1", "test", nil, true)
+	if !strings.HasPrefix(testKey, "nxs_test_") {
+		t.Errorf("test key should have nxs_test_ prefix, got %s", testKey[:12])
+	}
+
+	// Invalid prefix should fail validation
+	_, err := store.ValidateKey("invalid_prefix_key_abcdef01234567890")
+	if err == nil {
+		t.Error("key with invalid prefix should fail validation")
+	}
+}
+
+func TestAPIKeyPerKeyRateLimiting(t *testing.T) {
+	dir := testDir(t)
+	logger := testLogger()
+	subStore := NewSubscriptionStore(dir, logger)
+
+	sub := &Subscription{
+		ID:               "sub_rl",
+		UserID:           "user_rl",
+		PlanID:           "free",
+		Status:           "active",
+		CurrentPeriodEnd: time.Now().Add(30 * 24 * time.Hour),
+	}
+	subStore.Create(sub)
+
+	store := NewAPIKeyStore(dir, subStore, logger)
+	key, _, _ := store.GenerateKey("user_rl", "sub_rl", "rate limit key", nil, false)
+
+	// Under quota should be allowed
+	result := store.CheckQuota(key.KeyHash)
+	if !result.Allowed {
+		t.Error("should be allowed under quota")
+	}
+
+	// Exhaust quota
+	store.mu.Lock()
+	store.keys[key.KeyHash].MonthlyUsage = 1000 // free plan limit
+	store.mu.Unlock()
+
+	result = store.CheckQuota(key.KeyHash)
+	if result.Allowed {
+		t.Error("should be denied when quota exhausted")
+	}
+	if result.Remaining != 0 {
+		t.Errorf("expected 0 remaining, got %d", result.Remaining)
+	}
+}

@@ -31,8 +31,19 @@ monitoring/grafana/data/
 
 # Environment & Secrets
 .env
+.env.*
 *.key
 *.pem
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# Secret files
+**/credentials*
+**/secrets*
+*.secret
+*.credentials
 
 # OS
 .DS_Store

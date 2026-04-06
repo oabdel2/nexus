@@ -344,6 +344,9 @@ func (s *Server) Start(ctx context.Context) error {
 		middlewares = append(middlewares, security.AuditLog(s.logger))
 	}
 
+	// Error sanitizer: intercepts 5xx responses leaking internal details
+	middlewares = append(middlewares, security.ErrorSanitizer(s.logger))
+
 	// Apply middleware chain
 	handler := security.Chain(mux, middlewares...)
 

@@ -28,10 +28,10 @@ func TestSecurityHeaders(t *testing.T) {
 		"X-Content-Type-Options":    "nosniff",
 		"X-Frame-Options":          "DENY",
 		"X-XSS-Protection":        "1; mode=block",
-		"Strict-Transport-Security": "max-age=31536000; includeSubDomains",
-		"Content-Security-Policy":   "default-src 'self'",
+		"Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
+		"Content-Security-Policy":   "default-src 'none'; frame-ancestors 'none'",
 		"Referrer-Policy":          "strict-origin-when-cross-origin",
-		"Permissions-Policy":       "camera=(), microphone=(), geolocation=()",
+		"Permissions-Policy":       "camera=(), microphone=(), geolocation=(), interest-cohort=()",
 		"Cache-Control":            "no-store",
 	}
 
@@ -1165,5 +1165,153 @@ func TestExtractClientIPFromXForwardedFor(t *testing.T) {
 	ip := extractClientIP(req)
 	if ip != "203.0.113.50" {
 		t.Errorf("expected first X-Forwarded-For IP 203.0.113.50, got %s", ip)
+	}
+}
+
+// --- Error Sanitizer Tests ---
+
+func TestErrorSanitizerPassesSafeError(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := ErrorSanitizer(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":"something went wrong"}`))
+	}))
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", rec.Code)
+	}
+	// Safe error should pass through unchanged
+	if !strings.Contains(rec.Body.String(), "something went wrong") {
+		t.Error("safe error body should pass through")
+	}
+}
+
+func TestErrorSanitizerStripsStackTrace(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := ErrorSanitizer(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("goroutine 1 [running]:\nmain.main()\n\t/app/main.go:42"))
+	}))
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if strings.Contains(body, "goroutine") {
+		t.Error("stack trace should be sanitized from response")
+	}
+	if strings.Contains(body, "main.go") {
+		t.Error("file paths should be sanitized from response")
+	}
+
+	var resp map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("sanitized response should be valid JSON: %v", err)
+	}
+	if resp["error"] != "internal server error" {
+		t.Errorf("expected generic error, got %q", resp["error"])
+	}
+}
+
+func TestErrorSanitizerStripsFilePaths(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := ErrorSanitizer(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`error at C:\Users\dev\project\internal\server.go:42`))
+	}))
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if strings.Contains(body, `C:\Users`) {
+		t.Error("Windows file paths should be sanitized")
+	}
+}
+
+func TestErrorSanitizerStripsInternalIPs(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := ErrorSanitizer(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("connection refused to 10.0.0.55:5432"))
+	}))
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if strings.Contains(body, "10.0.0.55") {
+		t.Error("internal IP addresses should be sanitized")
+	}
+}
+
+func TestErrorSanitizerIgnoresNon5xx(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := ErrorSanitizer(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error":"bad request with goroutine 1 info"}`))
+	}))
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", rec.Code)
+	}
+	// 4xx responses should not be sanitized even if they contain sensitive-looking data
+	if !strings.Contains(rec.Body.String(), "goroutine") {
+		t.Error("non-5xx responses should pass through unchanged")
+	}
+}
+
+func TestErrorSanitizerStripsPanicMessage(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := ErrorSanitizer(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("panic: runtime error: index out of range [5] with length 3"))
+	}))
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if strings.Contains(body, "panic") {
+		t.Error("panic messages should be sanitized")
+	}
+	if strings.Contains(body, "runtime error") {
+		t.Error("runtime errors should be sanitized")
+	}
+}
+
+func TestErrorSanitizerOKPassthrough(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	handler := ErrorSanitizer(logger)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ok"}`))
+	}))
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", rec.Code)
+	}
+	if rec.Body.String() != `{"status":"ok"}` {
+		t.Errorf("OK response should pass through unchanged, got %q", rec.Body.String())
 	}
 }
