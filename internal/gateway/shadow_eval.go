@@ -15,7 +15,7 @@ import (
 
 // runShadowEval sends the same request to a comparison tier and compares results.
 // It runs in a background goroutine and failures are silent.
-func (s *Server) runShadowEval(ctx context.Context, req provider.ChatRequest, prompt string,
+func (s *Server) runShadowEval(_ context.Context, req provider.ChatRequest, prompt string,
 	primarySelection router.ModelSelection, primaryResp *provider.ChatResponse) {
 
 	comparisonTier := getComparisonTier(primarySelection.Tier)

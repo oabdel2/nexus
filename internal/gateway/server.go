@@ -519,6 +519,11 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	// Wait for in-flight requests to drain (each request holds a semaphore slot)
 	s.drainRequests(ctx)
 
+	// Stop cache cleanup goroutines
+	if s.cache != nil {
+		s.cache.Stop()
+	}
+
 	if s.tracker != nil {
 		s.tracker.Stop()
 	}

@@ -32,7 +32,9 @@ func writeNexusError(w http.ResponseWriter, ne *NexusError, status int) {
 
 func generateRequestID() string {
 	b := make([]byte, 8)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		return "nex-00000000"
+	}
 	return "nex-" + hex.EncodeToString(b)
 }
 

@@ -65,8 +65,11 @@ func (c *ExactCache) Get(key string) ([]byte, bool) {
 
 	if time.Since(entry.CreatedAt) > c.ttl {
 		c.mu.Lock()
-		delete(c.entries, key)
-		c.lru.Remove(key)
+		// Re-check under write lock: a concurrent Set may have replaced the entry
+		if current, exists := c.entries[key]; exists && current == entry {
+			delete(c.entries, key)
+			c.lru.Remove(key)
+		}
 		c.mu.Unlock()
 		c.misses.Add(1)
 		return nil, false

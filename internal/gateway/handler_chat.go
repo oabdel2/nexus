@@ -73,6 +73,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	promptText := extractPromptText(req.Messages)
 	guardText := fullPromptText(req.Messages)
 	contextLen := len(guardText)
+	userModel := req.Model // preserve before routing mutates req.Model
 
 	// Check for prompt injection
 	if guard := security.GetPromptGuard(r.Context()); guard != nil {
@@ -88,10 +89,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check cache first
-	cacheKey := ""
 	if s.cfg.Cache.Enabled {
 		ctx, cacheSpan := s.tracer.StartSpan(r.Context(), "cache.lookup")
-		if cached, hit, source := s.cache.Lookup(promptText, req.Model); hit {
+		if cached, hit, source := s.cache.Lookup(promptText, userModel); hit {
 			cacheSpan.SetAttribute("cache.hit", "true")
 			cacheSpan.SetAttribute("cache.source", source)
 			s.tracer.EndSpan(cacheSpan)
@@ -148,7 +148,6 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		cacheSpan.SetAttribute("cache.hit", "false")
 		s.tracer.EndSpan(cacheSpan)
 		r = r.WithContext(ctx)
-		_ = cacheKey
 	}
 
 	// Plugin PreRoute hook: let plugins modify messages or override tier before routing
@@ -386,7 +385,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		// Cache the assembled streaming response
 		if s.cfg.Cache.Enabled {
 			if cacheData, ok := streamBuf.CacheableJSON(); ok {
-				s.cache.StoreResponse(promptText, selection.Model, cacheData)
+				s.cache.StoreResponse(promptText, userModel, cacheData)
 			}
 		}
 		return
@@ -429,7 +428,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 					"model":       selection.Model,
 				})
 			}
-			writeNexusError(w, errProviderError(err.Error()), http.StatusBadGateway)
+			writeNexusError(w, errProviderError(""), http.StatusBadGateway)
 			return
 		}
 		s.health.RecordSuccess(selection.Provider)
@@ -541,7 +540,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	// Cache the response
 	_, storeSpan := s.tracer.StartSpan(r.Context(), "cache.store")
 	respBody, _ := json.Marshal(resp)
-	s.cache.StoreResponse(promptText, selection.Model, respBody)
+	s.cache.StoreResponse(promptText, userModel, respBody)
 	storeSpan.SetAttribute("cache.model", selection.Model)
 	s.tracer.EndSpan(storeSpan)
 
