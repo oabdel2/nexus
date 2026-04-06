@@ -224,5 +224,19 @@ func (m *Manager) AllExperiments() []Experiment {
 	return out
 }
 
+// ToggleExperiment enables or disables an experiment by ID.
+// Returns true if the experiment was found.
+func (m *Manager) ToggleExperiment(experimentID string, enabled bool) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	exp, ok := m.experiments[experimentID]
+	if !ok {
+		return false
+	}
+	exp.Enabled = enabled
+	return true
+}
+
 // now is an indirection for testing (not exported).
 var now = time.Now

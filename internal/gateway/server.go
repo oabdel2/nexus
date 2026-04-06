@@ -18,6 +18,7 @@ import (
 	"github.com/nexus-gateway/nexus/internal/config"
 	"github.com/nexus-gateway/nexus/internal/dashboard"
 	"github.com/nexus-gateway/nexus/internal/eval"
+	"github.com/nexus-gateway/nexus/internal/experiment"
 	"github.com/nexus-gateway/nexus/internal/notification"
 	"github.com/nexus-gateway/nexus/internal/provider"
 	"github.com/nexus-gateway/nexus/internal/router"
@@ -50,6 +51,7 @@ type Server struct {
 	confidenceScorer *eval.ConfidenceScorer
 	confidenceMap    *eval.ConfidenceMap
 	cascade          *router.CascadeRouter
+	experimentMgr    *experiment.Manager
 }
 
 func New(cfg *config.Config, logger *slog.Logger) *Server {
@@ -162,6 +164,17 @@ func New(cfg *config.Config, logger *slog.Logger) *Server {
 		s.cascade = router.NewCascadeRouter(s.router, cfg.Cascade.ConfidenceThreshold, cfg.Cascade.MaxLatencyMs, cfg.Cascade.SampleRate)
 	}
 
+	// Init experiment manager
+	if cfg.Experiment.Enabled {
+		s.experimentMgr = experiment.NewManager()
+		if cfg.Experiment.AutoStart {
+			s.experimentMgr.RegisterExperiment(experiment.CascadeThresholdExperiment())
+			s.experimentMgr.RegisterExperiment(experiment.CompressionExperiment())
+			s.experimentMgr.RegisterExperiment(experiment.TierThresholdExperiment())
+			s.experimentMgr.RegisterExperiment(experiment.CacheAggressivenessExperiment())
+		}
+	}
+
 	// Init billing (if enabled)
 	if cfg.Billing.Enabled {
 		s.eventLog = notification.NewEventLog(cfg.Billing.DataDir)
@@ -235,6 +248,28 @@ func (s *Server) Start(ctx context.Context) error {
 	// Eval and compression stats endpoints
 	mux.HandleFunc("/api/eval/stats", s.handleEvalStats)
 	mux.HandleFunc("/api/compression/stats", s.handleCompressionStats)
+
+	// Shadow evaluation stats
+	mux.HandleFunc("/api/shadow/stats", s.handleShadowStats)
+
+	// Experiment endpoints
+	mux.HandleFunc("/api/experiments", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			s.handleExperimentCreate(w, r)
+		} else {
+			s.handleExperiments(w, r)
+		}
+	})
+	mux.HandleFunc("/api/experiments/", func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if strings.HasSuffix(path, "/results") {
+			s.handleExperimentResults(w, r)
+		} else if strings.HasSuffix(path, "/toggle") {
+			s.handleExperimentToggle(w, r)
+		} else {
+			http.NotFound(w, r)
+		}
+	})
 
 	// Request inspector endpoint
 	mux.HandleFunc("/api/inspect", s.handleInspect)
@@ -742,6 +777,34 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		s.tracer.EndSpan(evalSpan)
 
 		w.Header().Set("X-Nexus-Confidence", fmt.Sprintf("%.3f", evalResult.Score))
+	}
+
+	// Shadow evaluation: compare primary vs comparison tier on sample % of requests
+	if s.cfg.Eval.ShadowEnabled && s.cfg.Eval.ShadowSampleRate > 0 {
+		if shouldShadow(workflowID, s.cfg.Eval.ShadowSampleRate) {
+			go s.runShadowEval(r.Context(), req, promptText, selection, resp)
+		}
+	}
+
+	// A/B experiment: record metrics for assigned variant
+	var expAssignment *experiment.Assignment
+	if s.experimentMgr != nil {
+		expAssignment = s.experimentMgr.GetAssignment(workflowID)
+	}
+	if expAssignment != nil {
+		var evalScore float64
+		if evalResult != nil {
+			evalScore = evalResult.Score
+		}
+		s.experimentMgr.RecordMetric(workflowID, experiment.MetricEvent{
+			Cost:       cost,
+			Tokens:     int64(tokens),
+			LatencyMs:  latencyMs,
+			CacheHit:   false,
+			Escalation: false,
+			Confidence: evalScore,
+			Error:      false,
+		})
 	}
 
 	// Cache the response

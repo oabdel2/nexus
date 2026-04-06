@@ -22,6 +22,7 @@ type Config struct {
 	Compression  CompressionConfig  `yaml:"compression"`
 	Cascade      CascadeConfig      `yaml:"cascade"`
 	Eval         EvalConfig         `yaml:"eval"`
+	Experiment   ExperimentConfig   `yaml:"experiment"`
 }
 
 type CompressionConfig struct {
@@ -41,10 +42,17 @@ type CascadeConfig struct {
 }
 
 type EvalConfig struct {
-	Enabled        bool    `yaml:"enabled"`
-	DataDir        string  `yaml:"data_dir"`
-	HedgingPenalty float64 `yaml:"hedging_penalty"`
-	SampleRate     float64 `yaml:"sample_rate"`
+	Enabled          bool    `yaml:"enabled"`
+	DataDir          string  `yaml:"data_dir"`
+	HedgingPenalty   float64 `yaml:"hedging_penalty"`
+	SampleRate       float64 `yaml:"sample_rate"`
+	ShadowEnabled    bool    `yaml:"shadow_enabled"`
+	ShadowSampleRate float64 `yaml:"shadow_sample_rate"`
+}
+
+type ExperimentConfig struct {
+	Enabled   bool `yaml:"enabled"`
+	AutoStart bool `yaml:"auto_start"`
 }
 
 type BillingConfig struct {
@@ -443,5 +451,8 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.Eval.SampleRate == 0 {
 		cfg.Eval.SampleRate = 1.0
+	}
+	if cfg.Eval.ShadowSampleRate == 0 && cfg.Eval.ShadowEnabled {
+		cfg.Eval.ShadowSampleRate = 0.10
 	}
 }

@@ -152,3 +152,9 @@ func (r *Router) GetModelCost(provider, model string) float64 {
 	}
 	return 0.005 // default fallback
 }
+
+// ForceSelectTier selects a model from a specific tier, using the same
+// fallback logic as selectModelWithFallback.
+func (r *Router) ForceSelectTier(tier string) (provider string, model string) {
+	return r.selectModelWithFallback(tier)
+}
