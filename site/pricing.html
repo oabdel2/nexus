@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pricing — Nexus AI Gateway</title>
+<meta name="description" content="Nexus pricing: Free, Starter (/mo), Team (/mo), Enterprise. Start free, scale as you grow.">
+<style>
+:root {
+  --bg: #0a0a0b;
+  --card: #111113;
+  --border: #1e1e22;
+  --text: #e4e4e7;
+  --text-secondary: #a1a1aa;
+  --text-dim: #71717a;
+  --blue: #3b82f6;
+  --purple: #8b5cf6;
+  --pink: #ec4899;
+  --green: #22c55e;
+  --red: #ef4444;
+  --gradient: linear-gradient(135deg, var(--blue), var(--purple), var(--pink));
+  --gradient-h: linear-gradient(90deg, var(--blue), var(--purple), var(--pink));
+  --radius: 12px;
+  --radius-sm: 8px;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+  --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  --nav-height: 64px;
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; cursor: pointer; border: none; background: none; }
+.container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+.gradient-text {
+  background: var(--gradient-h);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.fade-in {
+  opacity: 0; transform: translateY(24px);
+  transition: opacity .6s ease, transform .6s ease;
+}
+.fade-in.visible { opacity: 1; transform: translateY(0); }
+
+/* NAV */
+.nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  height: var(--nav-height); display: flex; align-items: center;
+  background: rgba(10,10,11,.8); backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px); box-shadow: 0 1px 0 var(--border);
+}
+.nav .container { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+.nav-logo { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 700; letter-spacing: -.02em; }
+.nav-logo-icon {
+  width: 32px; height: 32px; border-radius: 8px; background: var(--gradient);
+  display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; color: #fff;
+}
+.nav-links { display: flex; align-items: center; gap: 32px; list-style: none; }
+.nav-links a { font-size: 14px; color: var(--text-secondary); transition: color .2s; font-weight: 500; }
+.nav-links a:hover { color: #fff; }
+.nav-links a.active { color: #fff; }
+.nav-cta {
+  padding: 8px 20px; border-radius: 8px; background: var(--gradient);
+  color: #fff !important; font-weight: 600; font-size: 14px; transition: opacity .2s, transform .15s;
+}
+.nav-cta:hover { opacity: .9; transform: translateY(-1px); }
+.mobile-toggle { display: none; flex-direction: column; gap: 5px; padding: 4px; }
+.mobile-toggle span { display: block; width: 22px; height: 2px; background: var(--text); border-radius: 2px; transition: transform .3s, opacity .3s; }
+.mobile-menu {
+  display: none; position: fixed; top: var(--nav-height); left: 0; right: 0; bottom: 0;
+  background: rgba(10,10,11,.96); backdrop-filter: blur(16px); z-index: 99; padding: 40px 24px;
+}
+.mobile-menu.open { display: flex; flex-direction: column; gap: 24px; }
+.mobile-menu a { font-size: 18px; color: var(--text-secondary); font-weight: 500; }
+.mobile-menu a:hover { color: #fff; }
+@media (max-width: 768px) {
+  .nav-links { display: none; }
+  .mobile-toggle { display: flex; }
+}
+
+/* HERO */
+.pricing-hero {
+  padding: 140px 0 80px; text-align: center; position: relative;
+}
+.pricing-hero::before {
+  content: ''; position: absolute; top: -200px; left: 50%; transform: translateX(-50%);
+  width: 800px; height: 600px;
+  background: radial-gradient(ellipse, rgba(139,92,246,.12) 0%, rgba(59,130,246,.06) 40%, transparent 70%);
+  pointer-events: none;
+}
+.pricing-hero h1 { font-size: clamp(36px, 5vw, 56px); font-weight: 800; letter-spacing: -.03em; line-height: 1.1; margin-bottom: 16px; }
+.pricing-hero p { font-size: 18px; color: var(--text-secondary); max-width: 560px; margin: 0 auto; }
+
+/* TOGGLE */
+.billing-toggle { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 40px 0; }
+.billing-toggle span { font-size: 14px; color: var(--text-dim); font-weight: 500; }
+.billing-toggle span.active { color: var(--text); }
+.toggle-track {
+  width: 48px; height: 26px; border-radius: 13px; background: var(--border); cursor: pointer;
+  position: relative; transition: background .3s;
+}
+.toggle-track.annual { background: var(--blue); }
+.toggle-thumb {
+  width: 22px; height: 22px; border-radius: 50%; background: #fff; position: absolute;
+  top: 2px; left: 2px; transition: left .3s;
+}
+.toggle-track.annual .toggle-thumb { left: 24px; }
+.save-badge { font-size: 12px; font-weight: 700; color: var(--green); background: rgba(34,197,94,.1); padding: 2px 10px; border-radius: 100px; }
+
+/* PRICING CARDS */
+section { padding: 0 0 100px; }
+.pricing-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;
+}
+.pricing-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 36px 28px; display: flex; flex-direction: column; position: relative;
+  transition: transform .2s, border-color .25s;
+}
+.pricing-card:hover { transform: translateY(-4px); border-color: rgba(139,92,246,.2); }
+.pricing-card.popular { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue), 0 8px 40px rgba(59,130,246,.1); }
+.popular-badge {
+  position: absolute; top: -12px; left: 50%; transform: translateX(-50%);
+  background: var(--gradient); color: #fff; font-size: 11px; font-weight: 700;
+  padding: 4px 16px; border-radius: 100px; text-transform: uppercase; letter-spacing: .06em; white-space: nowrap;
+}
+.pricing-name { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+.pricing-price { font-size: 48px; font-weight: 800; letter-spacing: -.03em; margin-bottom: 4px; }
+.pricing-price span { font-size: 16px; color: var(--text-dim); font-weight: 500; }
+.pricing-desc { font-size: 14px; color: var(--text-dim); margin-bottom: 24px; line-height: 1.5; }
+.pricing-features { list-style: none; margin-bottom: 32px; flex: 1; }
+.pricing-features li {
+  font-size: 14px; color: var(--text-secondary); padding: 6px 0;
+  display: flex; align-items: flex-start; gap: 10px;
+}
+.pricing-features li::before { content: '\2713'; color: var(--green); font-weight: 700; flex-shrink: 0; }
+.pricing-btn {
+  width: 100%; padding: 14px; border-radius: var(--radius-sm);
+  font-weight: 600; font-size: 15px; text-align: center;
+  transition: opacity .2s, transform .15s; display: block;
+}
+.pricing-btn.primary { background: var(--gradient); color: #fff; }
+.pricing-btn.outline { border: 1px solid var(--border); color: var(--text); }
+.pricing-btn:hover { opacity: .9; transform: translateY(-1px); }
+@media (max-width: 992px) { .pricing-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .pricing-grid { grid-template-columns: 1fr; } }
+
+/* FEATURE MATRIX */
+.matrix-section { padding: 80px 0; }
+.matrix-section h2 { font-size: clamp(28px, 3.5vw, 40px); font-weight: 800; letter-spacing: -.02em; text-align: center; margin-bottom: 48px; }
+.matrix-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.matrix {
+  width: 100%; border-collapse: collapse; min-width: 700px;
+}
+.matrix th, .matrix td {
+  padding: 14px 16px; text-align: center; font-size: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.matrix th { font-weight: 700; font-size: 14px; background: var(--card); position: sticky; top: var(--nav-height); z-index: 10; }
+.matrix th:first-child, .matrix td:first-child { text-align: left; font-weight: 500; min-width: 240px; }
+.matrix th.highlight { color: var(--blue); background: rgba(59,130,246,.06); }
+.matrix td.highlight { background: rgba(59,130,246,.04); }
+.matrix .cat-row td { font-weight: 700; color: var(--purple); font-size: 13px; text-transform: uppercase; letter-spacing: .06em; padding-top: 24px; background: transparent; }
+.ck { color: var(--green); font-weight: 700; font-size: 16px; }
+.cx { color: var(--text-dim); font-size: 13px; }
+
+/* FAQ */
+.faq-section { padding: 80px 0 120px; }
+.faq-section h2 { font-size: clamp(28px, 3.5vw, 40px); font-weight: 800; letter-spacing: -.02em; text-align: center; margin-bottom: 48px; }
+.faq-grid { max-width: 800px; margin: 0 auto; }
+.faq-item {
+  border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 12px;
+  background: var(--card); overflow: hidden;
+}
+.faq-q {
+  padding: 20px 24px; font-size: 16px; font-weight: 600; cursor: pointer;
+  display: flex; justify-content: space-between; align-items: center;
+  transition: color .2s;
+}
+.faq-q:hover { color: var(--blue); }
+.faq-q::after { content: '+'; font-size: 20px; font-weight: 300; color: var(--text-dim); transition: transform .3s; }
+.faq-item.open .faq-q::after { transform: rotate(45deg); }
+.faq-a {
+  max-height: 0; overflow: hidden; transition: max-height .4s ease, padding .3s ease;
+}
+.faq-item.open .faq-a { max-height: 300px; padding: 0 24px 20px; }
+.faq-a p { font-size: 15px; color: var(--text-secondary); line-height: 1.7; }
+
+/* CTA */
+.cta-section {
+  padding: 80px 0; text-align: center;
+  background: linear-gradient(180deg, var(--bg) 0%, rgba(59,130,246,.04) 50%, var(--bg) 100%);
+}
+.cta-section h2 { font-size: clamp(28px, 3.5vw, 40px); font-weight: 800; margin-bottom: 16px; }
+.cta-section p { font-size: 17px; color: var(--text-secondary); max-width: 500px; margin: 0 auto 32px; }
+.cta-btns { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+.btn-primary {
+  padding: 14px 32px; border-radius: 10px; background: var(--gradient); color: #fff;
+  font-weight: 600; font-size: 16px; transition: opacity .2s, transform .15s;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.btn-primary:hover { opacity: .9; transform: translateY(-2px); }
+.btn-outline {
+  padding: 14px 32px; border-radius: 10px; border: 1px solid var(--border); color: var(--text);
+  font-weight: 600; font-size: 16px; transition: border-color .2s, transform .15s, background .2s;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.btn-outline:hover { border-color: var(--text-dim); background: rgba(255,255,255,.03); transform: translateY(-2px); }
+
+/* FOOTER */
+.footer { padding: 60px 0 40px; border-top: 1px solid var(--border); }
+.footer-bottom {
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 12px;
+}
+.footer-bottom p { font-size: 13px; color: var(--text-dim); }
+.footer-heart { color: var(--pink); }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav" id="nav">
+  <div class="container">
+    <a href="index.html" class="nav-logo">
+      <div class="nav-logo-icon">N</div>
+      Nexus
+    </a>
+    <ul class="nav-links">
+      <li><a href="index.html#features">Features</a></li>
+      <li><a href="index.html#how-it-works">How It Works</a></li>
+      <li><a href="docs.html">Docs</a></li>
+      <li><a href="playground.html">Playground</a></li>
+      <li><a href="pricing.html" class="active">Pricing</a></li>
+      <li><a href="https://github.com" target="_blank" rel="noopener">GitHub</a></li>
+      <li><a href="index.html#quickstart" class="nav-cta">Get Started Free</a></li>
+    </ul>
+    <button class="mobile-toggle" id="mobile-toggle" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</nav>
+<div class="mobile-menu" id="mobile-menu">
+  <a href="index.html#features">Features</a>
+  <a href="index.html#how-it-works">How It Works</a>
+  <a href="docs.html">Docs</a>
+  <a href="playground.html">Playground</a>
+  <a href="pricing.html">Pricing</a>
+  <a href="https://github.com" target="_blank" rel="noopener">GitHub</a>
+  <a href="index.html#quickstart" class="nav-cta" style="text-align:center;display:block;margin-top:16px;">Get Started Free</a>
+</div>
+
+<!-- HERO -->
+<div class="pricing-hero">
+  <div class="container">
+    <h1 class="fade-in">Simple, <span class="gradient-text">Transparent</span> Pricing</h1>
+    <p class="fade-in">Start free. Scale as you grow. No hidden fees, no surprises.</p>
+  </div>
+</div>
+
+<!-- PRICING CARDS -->
+<section>
+  <div class="container">
+    <div class="pricing-grid">
+      <div class="pricing-card fade-in">
+        <div class="pricing-name">Free</div>
+        <div class="pricing-price">$0</div>
+        <div class="pricing-desc">For individuals and hobby projects getting started with intelligent routing.</div>
+        <ul class="pricing-features">
+          <li>1,000 requests/month</li>
+          <li>Smart TF-IDF classification</li>
+          <li>3-layer cache (Exact, BM25, feedback)</li>
+          <li>Basic security (rate limiting, CORS)</li>
+          <li>Docker deployment</li>
+          <li>Prometheus metrics</li>
+          <li>Community support (GitHub)</li>
+          <li>CLI tools (init, status, validate)</li>
+        </ul>
+        <a href="index.html#quickstart" class="pricing-btn primary">Start Free</a>
+      </div>
+      <div class="pricing-card popular fade-in">
+        <div class="popular-badge">Most Popular</div>
+        <div class="pricing-name">Starter</div>
+        <div class="pricing-price">$29<span>/mo</span></div>
+        <div class="pricing-desc">For growing teams that need full routing intelligence and caching.</div>
+        <ul class="pricing-features">
+          <li>50,000 requests/month</li>
+          <li>Full cascade routing</li>
+          <li>7-layer cache (all layers)</li>
+          <li>Prompt compression (4 strategies)</li>
+          <li>Cost savings dashboard</li>
+          <li>Confidence scoring (6 signals)</li>
+          <li>Config hot-reload</li>
+          <li>Email support</li>
+        </ul>
+        <a href="index.html#quickstart" class="pricing-btn primary">Get Started</a>
+      </div>
+      <div class="pricing-card fade-in">
+        <div class="pricing-name">Team</div>
+        <div class="pricing-price">$99<span>/mo</span></div>
+        <div class="pricing-desc">For organizations with multiple teams, projects, and compliance needs.</div>
+        <ul class="pricing-features">
+          <li>500,000 requests/month</li>
+          <li>Everything in Starter</li>
+          <li>A/B testing framework</li>
+          <li>Shadow evaluation</li>
+          <li>OIDC SSO &amp; RBAC</li>
+          <li>Per-team budget controls</li>
+          <li>Prompt injection guard</li>
+          <li>Priority support</li>
+        </ul>
+        <a href="index.html#quickstart" class="pricing-btn outline">Get Started</a>
+      </div>
+      <div class="pricing-card fade-in">
+        <div class="pricing-name">Enterprise</div>
+        <div class="pricing-price">Custom</div>
+        <div class="pricing-desc">Dedicated infrastructure and custom solutions for large organizations.</div>
+        <ul class="pricing-features">
+          <li>Unlimited requests</li>
+          <li>Everything in Team</li>
+          <li>Helm chart &amp; Kubernetes (14 templates)</li>
+          <li>Custom TF-IDF classifiers</li>
+          <li>Dedicated support engineer</li>
+          <li>Guaranteed SLA</li>
+          <li>On-premise deployment</li>
+          <li>Custom Grafana dashboards</li>
+        </ul>
+        <button class="pricing-btn outline" onclick="window.location.href='mailto:sales@nexus-gateway.dev'">Contact Sales</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURE COMPARISON MATRIX -->
+<div class="matrix-section">
+  <div class="container">
+    <h2 class="fade-in">Full Feature <span class="gradient-text">Comparison</span></h2>
+    <div class="matrix-wrap fade-in">
+      <table class="matrix">
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>Free</th>
+            <th class="highlight">Starter</th>
+            <th>Team</th>
+            <th>Enterprise</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="cat-row"><td colspan="5">Routing &amp; Intelligence</td></tr>
+          <tr><td>TF-IDF Classification</td><td><span class="ck">&#10003;</span></td><td class="highlight"><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>Cascade Routing</td><td><span class="cx">&mdash;</span></td><td class="highlight"><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>Confidence Scoring (6 signals)</td><td><span class="cx">&mdash;</span></td><td class="highlight"><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>Online Learning</td><td><span class="cx">&mdash;</span></td><td class="highlight"><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>Custom Classifiers</td><td><span class="cx">&mdash;</span></td><td class="highlight"><span class="cx">&mdash;</span></td><td><span class="cx">&mdash;</span></td><td><span class="ck">&#10003;</span></td></tr>
+
+          <tr class="cat-row"><td colspan="5">Caching</td></tr>
+          <tr><td>L1 Exact Cache</td><td><span class="ck">&#10003;</span></td><td class="highlight"><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>L2 BM25 Fuzzy Cache</td><td><span class="ck">&#10003;</span></td><td class="highlight"><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>L2 Semantic Cache (BGE-M3)</td><td><span class="cx">&mdash;</span></td><td class="highlight"><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>Reranker Verification</td><td><span class="cx">&mdash;</span></td><td class="highlight"><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>Synonym Learning</td><td><span class="cx">&mdash;</span></td><td class="highlight"><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>Feedback Loop</td><td><span class="ck">&#10003;</span></td><td class="highlight"><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>Prompt Compression (4 strategies)</td><td><span class="cx">&mdash;</span></td><td class="highlight"><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+
+          <tr class="cat-row"><td colspan="5">Security</td></tr>
+          <tr><td>Rate Limiting &amp; CORS</td><td><span class="ck">&#10003;</span></td><td class="highlight"><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>API Key Auth</td><td><span class="ck">&#10003;</span></td><td class="highlight"><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>Security Headers (HSTS)</td><td><span class="ck">&#10003;</span></td><td class="highlight"><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>Input Validation</td><td><span class="ck">&#10003;</span></td><td class="highlight"><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>OIDC SSO</td><td><span class="cx">&mdash;</span></td><td class="highlight"><span class="cx">&mdash;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>RBAC</td><td><span class="cx">&mdash;</span></td><td class="highlight"><span class="cx">&mdash;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>Prompt Injection Guard (16 patterns)</td><td><span class="cx">&mdash;</span></td><td class="highlight"><span class="cx">&mdash;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>IP Allowlist</td><td><span class="cx">&mdash;</span></td><td class="highlight"><span class="cx">&mdash;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>Webhook HMAC Verification</td><td><span class="cx">&mdash;</span></td><td class="highlight"><span class="cx">&mdash;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+
+          <tr class="cat-row"><td colspan="5">Observability</td></tr>
+          <tr><td>Prometheus Metrics</td><td><span class="ck">&#10003;</span></td><td class="highlight"><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>Cost Savings Dashboard</td><td><span class="cx">&mdash;</span></td><td class="highlight"><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>A/B Testing Framework</td><td><span class="cx">&mdash;</span></td><td class="highlight"><span class="cx">&mdash;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>Shadow Evaluation</td><td><span class="cx">&mdash;</span></td><td class="highlight"><span class="cx">&mdash;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>Grafana Dashboards</td><td><span class="cx">&mdash;</span></td><td class="highlight"><span class="cx">&mdash;</span></td><td><span class="cx">&mdash;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>Request Inspector</td><td><span class="ck">&#10003;</span></td><td class="highlight"><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+
+          <tr class="cat-row"><td colspan="5">Infrastructure</td></tr>
+          <tr><td>Docker &amp; Docker Compose</td><td><span class="ck">&#10003;</span></td><td class="highlight"><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>Config Hot-Reload</td><td><span class="cx">&mdash;</span></td><td class="highlight"><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>Model Warmup</td><td><span class="cx">&mdash;</span></td><td class="highlight"><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>Helm Chart / Kubernetes</td><td><span class="cx">&mdash;</span></td><td class="highlight"><span class="cx">&mdash;</span></td><td><span class="cx">&mdash;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>HPA &amp; ServiceMonitor</td><td><span class="cx">&mdash;</span></td><td class="highlight"><span class="cx">&mdash;</span></td><td><span class="cx">&mdash;</span></td><td><span class="ck">&#10003;</span></td></tr>
+
+          <tr class="cat-row"><td colspan="5">Developer Experience</td></tr>
+          <tr><td>CLI (init, status, validate, inspect)</td><td><span class="ck">&#10003;</span></td><td class="highlight"><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>SDKs (Python, Node.js, Go)</td><td><span class="ck">&#10003;</span></td><td class="highlight"><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>X-Nexus-Explain Header</td><td><span class="ck">&#10003;</span></td><td class="highlight"><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>Actionable Error Codes</td><td><span class="ck">&#10003;</span></td><td class="highlight"><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+
+          <tr class="cat-row"><td colspan="5">Support</td></tr>
+          <tr><td>Community (GitHub Issues)</td><td><span class="ck">&#10003;</span></td><td class="highlight"><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>Email Support</td><td><span class="cx">&mdash;</span></td><td class="highlight"><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>Priority Support</td><td><span class="cx">&mdash;</span></td><td class="highlight"><span class="cx">&mdash;</span></td><td><span class="ck">&#10003;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>Dedicated Support Engineer</td><td><span class="cx">&mdash;</span></td><td class="highlight"><span class="cx">&mdash;</span></td><td><span class="cx">&mdash;</span></td><td><span class="ck">&#10003;</span></td></tr>
+          <tr><td>SLA Guarantee</td><td><span class="cx">&mdash;</span></td><td class="highlight"><span class="cx">&mdash;</span></td><td><span class="cx">&mdash;</span></td><td><span class="ck">&#10003;</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- FAQ -->
+<div class="faq-section">
+  <div class="container">
+    <h2 class="fade-in">Frequently Asked <span class="gradient-text">Questions</span></h2>
+    <div class="faq-grid">
+      <div class="faq-item fade-in">
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">What counts as a request?</div>
+        <div class="faq-a"><p>A request is any API call to the Nexus gateway &mdash; including chat completions, embeddings, and any proxied call. Cached responses that are served from Nexus&rsquo;s 7-layer cache still count as requests, but they don&rsquo;t incur any upstream model cost.</p></div>
+      </div>
+      <div class="faq-item fade-in">
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">Can I self-host Nexus?</div>
+        <div class="faq-a"><p>Absolutely. Nexus is a single Go binary with zero external dependencies (only yaml.v3). You can run it via Docker, Docker Compose, or the standalone binary. Enterprise customers also get a Helm chart for Kubernetes with 14 templates, HPA, and ServiceMonitor.</p></div>
+      </div>
+      <div class="faq-item fade-in">
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">How does Nexus handle my data?</div>
+        <div class="faq-a"><p>Nexus runs entirely in your infrastructure. Your prompts and responses never leave your environment. We don&rsquo;t collect, store, or transmit any request data. The TF-IDF classifier runs locally and the cache is stored in your own infrastructure.</p></div>
+      </div>
+      <div class="faq-item fade-in">
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">How does cascade routing work?</div>
+        <div class="faq-a"><p>Cascade routing tries the cheapest suitable model first. If the confidence score (measured by 6 heuristics including hedging, completeness, and structure) falls below the 0.78 threshold, the request is automatically escalated to the next tier. This saves 40-70% on routable traffic.</p></div>
+      </div>
+      <div class="faq-item fade-in">
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">What is shadow evaluation?</div>
+        <div class="faq-a"><p>On 10% of requests, Nexus runs both the cheap and premium model in parallel and compares the results. This builds a confidence map over time, so the system can prove that routing to cheaper models doesn&rsquo;t degrade quality. You get statistical evidence, not guesswork.</p></div>
+      </div>
+      <div class="faq-item fade-in">
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">Can I use my own API keys?</div>
+        <div class="faq-a"><p>Yes. Nexus is a proxy &mdash; you bring your own API keys for OpenAI, Anthropic, Ollama, or any other provider. Nexus routes to the best model using your existing accounts. There&rsquo;s no markup on model costs.</p></div>
+      </div>
+      <div class="faq-item fade-in">
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">What happens if I exceed my request limit?</div>
+        <div class="faq-a"><p>Requests over your plan limit are still processed but at a reduced priority. You&rsquo;ll receive a notification at 80% and 100% of your limit. You can upgrade your plan at any time to increase your allocation.</p></div>
+      </div>
+      <div class="faq-item fade-in">
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">How long does integration take?</div>
+        <div class="faq-a"><p>Most teams are up and running in under 10 minutes. If you&rsquo;re using the OpenAI SDK, you just change the base_url parameter. No code changes needed beyond that. Run <code style="font-family:var(--mono);background:var(--border);padding:2px 6px;border-radius:4px;font-size:13px;">nexus init</code> and the wizard handles the rest.</p></div>
+      </div>
+      <div class="faq-item fade-in">
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">Is Nexus open source?</div>
+        <div class="faq-a"><p>Yes. Nexus is fully open source and available on GitHub. The Free tier includes all core routing features. Paid tiers add advanced capabilities like cascade routing, full caching, A/B testing, and enterprise security features.</p></div>
+      </div>
+      <div class="faq-item fade-in">
+        <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">What models does Nexus support?</div>
+        <div class="faq-a"><p>Nexus supports any OpenAI-compatible API including OpenAI (GPT-4o, GPT-4o-mini), Anthropic (Claude), local models via Ollama, and any other provider with an OpenAI-compatible endpoint. The TF-IDF classifier is model-agnostic.</p></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CTA -->
+<div class="cta-section">
+  <div class="container">
+    <h2 class="fade-in">Ready to <span class="gradient-text">Save 40-70%</span>?</h2>
+    <p class="fade-in">Start with the free tier. No credit card required. Deploy in 60 seconds.</p>
+    <div class="cta-btns fade-in">
+      <a href="index.html#quickstart" class="btn-primary">Start Free &rarr;</a>
+      <a href="docs.html" class="btn-outline">Read the Docs</a>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer-bottom">
+      <p>Built with <span class="footer-heart">&hearts;</span> for the AI community</p>
+      <p>&copy; 2025 Nexus. All rights reserved.</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function() {
+  'use strict';
+  var observer = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      if (entry.isIntersecting) { entry.target.classList.add('visible'); observer.unobserve(entry.target); }
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+  document.querySelectorAll('.fade-in').forEach(function(el) { observer.observe(el); });
+
+  var toggle = document.getElementById('mobile-toggle');
+  var menu = document.getElementById('mobile-menu');
+  toggle.addEventListener('click', function() {
+    menu.classList.toggle('open');
+    var open = menu.classList.contains('open');
+    toggle.children[0].style.transform = open ? 'rotate(45deg) translate(5px, 5px)' : '';
+    toggle.children[1].style.opacity = open ? '0' : '1';
+    toggle.children[2].style.transform = open ? 'rotate(-45deg) translate(5px, -5px)' : '';
+    document.body.style.overflow = open ? 'hidden' : '';
+  });
+})();
+</script>
+</body>
+</html>

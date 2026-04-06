@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Nexus — How It Works</title>
-<meta name="description" content="Learn how Nexus integrates into your products as a transparent proxy between your applications and LLM providers. One endpoint. Every AI tool. Automatic savings.">
+<title>Nexus &mdash; How It Works</title>
+<meta name="description" content="Learn how Nexus processes every LLM request through a 10-step intelligent pipeline that slashes costs up to 70% without sacrificing quality.">
 <style>
 :root {
   --bg: #0a0a0b;
@@ -22,8 +22,8 @@
   --gradient-h: linear-gradient(90deg, var(--blue), var(--purple), var(--pink));
   --radius: 12px;
   --radius-sm: 8px;
-  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
-  --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+  --mono: "SF Mono", "Cascadia Code", "Fira Code", Consolas, monospace;
   --shadow: 0 0 0 1px var(--border);
   --shadow-lg: 0 8px 32px rgba(0,0,0,.4);
   --nav-height: 64px;
@@ -42,570 +42,166 @@ a { color: inherit; text-decoration: none; }
 button { font-family: inherit; cursor: pointer; border: none; background: none; }
 .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
 
-/* Utility */
 .gradient-text {
   background: var(--gradient-h);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
 }
 .fade-in {
-  opacity: 0;
-  transform: translateY(24px);
+  opacity: 0; transform: translateY(24px);
   transition: opacity .6s ease, transform .6s ease;
 }
-.fade-in.visible {
-  opacity: 1;
-  transform: translateY(0);
-}
+.fade-in.visible { opacity: 1; transform: translateY(0); }
 
-/* ── NAV ────────────────────────────────────────── */
+/* NAV */
 .nav {
-  position: fixed;
-  top: 0; left: 0; right: 0;
-  z-index: 100;
-  height: var(--nav-height);
-  display: flex;
-  align-items: center;
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  height: var(--nav-height); display: flex; align-items: center;
   transition: background .3s, box-shadow .3s, backdrop-filter .3s;
 }
 .nav.scrolled {
-  background: rgba(10,10,11,.8);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow: 0 1px 0 var(--border);
+  background: rgba(10,10,11,.8); backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px); box-shadow: 0 1px 0 var(--border);
 }
 .nav .container {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
+  display: flex; align-items: center; justify-content: space-between; width: 100%;
 }
 .nav-logo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -.02em;
+  display: flex; align-items: center; gap: 10px;
+  font-size: 20px; font-weight: 700; letter-spacing: -.02em;
 }
 .nav-logo-icon {
-  width: 32px; height: 32px;
-  border-radius: 8px;
-  background: var(--gradient);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
-  font-size: 16px;
-  color: #fff;
+  width: 32px; height: 32px; border-radius: 8px; background: var(--gradient);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 16px; color: #fff;
 }
-.nav-links {
-  display: flex;
-  align-items: center;
-  gap: 32px;
-  list-style: none;
-}
-.nav-links a {
-  font-size: 14px;
-  color: var(--text-secondary);
-  transition: color .2s;
-  font-weight: 500;
-}
+.nav-links { display: flex; align-items: center; gap: 32px; list-style: none; }
+.nav-links a { font-size: 14px; color: var(--text-secondary); transition: color .2s; font-weight: 500; }
 .nav-links a:hover { color: #fff; }
 .nav-links a.active { color: #fff; }
 .nav-cta {
-  padding: 8px 20px;
-  border-radius: 8px;
-  background: var(--gradient);
-  color: #fff !important;
-  font-weight: 600;
-  font-size: 14px;
+  padding: 8px 20px; border-radius: 8px; background: var(--gradient);
+  color: #fff !important; font-weight: 600; font-size: 14px;
   transition: opacity .2s, transform .15s;
 }
 .nav-cta:hover { opacity: .9; transform: translateY(-1px); }
-.mobile-toggle {
-  display: none;
-  flex-direction: column;
-  gap: 5px;
-  padding: 4px;
-}
-.mobile-toggle span {
-  display: block;
-  width: 22px; height: 2px;
-  background: var(--text);
-  border-radius: 2px;
-  transition: transform .3s, opacity .3s;
-}
+.mobile-toggle { display: none; flex-direction: column; gap: 5px; padding: 4px; }
+.mobile-toggle span { display: block; width: 22px; height: 2px; background: var(--text); border-radius: 2px; transition: transform .3s, opacity .3s; }
 .mobile-menu {
-  display: none;
-  position: fixed;
+  display: none; position: fixed;
   top: var(--nav-height); left: 0; right: 0; bottom: 0;
-  background: rgba(10,10,11,.96);
-  backdrop-filter: blur(16px);
-  z-index: 99;
-  padding: 40px 24px;
+  background: rgba(10,10,11,.96); backdrop-filter: blur(16px); z-index: 99; padding: 40px 24px;
 }
 .mobile-menu.open { display: flex; flex-direction: column; gap: 24px; }
-.mobile-menu a {
-  font-size: 18px;
-  color: var(--text-secondary);
-  font-weight: 500;
-}
+.mobile-menu a { font-size: 18px; color: var(--text-secondary); font-weight: 500; }
 .mobile-menu a:hover { color: #fff; }
-
 @media (max-width: 768px) {
   .nav-links { display: none; }
   .mobile-toggle { display: flex; }
 }
 
-/* ── HERO ───────────────────────────────────────── */
+/* HERO */
 .hero {
-  padding: 160px 0 100px;
-  text-align: center;
-  position: relative;
-  overflow: hidden;
+  padding: 160px 0 100px; text-align: center; position: relative; overflow: hidden;
 }
 .hero::before {
-  content: '';
-  position: absolute;
-  top: -200px; left: 50%;
-  transform: translateX(-50%);
+  content: ''; position: absolute; top: -200px; left: 50%; transform: translateX(-50%);
   width: 800px; height: 600px;
   background: radial-gradient(ellipse, rgba(139,92,246,.12) 0%, rgba(59,130,246,.06) 40%, transparent 70%);
   pointer-events: none;
 }
-.hero h1 {
-  font-size: clamp(40px, 6vw, 72px);
-  font-weight: 800;
-  letter-spacing: -.03em;
-  line-height: 1.08;
-  margin-bottom: 20px;
-}
-.hero .subtitle {
-  font-size: clamp(17px, 2.2vw, 20px);
-  color: var(--text-secondary);
-  max-width: 640px;
-  margin: 0 auto 20px;
-  line-height: 1.6;
-}
-.hero .description {
-  font-size: 15px;
-  color: var(--text-dim);
-  max-width: 560px;
-  margin: 0 auto;
-  line-height: 1.7;
-}
+.hero h1 { font-size: clamp(40px, 6vw, 72px); font-weight: 800; letter-spacing: -.03em; line-height: 1.08; margin-bottom: 20px; }
+.hero .subtitle { font-size: clamp(17px, 2.2vw, 20px); color: var(--text-secondary); max-width: 640px; margin: 0 auto 20px; line-height: 1.6; }
+.hero .description { font-size: 15px; color: var(--text-dim); max-width: 560px; margin: 0 auto; line-height: 1.7; }
 
-/* ── SECTION COMMON ────────────────────────────── */
+/* SECTIONS */
 section { padding: 100px 0; }
 .section-label {
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: .1em;
-  color: var(--purple);
-  font-weight: 600;
-  margin-bottom: 12px;
+  font-size: 13px; text-transform: uppercase; letter-spacing: .1em;
+  color: var(--purple); font-weight: 600; margin-bottom: 12px;
 }
 .section-title {
-  font-size: clamp(30px, 4vw, 44px);
-  font-weight: 800;
-  letter-spacing: -.02em;
-  line-height: 1.15;
-  margin-bottom: 16px;
+  font-size: clamp(30px, 4vw, 44px); font-weight: 800;
+  letter-spacing: -.02em; line-height: 1.15; margin-bottom: 16px;
 }
-.section-subtitle {
-  font-size: 16px;
-  color: var(--text-secondary);
-  max-width: 600px;
-  line-height: 1.7;
-}
-.section-center {
-  text-align: center;
-}
-.section-center .section-subtitle {
-  margin: 0 auto;
-}
+.section-subtitle { font-size: 16px; color: var(--text-secondary); max-width: 600px; line-height: 1.7; }
+.section-center { text-align: center; }
+.section-center .section-subtitle { margin: 0 auto; }
 
-/* ── CODE BLOCKS ────────────────────────────────── */
+/* CODE BLOCKS */
 .code-block {
-  background: #0d0d10;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 16px 20px;
-  overflow-x: auto;
+  background: #0d0d10; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 16px 20px; overflow-x: auto;
 }
 .code-block code {
-  font-family: var(--mono);
-  font-size: 13px;
-  line-height: 1.7;
-  display: block;
-  color: var(--text-secondary);
-  white-space: pre;
+  font-family: var(--mono); font-size: 13px; line-height: 1.7;
+  display: block; color: var(--text-secondary); white-space: pre;
 }
-.code-block code .keyword { color: var(--purple); }
-.code-block code .string { color: var(--green); }
-.code-block code .func { color: var(--blue); }
-.code-block code .comment { color: var(--text-dim); }
-.code-block code .flag { color: var(--pink); }
-.code-block code .var { color: #f59e0b; }
+.code-block code .kw { color: var(--purple); }
+.code-block code .str { color: var(--green); }
+.code-block code .fn { color: var(--blue); }
+.code-block code .cm { color: var(--text-dim); }
+.code-block code .fl { color: var(--pink); }
+.code-block code .vr { color: #f59e0b; }
 
-/* ── PROBLEM/SOLUTION ──────────────────────────── */
-.compare-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-  margin-top: 48px;
-}
+/* COMPARE */
+.compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 48px; }
 .compare-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 32px;
-  position: relative;
-  overflow: hidden;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 32px; position: relative; overflow: hidden;
 }
-.compare-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 3px;
-}
-.compare-card.problem::before {
-  background: linear-gradient(90deg, var(--red), #f97316);
-}
-.compare-card.solution::before {
-  background: linear-gradient(90deg, var(--green), var(--blue));
-}
-.compare-card-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 24px;
-}
+.compare-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+.compare-card.problem::before { background: linear-gradient(90deg, var(--red), #f97316); }
+.compare-card.solution::before { background: linear-gradient(90deg, var(--green), var(--blue)); }
+.compare-card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
 .compare-card-badge {
-  padding: 4px 12px;
-  border-radius: 100px;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .05em;
+  padding: 4px 12px; border-radius: 100px; font-size: 12px;
+  font-weight: 600; text-transform: uppercase; letter-spacing: .05em;
 }
-.problem .compare-card-badge {
-  background: rgba(239,68,68,.12);
-  color: var(--red);
-}
-.solution .compare-card-badge {
-  background: rgba(34,197,94,.12);
-  color: var(--green);
-}
-.compare-card-title {
-  font-size: 20px;
-  font-weight: 700;
-}
+.problem .compare-card-badge { background: rgba(239,68,68,.12); color: var(--red); }
+.solution .compare-card-badge { background: rgba(34,197,94,.12); color: var(--green); }
+.compare-card-title { font-size: 20px; font-weight: 700; }
 .compare-visual {
-  background: rgba(0,0,0,.3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 20px;
-  margin-bottom: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  flex-wrap: wrap;
+  background: rgba(0,0,0,.3); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 20px; margin-bottom: 20px; display: flex; align-items: center;
+  justify-content: center; gap: 12px; flex-wrap: wrap;
 }
-.vis-box {
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  text-align: center;
-  min-width: 80px;
-}
-.vis-app {
-  background: rgba(59,130,246,.15);
-  border: 1px solid rgba(59,130,246,.3);
-  color: var(--blue);
-}
-.vis-nexus {
-  background: rgba(139,92,246,.15);
-  border: 1px solid rgba(139,92,246,.3);
-  color: var(--purple);
-}
-.vis-provider {
-  background: rgba(236,72,153,.15);
-  border: 1px solid rgba(236,72,153,.3);
-  color: var(--pink);
-  font-size: 12px;
-}
-.vis-provider-bad {
-  background: rgba(239,68,68,.1);
-  border: 1px solid rgba(239,68,68,.25);
-  color: var(--red);
-}
-.vis-arrow {
-  color: var(--text-dim);
-  font-size: 18px;
-}
-.compare-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.compare-list li {
-  font-size: 14px;
-  color: var(--text-secondary);
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  line-height: 1.5;
-}
+.vis-box { padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; text-align: center; min-width: 80px; }
+.vis-app { background: rgba(59,130,246,.15); border: 1px solid rgba(59,130,246,.3); color: var(--blue); }
+.vis-nexus { background: rgba(139,92,246,.15); border: 1px solid rgba(139,92,246,.3); color: var(--purple); }
+.vis-provider { background: rgba(236,72,153,.15); border: 1px solid rgba(236,72,153,.3); color: var(--pink); font-size: 12px; }
+.vis-provider-bad { background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.25); color: var(--red); }
+.vis-arrow { color: var(--text-dim); font-size: 18px; }
+.compare-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.compare-list li { font-size: 14px; color: var(--text-secondary); display: flex; align-items: flex-start; gap: 10px; line-height: 1.5; }
 .compare-list .icon-bad { color: var(--red); flex-shrink: 0; }
 .compare-list .icon-good { color: var(--green); flex-shrink: 0; }
+@media (max-width: 768px) { .compare-grid { grid-template-columns: 1fr; } }
 
-@media (max-width: 768px) {
-  .compare-grid { grid-template-columns: 1fr; }
-}
-
-/* ── TIMELINE ──────────────────────────────────── */
-.timeline {
-  position: relative;
-  margin-top: 56px;
-  padding-left: 48px;
-}
-.timeline::before {
-  content: '';
-  position: absolute;
-  left: 18px; top: 0; bottom: 0;
-  width: 2px;
-  background: linear-gradient(180deg, var(--blue), var(--purple), var(--pink), var(--green));
-  border-radius: 2px;
-}
-.timeline-step {
-  position: relative;
-  padding-bottom: 48px;
-}
-.timeline-step:last-child { padding-bottom: 0; }
-.timeline-dot {
-  position: absolute;
-  left: -48px; top: 0;
-  width: 36px; height: 36px;
-  border-radius: 50%;
-  background: var(--card);
-  border: 2px solid var(--purple);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  z-index: 1;
-}
-.timeline-content {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 28px;
-}
-.timeline-step-label {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: .08em;
-  color: var(--purple);
-  font-weight: 600;
-  margin-bottom: 6px;
-}
-.timeline-step-title {
-  font-size: 20px;
-  font-weight: 700;
-  margin-bottom: 8px;
-}
-.timeline-step-desc {
-  font-size: 14px;
-  color: var(--text-secondary);
-  margin-bottom: 16px;
-  line-height: 1.6;
-}
-.timeline-code {
-  margin-top: 12px;
-}
-
-/* Flow visual in step 4 */
-.flow-mini {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  padding: 16px;
-  background: rgba(0,0,0,.3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  margin-top: 12px;
-}
-.flow-mini-node {
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  background: rgba(139,92,246,.12);
-  border: 1px solid rgba(139,92,246,.25);
-  color: var(--purple);
-  white-space: nowrap;
-}
-.flow-mini-arrow {
-  color: var(--text-dim);
-  font-size: 14px;
-}
-
-@media (max-width: 600px) {
-  .timeline { padding-left: 40px; }
-  .timeline::before { left: 14px; }
-  .timeline-dot { left: -40px; width: 30px; height: 30px; font-size: 14px; }
-}
-
-/* ── INTEGRATION CARDS ─────────────────────────── */
-.integration-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
-  margin-top: 48px;
-}
-.integration-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 28px;
-  transition: border-color .2s, transform .2s;
-}
-.integration-card:hover {
-  border-color: rgba(139,92,246,.3);
-  transform: translateY(-2px);
-}
-.integration-card-title {
-  font-size: 18px;
-  font-weight: 700;
-  margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.integration-card-rec {
-  font-size: 10px;
-  padding: 2px 8px;
-  border-radius: 100px;
-  background: rgba(34,197,94,.12);
-  color: var(--green);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .05em;
-}
-.integration-card .code-block {
-  margin-bottom: 16px;
-}
-.integration-supports {
-  font-size: 13px;
-  color: var(--text-dim);
-  margin-bottom: 8px;
-  line-height: 1.6;
-}
-.integration-supports strong {
-  color: var(--text-secondary);
-}
-.integration-difficulty {
-  font-size: 13px;
-  color: var(--text-dim);
-}
-.integration-difficulty strong {
-  color: var(--text-secondary);
-}
-
-@media (max-width: 900px) {
-  .integration-grid { grid-template-columns: 1fr; }
-}
-
-/* ── PIPELINE ──────────────────────────────────── */
-.pipeline-wrap {
-  margin-top: 48px;
-  overflow-x: auto;
-  padding-bottom: 16px;
-}
-.pipeline {
-  display: flex;
-  align-items: stretch;
-  gap: 0;
-  min-width: 900px;
-  position: relative;
-}
+/* PIPELINE */
+.pipeline-wrap { margin-top: 48px; overflow-x: auto; padding-bottom: 16px; }
+.pipeline { display: flex; align-items: stretch; gap: 0; min-width: 1100px; position: relative; }
 .pipeline-node {
-  flex: 1;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 16px 12px;
-  text-align: center;
-  position: relative;
-  z-index: 1;
-  transition: border-color .3s;
+  flex: 1; background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 14px 10px; text-align: center;
+  position: relative; z-index: 1; transition: border-color .3s;
 }
-.pipeline-node.active {
-  border-color: var(--purple);
-  box-shadow: 0 0 20px rgba(139,92,246,.15);
-}
-.pipeline-node-icon {
-  font-size: 22px;
-  margin-bottom: 6px;
-}
-.pipeline-node-name {
-  font-size: 12px;
-  font-weight: 700;
-  margin-bottom: 4px;
-  text-transform: uppercase;
-  letter-spacing: .04em;
-}
-.pipeline-node-desc {
-  font-size: 11px;
-  color: var(--text-dim);
-  line-height: 1.4;
-  margin-bottom: 6px;
-}
-.pipeline-node-time {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--green);
-  font-family: var(--mono);
-}
+.pipeline-node.active { border-color: var(--purple); box-shadow: 0 0 20px rgba(139,92,246,.15); }
+.pipeline-node-icon { font-size: 20px; margin-bottom: 4px; }
+.pipeline-node-name { font-size: 11px; font-weight: 700; margin-bottom: 3px; text-transform: uppercase; letter-spacing: .04em; }
+.pipeline-node-desc { font-size: 10px; color: var(--text-dim); line-height: 1.4; margin-bottom: 4px; }
+.pipeline-node-time { font-size: 10px; font-weight: 600; color: var(--green); font-family: var(--mono); }
 .pipeline-connector {
-  width: 24px;
-  min-width: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  z-index: 0;
+  width: 20px; min-width: 20px; display: flex; align-items: center;
+  justify-content: center; position: relative; z-index: 0;
 }
-.pipeline-connector::before {
-  content: '';
-  width: 100%;
-  height: 2px;
-  background: var(--border);
-}
-.pipeline-pulse {
-  position: absolute;
-  top: 0; left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 2;
-}
+.pipeline-connector::before { content: ''; width: 100%; height: 2px; background: var(--border); }
+.pipeline-pulse { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
 .pipeline-pulse-dot {
-  position: absolute;
-  width: 10px; height: 10px;
-  border-radius: 50%;
+  position: absolute; width: 10px; height: 10px; border-radius: 50%;
   background: var(--purple);
   box-shadow: 0 0 12px var(--purple), 0 0 24px rgba(139,92,246,.3);
-  top: 50%;
-  transform: translateY(-50%);
-  animation: pipelinePulse 4s ease-in-out infinite;
+  top: 50%; transform: translateY(-50%);
+  animation: pipelinePulse 6s ease-in-out infinite;
 }
 @keyframes pipelinePulse {
   0% { left: 0; opacity: 0; }
@@ -614,406 +210,171 @@ section { padding: 100px 0; }
   100% { left: calc(100% - 10px); opacity: 0; }
 }
 
-/* ── LIVE EXAMPLE ──────────────────────────────── */
-.example-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-  margin-top: 48px;
+/* LEARNING LOOP */
+.loop-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 48px; }
+.loop-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 28px; transition: border-color .2s, transform .2s;
 }
-.example-panel {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
+.loop-card:hover { border-color: rgba(139,92,246,.3); transform: translateY(-2px); }
+.loop-card-icon { font-size: 32px; margin-bottom: 16px; }
+.loop-card-title { font-size: 18px; font-weight: 700; margin-bottom: 10px; }
+.loop-card-desc { font-size: 14px; color: var(--text-secondary); line-height: 1.7; }
+.loop-flow {
+  margin-top: 32px; display: flex; align-items: center; justify-content: center;
+  gap: 8px; flex-wrap: wrap; padding: 20px;
+  background: rgba(0,0,0,.3); border: 1px solid var(--border); border-radius: var(--radius-sm);
 }
-.example-panel-header {
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
+.loop-flow-node {
+  padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  background: rgba(139,92,246,.1); border: 1px solid rgba(139,92,246,.25); color: var(--purple);
 }
-.example-panel-header .dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-}
-.example-panel-header .dot-red { background: var(--red); }
-.example-panel-header .dot-yellow { background: #eab308; }
-.example-panel-header .dot-green { background: var(--green); }
-.example-panel-body {
-  padding: 20px;
-}
-.example-panel-body code {
-  font-family: var(--mono);
-  font-size: 12px;
-  line-height: 1.7;
-  color: var(--text-secondary);
-  display: block;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-.decision-line {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 6px 0;
-  font-size: 13px;
-  font-family: var(--mono);
-  line-height: 1.5;
-}
-.decision-check {
-  color: var(--green);
-  font-weight: 700;
-  flex-shrink: 0;
-}
-.decision-label {
-  color: var(--text-dim);
-}
-.decision-value {
-  color: var(--text-secondary);
-}
-.cost-badge {
-  margin-top: 24px;
-  background: rgba(34,197,94,.06);
-  border: 1px solid rgba(34,197,94,.2);
-  border-radius: var(--radius-sm);
-  padding: 16px 20px;
-  text-align: center;
-  font-size: 14px;
-  color: var(--text-secondary);
-  line-height: 1.6;
-}
-.cost-badge .highlight-green {
-  color: var(--green);
-  font-weight: 700;
-}
-.cost-badge .highlight-red {
-  color: var(--red);
-  font-weight: 600;
-}
-.cost-badge .highlight-blue {
-  color: var(--blue);
-  font-weight: 600;
-}
-.cache-hit-card {
-  margin-top: 24px;
-  background: var(--card);
-  border: 1px solid rgba(59,130,246,.25);
-  border-radius: var(--radius);
-  padding: 20px;
-}
-.cache-hit-title {
-  font-size: 13px;
-  color: var(--text-dim);
-  margin-bottom: 12px;
-  font-style: italic;
-}
+.loop-flow-arrow { color: var(--text-dim); font-size: 16px; }
+@media (max-width: 900px) { .loop-grid { grid-template-columns: 1fr; } }
 
-@media (max-width: 768px) {
-  .example-grid { grid-template-columns: 1fr; }
+/* INTEGRATION */
+.integration-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 48px; }
+.integration-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 28px; transition: border-color .2s, transform .2s;
 }
+.integration-card:hover { border-color: rgba(139,92,246,.3); transform: translateY(-2px); }
+.integration-card-title {
+  font-size: 18px; font-weight: 700; margin-bottom: 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.integration-card-rec {
+  font-size: 10px; padding: 2px 8px; border-radius: 100px;
+  background: rgba(34,197,94,.12); color: var(--green);
+  font-weight: 600; text-transform: uppercase; letter-spacing: .05em;
+}
+.integration-card .code-block { margin-bottom: 16px; }
+.integration-supports { font-size: 13px; color: var(--text-dim); margin-bottom: 8px; line-height: 1.6; }
+.integration-supports strong { color: var(--text-secondary); }
+.integration-difficulty { font-size: 13px; color: var(--text-dim); }
+.integration-difficulty strong { color: var(--text-secondary); }
+@media (max-width: 900px) { .integration-grid { grid-template-columns: 1fr; } }
 
-/* ── ARCHITECTURE ──────────────────────────────── */
-.arch-diagram {
-  margin-top: 48px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 40px;
-  overflow-x: auto;
+/* LIVE DEMO */
+.demo-wrap { margin-top: 48px; }
+.demo-terminal {
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
 }
-.arch-inner {
-  min-width: 600px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0;
+.demo-terminal-header {
+  padding: 12px 20px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600; color: var(--text-secondary);
 }
-.arch-layer {
-  width: 100%;
-  max-width: 700px;
-  position: relative;
+.demo-terminal-header .dot { width: 8px; height: 8px; border-radius: 50%; }
+.dot-red { background: var(--red); }
+.dot-yellow { background: #eab308; }
+.dot-green { background: var(--green); }
+.demo-terminal-body { padding: 20px; }
+.demo-terminal-body code {
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.7;
+  color: var(--text-secondary); display: block; white-space: pre-wrap; word-break: break-all;
 }
-.arch-layer-label {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: .08em;
-  color: var(--text-dim);
-  font-weight: 600;
-  margin-bottom: 12px;
-  text-align: center;
+.demo-response {
+  margin-top: 24px; background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
 }
-.arch-boxes {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-  flex-wrap: wrap;
+.demo-response-header {
+  padding: 12px 20px; border-bottom: 1px solid var(--border);
+  font-size: 13px; font-weight: 600; color: var(--text-secondary);
+  display: flex; align-items: center; gap: 8px;
 }
-.arch-box {
-  padding: 12px 20px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: 600;
-  text-align: center;
-  min-width: 100px;
-  position: relative;
+.demo-response-body { padding: 20px; }
+.header-line {
+  display: flex; align-items: center; gap: 0; font-family: var(--mono);
+  font-size: 12.5px; line-height: 1.8; flex-wrap: wrap;
 }
-.arch-box-dev {
-  background: rgba(59,130,246,.08);
-  border: 1px solid rgba(59,130,246,.25);
-  color: var(--blue);
+.header-name { color: var(--purple); font-weight: 600; }
+.header-sep { color: var(--text-dim); }
+.header-value { color: var(--text-secondary); }
+.header-value.green { color: var(--green); }
+.header-value.blue { color: var(--blue); }
+.header-value.pink { color: var(--pink); }
+.header-annotation {
+  font-family: var(--font); font-size: 11px; color: var(--text-dim);
+  margin-left: 12px; font-style: italic;
 }
-.arch-box-lb {
-  background: rgba(139,92,246,.08);
-  border: 1px solid rgba(139,92,246,.25);
-  color: var(--purple);
+.demo-cost {
+  margin-top: 24px; background: rgba(34,197,94,.06); border: 1px solid rgba(34,197,94,.2);
+  border-radius: var(--radius-sm); padding: 16px 20px; text-align: center;
+  font-size: 14px; color: var(--text-secondary); line-height: 1.6;
 }
-.arch-box-nexus {
-  background: rgba(139,92,246,.12);
-  border: 2px solid rgba(139,92,246,.4);
-  color: var(--purple);
-  padding: 16px 24px;
-}
-.arch-box-component {
-  background: rgba(236,72,153,.08);
-  border: 1px solid rgba(236,72,153,.2);
-  color: var(--pink);
-  font-size: 12px;
-  padding: 8px 14px;
-}
-.arch-box-provider {
-  font-size: 13px;
-  padding: 12px 20px;
-}
-.arch-box-openai {
-  background: rgba(34,197,94,.06);
-  border: 1px solid rgba(34,197,94,.2);
-  color: var(--green);
-}
-.arch-box-claude {
-  background: rgba(59,130,246,.06);
-  border: 1px solid rgba(59,130,246,.2);
-  color: var(--blue);
-}
-.arch-box-ollama {
-  background: rgba(236,72,153,.06);
-  border: 1px solid rgba(236,72,153,.2);
-  color: var(--pink);
-}
-.arch-connector {
-  display: flex;
-  justify-content: center;
-  padding: 12px 0;
-}
-.arch-connector-line {
-  width: 2px;
-  height: 32px;
-  background: linear-gradient(180deg, rgba(139,92,246,.4), rgba(139,92,246,.15));
-  position: relative;
-}
-.arch-connector-line::after {
-  content: '▼';
-  position: absolute;
-  bottom: -10px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 10px;
-  color: var(--purple);
-}
-.arch-connector-multi {
-  display: flex;
-  justify-content: center;
-  gap: 100px;
-  padding: 8px 0;
-}
-.arch-connector-multi .arch-connector-line {
-  height: 24px;
-}
-.arch-nexus-inner {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-  margin-top: 8px;
-}
-.arch-cost-label {
-  font-size: 11px;
-  color: var(--text-dim);
-  display: block;
-  margin-top: 4px;
-}
+.demo-cost .hl-red { color: var(--red); font-weight: 600; }
+.demo-cost .hl-blue { color: var(--blue); font-weight: 600; }
+.demo-cost .hl-green { color: var(--green); font-weight: 700; }
 
-/* ── DEPLOY CARDS ──────────────────────────────── */
-.deploy-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
-  margin-top: 48px;
-}
-.deploy-card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 28px;
-  transition: border-color .2s, transform .2s;
-}
-.deploy-card:hover {
-  border-color: rgba(139,92,246,.3);
-  transform: translateY(-2px);
-}
-.deploy-card-icon {
-  font-size: 28px;
-  margin-bottom: 12px;
-}
-.deploy-card-title {
-  font-size: 18px;
-  font-weight: 700;
-  margin-bottom: 4px;
-}
-.deploy-card-type {
-  font-size: 12px;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: .06em;
-  font-weight: 600;
-  margin-bottom: 16px;
-}
-.deploy-card .code-block {
-  margin-bottom: 16px;
-}
-.deploy-card-features {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.deploy-card-features li {
-  font-size: 13px;
-  color: var(--text-secondary);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.deploy-card-features li::before {
-  content: '✓';
-  color: var(--green);
-  font-weight: 700;
-  font-size: 12px;
-}
-
-@media (max-width: 900px) {
-  .deploy-grid { grid-template-columns: 1fr; }
-}
-
-/* ── FOOTER ────────────────────────────────────── */
-.footer {
-  padding: 80px 0 40px;
-  border-top: 1px solid var(--border);
-}
+/* FOOTER */
+.footer { padding: 80px 0 40px; border-top: 1px solid var(--border); }
 .footer-top {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1.5fr;
-  gap: 48px;
-  margin-bottom: 48px;
+  display: grid; grid-template-columns: 2fr 1fr 1fr 1.5fr;
+  gap: 48px; margin-bottom: 48px;
 }
 .footer-brand .nav-logo { margin-bottom: 12px; }
-.footer-tagline {
-  font-size: 14px;
-  color: var(--text-dim);
-  line-height: 1.6;
-  max-width: 280px;
-}
+.footer-tagline { font-size: 14px; color: var(--text-dim); line-height: 1.6; max-width: 280px; }
 .footer-col h4 {
-  font-size: 13px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .06em;
-  color: var(--text);
-  margin-bottom: 16px;
+  font-size: 13px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--text); margin-bottom: 16px;
 }
-.footer-col a {
-  display: block;
-  font-size: 14px;
-  color: var(--text-dim);
-  padding: 4px 0;
-  transition: color .2s;
-}
+.footer-col a { display: block; font-size: 14px; color: var(--text-dim); padding: 4px 0; transition: color .2s; }
 .footer-col a:hover { color: var(--text); }
 .footer-bottom {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-top: 32px;
-  border-top: 1px solid var(--border);
-  flex-wrap: wrap;
-  gap: 12px;
+  display: flex; justify-content: space-between; align-items: center;
+  padding-top: 32px; border-top: 1px solid var(--border); flex-wrap: wrap; gap: 12px;
 }
-.footer-bottom p {
-  font-size: 13px;
-  color: var(--text-dim);
-}
+.footer-bottom p { font-size: 13px; color: var(--text-dim); }
 .footer-heart { color: var(--pink); }
-
-@media (max-width: 768px) {
-  .footer-top { grid-template-columns: 1fr 1fr; gap: 32px; }
-}
-@media (max-width: 480px) {
-  .footer-top { grid-template-columns: 1fr; }
-}
-
-/* ── EXTRA RESPONSIVE ──────────────────────────── */
 @media (max-width: 768px) {
   section { padding: 64px 0; }
   .hero { padding: 120px 0 64px; }
+  .footer-top { grid-template-columns: 1fr 1fr; gap: 32px; }
 }
+@media (max-width: 480px) { .footer-top { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
 
-<!-- ════════════════ NAV ════════════════ -->
+<!-- NAV -->
 <nav class="nav" id="nav">
   <div class="container">
-    <a href="index.html" class="nav-logo">
-      <div class="nav-logo-icon">N</div>
-      Nexus
-    </a>
+    <a href="index.html" class="nav-logo"><div class="nav-logo-icon">N</div> Nexus</a>
     <ul class="nav-links">
-      <li><a href="index.html#features">Features</a></li>
+      <li><a href="index.html">Home</a></li>
       <li><a href="how-it-works.html" class="active">How It Works</a></li>
       <li><a href="docs.html">Docs</a></li>
       <li><a href="playground.html">Playground</a></li>
+      <li><a href="pricing.html">Pricing</a></li>
       <li><a href="https://github.com" target="_blank" rel="noopener">GitHub</a></li>
       <li><a href="index.html#quickstart" class="nav-cta">Get Started Free</a></li>
     </ul>
-    <button class="mobile-toggle" id="mobile-toggle" aria-label="Menu">
-      <span></span><span></span><span></span>
-    </button>
+    <button class="mobile-toggle" id="mobile-toggle" aria-label="Menu"><span></span><span></span><span></span></button>
   </div>
 </nav>
 <div class="mobile-menu" id="mobile-menu">
-  <a href="index.html#features" onclick="closeMobile()">Features</a>
+  <a href="index.html" onclick="closeMobile()">Home</a>
   <a href="how-it-works.html" onclick="closeMobile()">How It Works</a>
-  <a href="docs.html">Docs</a>
-  <a href="playground.html">Playground</a>
+  <a href="docs.html" onclick="closeMobile()">Docs</a>
+  <a href="playground.html" onclick="closeMobile()">Playground</a>
+  <a href="pricing.html" onclick="closeMobile()">Pricing</a>
   <a href="https://github.com" target="_blank" rel="noopener">GitHub</a>
   <a href="index.html#quickstart" class="nav-cta" style="text-align:center;display:block;margin-top:16px;" onclick="closeMobile()">Get Started Free</a>
 </div>
 
-<!-- ════════════════ SECTION 1: HERO ════════════════ -->
+<!-- SECTION 1: HERO -->
 <section class="hero">
   <div class="container">
     <div class="fade-in">
       <h1><span class="gradient-text">How Nexus Works</span></h1>
       <p class="subtitle">One endpoint. Every AI tool. Automatic savings.</p>
-      <p class="description">Nexus is a transparent proxy that sits between your applications and LLM providers. No code changes required — just point your tools at Nexus and watch costs drop.</p>
+      <p class="description">Nexus is a transparent proxy that sits between your applications and LLM providers. Every request flows through a 10-step intelligent pipeline that compresses, caches, classifies, routes, and evaluates &mdash; slashing costs up to 70% without any code changes.</p>
     </div>
   </div>
 </section>
 
-<!-- ════════════════ SECTION 2: PROBLEM → SOLUTION ════════════════ -->
+<!-- SECTION 2: BEFORE / AFTER -->
 <section style="padding-top: 0;">
   <div class="container">
     <div class="section-center fade-in">
@@ -1023,31 +384,32 @@ section { padding: 100px 0; }
     <div class="compare-grid">
       <div class="compare-card problem fade-in">
         <div class="compare-card-header">
-          <span class="compare-card-badge">✕ Without Nexus</span>
+          <span class="compare-card-badge">&#x2715; Without Nexus</span>
         </div>
         <div class="compare-card-title" style="margin-bottom:16px;">Direct API Calls</div>
         <div class="compare-visual">
           <div class="vis-box vis-app">Your App</div>
-          <span class="vis-arrow">→</span>
+          <span class="vis-arrow">&rarr;</span>
           <div class="vis-box vis-provider-bad">OpenAI ($$$)</div>
         </div>
         <ul class="compare-list">
-          <li><span class="icon-bad">✕</span> Every request hits expensive models</li>
-          <li><span class="icon-bad">✕</span> No caching, no routing intelligence</li>
-          <li><span class="icon-bad">✕</span> Single point of failure</li>
-          <li><span class="icon-bad">✕</span> Zero visibility into costs</li>
+          <li><span class="icon-bad">&#x2715;</span> Every request hits the most expensive model</li>
+          <li><span class="icon-bad">&#x2715;</span> No caching &mdash; identical prompts pay full price</li>
+          <li><span class="icon-bad">&#x2715;</span> Single point of failure, no fallback</li>
+          <li><span class="icon-bad">&#x2715;</span> Zero visibility into costs or quality</li>
+          <li><span class="icon-bad">&#x2715;</span> No learning &mdash; same mistakes repeated</li>
         </ul>
       </div>
       <div class="compare-card solution fade-in">
         <div class="compare-card-header">
-          <span class="compare-card-badge">✓ With Nexus</span>
+          <span class="compare-card-badge">&#x2713; With Nexus</span>
         </div>
         <div class="compare-card-title" style="margin-bottom:16px;">Intelligent Routing</div>
         <div class="compare-visual">
           <div class="vis-box vis-app">Your App</div>
-          <span class="vis-arrow">→</span>
+          <span class="vis-arrow">&rarr;</span>
           <div class="vis-box vis-nexus">Nexus</div>
-          <span class="vis-arrow">→</span>
+          <span class="vis-arrow">&rarr;</span>
           <div style="display:flex;flex-direction:column;gap:4px;">
             <div class="vis-box vis-provider" style="padding:4px 10px;font-size:11px;">OpenAI</div>
             <div class="vis-box vis-provider" style="padding:4px 10px;font-size:11px;">Anthropic</div>
@@ -1055,433 +417,270 @@ section { padding: 100px 0; }
           </div>
         </div>
         <ul class="compare-list">
-          <li><span class="icon-good">✓</span> Smart routing to the right model tier</li>
-          <li><span class="icon-good">✓</span> Semantic caching — instant repeat responses</li>
-          <li><span class="icon-good">✓</span> Circuit breaker auto-failover</li>
-          <li><span class="icon-good">✓</span> Full observability + cost dashboards</li>
+          <li><span class="icon-good">&#x2713;</span> Smart routing to the right model for each task</li>
+          <li><span class="icon-good">&#x2713;</span> 7-layer caching &mdash; instant repeat responses</li>
+          <li><span class="icon-good">&#x2713;</span> Circuit breaker auto-failover across providers</li>
+          <li><span class="icon-good">&#x2713;</span> Full observability + real-time cost dashboards</li>
+          <li><span class="icon-good">&#x2713;</span> Continuous learning via shadow eval &amp; A/B tests</li>
         </ul>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ════════════════ SECTION 3: INTEGRATION FLOW ════════════════ -->
-<section>
-  <div class="container">
-    <div class="section-center fade-in">
-      <p class="section-label">Integration Flow</p>
-      <h2 class="section-title">Up and Running in <span class="gradient-text">5 Steps</span></h2>
-      <p class="section-subtitle">From zero to optimized AI inference in minutes, not weeks.</p>
-    </div>
-    <div class="timeline">
-      <!-- Step 1 -->
-      <div class="timeline-step fade-in">
-        <div class="timeline-dot">🚀</div>
-        <div class="timeline-content">
-          <div class="timeline-step-label">Step 1</div>
-          <div class="timeline-step-title">Deploy (1 command)</div>
-          <div class="timeline-step-desc">Spin up Nexus with a single command. Docker Compose brings up the gateway, cache, and monitoring stack together.</div>
-          <div class="timeline-code">
-            <div class="code-block"><code><span class="comment"># Docker Compose (recommended)</span>
-docker compose up
-
-<span class="comment"># Or Kubernetes via Helm</span>
-helm install nexus deploy/helm/nexus/</code></div>
-          </div>
-        </div>
-      </div>
-      <!-- Step 2 -->
-      <div class="timeline-step fade-in">
-        <div class="timeline-dot">🔌</div>
-        <div class="timeline-content">
-          <div class="timeline-step-label">Step 2</div>
-          <div class="timeline-step-title">Connect Providers</div>
-          <div class="timeline-step-desc">Add your API keys. Nexus supports OpenAI, Anthropic, local models via Ollama, and more.</div>
-          <div class="timeline-code">
-            <div class="code-block"><code><span class="keyword">providers</span>:
-  - <span class="keyword">name</span>: <span class="string">openai</span>
-    <span class="keyword">api_key</span>: <span class="var">${OPENAI_API_KEY}</span>
-  - <span class="keyword">name</span>: <span class="string">anthropic</span>
-    <span class="keyword">api_key</span>: <span class="var">${ANTHROPIC_API_KEY}</span></code></div>
-          </div>
-        </div>
-      </div>
-      <!-- Step 3 -->
-      <div class="timeline-step fade-in">
-        <div class="timeline-dot">🎯</div>
-        <div class="timeline-content">
-          <div class="timeline-step-label">Step 3</div>
-          <div class="timeline-step-title">Point Your App (1 line change)</div>
-          <div class="timeline-step-desc">Change the base URL in your existing code. That's it — the API is fully OpenAI-compatible.</div>
-          <div class="timeline-code">
-            <div class="code-block"><code><span class="comment"># Python — one line change</span>
-client = <span class="func">OpenAI</span>(<span class="keyword">base_url</span>=<span class="string">"https://nexus.company.com/v1"</span>)</code></div>
-          </div>
-        </div>
-      </div>
-      <!-- Step 4 -->
-      <div class="timeline-step fade-in">
-        <div class="timeline-dot">⚡</div>
-        <div class="timeline-content">
-          <div class="timeline-step-label">Step 4</div>
-          <div class="timeline-step-title">Automatic Value Kicks In</div>
-          <div class="timeline-step-desc">Every request is automatically analyzed, cached, and routed to the optimal model — no configuration needed.</div>
-          <div class="flow-mini">
-            <span class="flow-mini-node">Request</span>
-            <span class="flow-mini-arrow">→</span>
-            <span class="flow-mini-node">Cache Check</span>
-            <span class="flow-mini-arrow">→</span>
-            <span class="flow-mini-node">Route</span>
-            <span class="flow-mini-arrow">→</span>
-            <span class="flow-mini-node">Provider</span>
-            <span class="flow-mini-arrow">→</span>
-            <span class="flow-mini-node">Cache Store</span>
-            <span class="flow-mini-arrow">→</span>
-            <span class="flow-mini-node">Response</span>
-          </div>
-        </div>
-      </div>
-      <!-- Step 5 -->
-      <div class="timeline-step fade-in">
-        <div class="timeline-dot">📊</div>
-        <div class="timeline-content">
-          <div class="timeline-step-label">Step 5</div>
-          <div class="timeline-step-title">Monitor &amp; Save</div>
-          <div class="timeline-step-desc">Open Grafana. See 50–70% cost reduction. Track every request, cache hit, and model decision in real-time dashboards.</div>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ════════════════ SECTION 4: WORKS WITH EVERY AI TOOL ════════════════ -->
-<section>
-  <div class="container">
-    <div class="section-center fade-in">
-      <p class="section-label">Universal Compatibility</p>
-      <h2 class="section-title">Works With <span class="gradient-text">Every AI Tool</span></h2>
-      <p class="section-subtitle">Claude Code, Copilot CLI, Cursor, custom apps — if it calls an LLM API, Nexus optimizes it.</p>
-    </div>
-    <div class="integration-grid">
-      <div class="integration-card fade-in">
-        <div class="integration-card-title">
-          🔧 Environment Variable
-          <span class="integration-card-rec">Recommended</span>
-        </div>
-        <div class="code-block"><code><span class="keyword">export</span> <span class="var">OPENAI_BASE_URL</span>=<span class="string">https://nexus.company.com/v1</span>
-<span class="comment"># Every AI tool on this machine now</span>
-<span class="comment"># routes through Nexus</span></code></div>
-        <p class="integration-supports"><strong>Supports:</strong> Claude Code, Copilot CLI, Cursor, Continue, Aider</p>
-        <p class="integration-difficulty"><strong>Difficulty:</strong> ⭐ (1 line)</p>
-      </div>
-      <div class="integration-card fade-in">
-        <div class="integration-card-title">🏢 Corporate Proxy</div>
-        <div class="code-block"><code><span class="comment"># IT pushes via MDM / Group Policy</span>
-<span class="keyword">export</span> <span class="var">HTTPS_PROXY</span>=<span class="string">https://nexus.company.com:443</span></code></div>
-        <p class="integration-supports"><strong>Supports:</strong> All tools automatically, zero developer action</p>
-        <p class="integration-difficulty"><strong>Difficulty:</strong> ⭐ (IT-managed)</p>
-      </div>
-      <div class="integration-card fade-in">
-        <div class="integration-card-title">🌐 VPN / Network Policy</div>
-        <div class="code-block"><code><span class="comment"># Corporate VPN →</span>
-<span class="comment">#   Network rules route LLM traffic →</span>
-<span class="comment">#     Nexus</span>
-<span class="comment"># Devs configure nothing.</span>
-<span class="comment"># SSO authenticates automatically.</span></code></div>
-        <p class="integration-supports"><strong>Supports:</strong> Entire org, invisible to developers</p>
-        <p class="integration-difficulty"><strong>Difficulty:</strong> ⭐⭐ (infra team setup)</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ════════════════ SECTION 5: REQUEST PIPELINE ════════════════ -->
+<!-- SECTION 3: THE 10-STEP PIPELINE -->
 <section>
   <div class="container">
     <div class="section-center fade-in">
       <p class="section-label">Request Pipeline</p>
-      <h2 class="section-title">Inside <span class="gradient-text">Every Request</span></h2>
-      <p class="section-subtitle">Each request flows through a high-performance pipeline of intelligent middleware.</p>
+      <h2 class="section-title">The <span class="gradient-text">10-Step Pipeline</span></h2>
+      <p class="section-subtitle">Every request flows through this high-performance pipeline in milliseconds. Each step adds intelligence without adding latency.</p>
     </div>
     <div class="pipeline-wrap fade-in">
       <div class="pipeline" id="pipeline">
-        <div class="pipeline-pulse">
-          <div class="pipeline-pulse-dot"></div>
-        </div>
+        <div class="pipeline-pulse"><div class="pipeline-pulse-dot"></div></div>
         <div class="pipeline-node">
-          <div class="pipeline-node-icon">📨</div>
-          <div class="pipeline-node-name">Request</div>
-          <div class="pipeline-node-desc">Incoming API call</div>
-          <div class="pipeline-node-time">0ms</div>
-        </div>
-        <div class="pipeline-connector"></div>
-        <div class="pipeline-node">
-          <div class="pipeline-node-icon">🔐</div>
-          <div class="pipeline-node-name">Auth/SSO</div>
-          <div class="pipeline-node-desc">Verify identity &amp; permissions</div>
-          <div class="pipeline-node-time">&lt; 1ms</div>
-        </div>
-        <div class="pipeline-connector"></div>
-        <div class="pipeline-node">
-          <div class="pipeline-node-icon">🛡️</div>
-          <div class="pipeline-node-name">Prompt Guard</div>
-          <div class="pipeline-node-desc">PII &amp; injection scan</div>
-          <div class="pipeline-node-time">2ms</div>
-        </div>
-        <div class="pipeline-connector"></div>
-        <div class="pipeline-node">
-          <div class="pipeline-node-icon">💾</div>
-          <div class="pipeline-node-name">Cache</div>
-          <div class="pipeline-node-desc">Semantic similarity lookup</div>
-          <div class="pipeline-node-time">3ms</div>
-        </div>
-        <div class="pipeline-connector"></div>
-        <div class="pipeline-node">
-          <div class="pipeline-node-icon">🧭</div>
-          <div class="pipeline-node-name">Route</div>
-          <div class="pipeline-node-desc">Classify &amp; pick best model</div>
-          <div class="pipeline-node-time">5ms</div>
-        </div>
-        <div class="pipeline-connector"></div>
-        <div class="pipeline-node">
-          <div class="pipeline-node-icon">☁️</div>
-          <div class="pipeline-node-name">Provider</div>
-          <div class="pipeline-node-desc">Forward to LLM</div>
-          <div class="pipeline-node-time">~500ms</div>
-        </div>
-        <div class="pipeline-connector"></div>
-        <div class="pipeline-node">
-          <div class="pipeline-node-icon">📝</div>
-          <div class="pipeline-node-name">Store</div>
-          <div class="pipeline-node-desc">Cache response for reuse</div>
+          <div class="pipeline-node-icon">&#x1f4e6;</div>
+          <div class="pipeline-node-name">Compress</div>
+          <div class="pipeline-node-desc">Shrink prompts via whitespace, synonym &amp; system prompt dedup</div>
           <div class="pipeline-node-time">1ms</div>
         </div>
         <div class="pipeline-connector"></div>
         <div class="pipeline-node">
-          <div class="pipeline-node-icon">📊</div>
-          <div class="pipeline-node-name">Trace</div>
-          <div class="pipeline-node-desc">Emit metrics &amp; logs</div>
-          <div class="pipeline-node-time">&lt; 1ms</div>
+          <div class="pipeline-node-icon">&#x1f6e1;&#xfe0f;</div>
+          <div class="pipeline-node-name">Security</div>
+          <div class="pipeline-node-desc">Auth, rate limit, PII scan, injection guard</div>
+          <div class="pipeline-node-time">2ms</div>
         </div>
         <div class="pipeline-connector"></div>
         <div class="pipeline-node">
-          <div class="pipeline-node-icon">✅</div>
-          <div class="pipeline-node-name">Response</div>
-          <div class="pipeline-node-desc">Return to caller</div>
-          <div class="pipeline-node-time">0ms</div>
+          <div class="pipeline-node-icon">&#x1f4be;</div>
+          <div class="pipeline-node-name">Cache</div>
+          <div class="pipeline-node-desc">7-layer lookup: exact, BM25, semantic, cluster</div>
+          <div class="pipeline-node-time">3ms</div>
         </div>
+        <div class="pipeline-connector"></div>
+        <div class="pipeline-node">
+          <div class="pipeline-node-icon">&#x1f9ed;</div>
+          <div class="pipeline-node-name">Classify</div>
+          <div class="pipeline-node-desc">TF-IDF complexity scoring (0&ndash;1)</div>
+          <div class="pipeline-node-time">2ms</div>
+        </div>
+        <div class="pipeline-connector"></div>
+        <div class="pipeline-node">
+          <div class="pipeline-node-icon">&#x1f9ea;</div>
+          <div class="pipeline-node-name">A/B Assign</div>
+          <div class="pipeline-node-desc">Assign experiment variant if active</div>
+          <div class="pipeline-node-time">&lt;1ms</div>
+        </div>
+        <div class="pipeline-connector"></div>
+        <div class="pipeline-node">
+          <div class="pipeline-node-icon">&#x1f3af;</div>
+          <div class="pipeline-node-name">Route</div>
+          <div class="pipeline-node-desc">Pick optimal model &amp; tier</div>
+          <div class="pipeline-node-time">1ms</div>
+        </div>
+        <div class="pipeline-connector"></div>
+        <div class="pipeline-node">
+          <div class="pipeline-node-icon">&#x26a1;</div>
+          <div class="pipeline-node-name">Cascade</div>
+          <div class="pipeline-node-desc">Escalate tier if confidence is low</div>
+          <div class="pipeline-node-time">0ms*</div>
+        </div>
+        <div class="pipeline-connector"></div>
+        <div class="pipeline-node">
+          <div class="pipeline-node-icon">&#x2601;&#xfe0f;</div>
+          <div class="pipeline-node-name">Send</div>
+          <div class="pipeline-node-desc">Forward to LLM provider</div>
+          <div class="pipeline-node-time">~500ms</div>
+        </div>
+        <div class="pipeline-connector"></div>
+        <div class="pipeline-node">
+          <div class="pipeline-node-icon">&#x1f4ca;</div>
+          <div class="pipeline-node-name">Eval</div>
+          <div class="pipeline-node-desc">Score response, update confidence map</div>
+          <div class="pipeline-node-time">1ms</div>
+        </div>
+        <div class="pipeline-connector"></div>
+        <div class="pipeline-node">
+          <div class="pipeline-node-icon">&#x1f441;&#xfe0f;</div>
+          <div class="pipeline-node-name">Shadow</div>
+          <div class="pipeline-node-desc">5% get parallel premium eval</div>
+          <div class="pipeline-node-time">async</div>
+        </div>
+      </div>
+    </div>
+    <p style="text-align:center;font-size:13px;color:var(--text-dim);margin-top:16px;">* Cascade only triggers when initial response confidence is below threshold. Shadow eval runs asynchronously.</p>
+  </div>
+</section>
+
+<!-- SECTION 4: THE LEARNING LOOP -->
+<section>
+  <div class="container">
+    <div class="section-center fade-in">
+      <p class="section-label">Continuous Improvement</p>
+      <h2 class="section-title">The <span class="gradient-text">Learning Loop</span></h2>
+      <p class="section-subtitle">Nexus gets smarter over time. Three feedback mechanisms work together to continuously improve routing decisions.</p>
+    </div>
+    <div class="loop-grid">
+      <div class="loop-card fade-in">
+        <div class="loop-card-icon">&#x1f441;&#xfe0f;</div>
+        <div class="loop-card-title">Shadow Evaluation</div>
+        <div class="loop-card-desc">5% of downrouted requests are <strong>silently re-sent to the premium model</strong>. Nexus compares both responses to verify the cheaper model matched quality. If it didn't, the confidence map is updated and future similar requests route higher.</div>
+      </div>
+      <div class="loop-card fade-in">
+        <div class="loop-card-icon">&#x1f5fa;&#xfe0f;</div>
+        <div class="loop-card-title">Confidence Map</div>
+        <div class="loop-card-desc">A living matrix of <strong>model &times; task-type &times; quality scores</strong>. Every eval result updates this map. Confidence scores decay over time (0.995 per day), ensuring stale data doesn't poison routing decisions.</div>
+      </div>
+      <div class="loop-card fade-in">
+        <div class="loop-card-icon">&#x1f9ea;</div>
+        <div class="loop-card-title">A/B Experiments</div>
+        <div class="loop-card-desc">Create controlled experiments that <strong>split traffic between model variants</strong>. Nexus tracks quality, latency, and cost per variant, then auto-concludes when statistical significance (p &lt; 0.05) is reached.</div>
+      </div>
+    </div>
+    <div class="loop-flow fade-in">
+      <span class="loop-flow-node">Request Arrives</span>
+      <span class="loop-flow-arrow">&rarr;</span>
+      <span class="loop-flow-node">Route via Confidence Map</span>
+      <span class="loop-flow-arrow">&rarr;</span>
+      <span class="loop-flow-node">Get Response</span>
+      <span class="loop-flow-arrow">&rarr;</span>
+      <span class="loop-flow-node">Shadow Eval (5%)</span>
+      <span class="loop-flow-arrow">&rarr;</span>
+      <span class="loop-flow-node">Update Confidence Map</span>
+      <span class="loop-flow-arrow">&rarr;</span>
+      <span class="loop-flow-node" style="background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.25);color:var(--green);">Smarter Routing &#x2713;</span>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION 5: INTEGRATION -->
+<section>
+  <div class="container">
+    <div class="section-center fade-in">
+      <p class="section-label">Integration</p>
+      <h2 class="section-title">Three Ways to <span class="gradient-text">Integrate</span></h2>
+      <p class="section-subtitle">From a single environment variable to a full sidecar deployment.</p>
+    </div>
+    <div class="integration-grid">
+      <div class="integration-card fade-in">
+        <div class="integration-card-title">
+          &#x1f50c; SDK Drop-In
+          <span class="integration-card-rec">Recommended</span>
+        </div>
+        <div class="code-block"><code><span class="cm"># Python</span>
+client = <span class="fn">OpenAI</span>(
+    <span class="kw">base_url</span>=<span class="str">"https://nexus.company.com/v1"</span>
+)
+
+<span class="cm"># Or just set env var:</span>
+<span class="kw">export</span> <span class="vr">OPENAI_BASE_URL</span>=<span class="str">https://nexus.company.com/v1</span></code></div>
+        <p class="integration-supports"><strong>Supports:</strong> Python, Node.js, Go, any OpenAI SDK</p>
+        <p class="integration-difficulty"><strong>Difficulty:</strong> &#x2b50; (1 line change)</p>
+      </div>
+      <div class="integration-card fade-in">
+        <div class="integration-card-title">&#x1f3e2; API Gateway</div>
+        <div class="code-block"><code><span class="cm"># IT pushes via MDM / Group Policy</span>
+<span class="kw">export</span> <span class="vr">HTTPS_PROXY</span>=<span class="str">https://nexus.company.com:443</span>
+
+<span class="cm"># Or corporate DNS:</span>
+<span class="cm"># api.openai.com &rarr; nexus.internal</span></code></div>
+        <p class="integration-supports"><strong>Supports:</strong> All tools automatically &mdash; zero developer action</p>
+        <p class="integration-difficulty"><strong>Difficulty:</strong> &#x2b50;&#x2b50; (IT-managed)</p>
+      </div>
+      <div class="integration-card fade-in">
+        <div class="integration-card-title">&#x1f433; Sidecar</div>
+        <div class="code-block"><code><span class="cm"># docker-compose.yaml</span>
+<span class="kw">services</span>:
+  <span class="kw">app</span>:
+    <span class="kw">environment</span>:
+      <span class="vr">OPENAI_BASE_URL</span>: <span class="str">http://nexus:8080/v1</span>
+  <span class="kw">nexus</span>:
+    <span class="kw">image</span>: <span class="str">nexus-ai/nexus:latest</span></code></div>
+        <p class="integration-supports"><strong>Supports:</strong> Kubernetes pods, Docker Compose stacks</p>
+        <p class="integration-difficulty"><strong>Difficulty:</strong> &#x2b50;&#x2b50; (infra team setup)</p>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ════════════════ SECTION 6: LIVE EXAMPLE ════════════════ -->
+<!-- SECTION 6: LIVE DEMO -->
 <section>
   <div class="container">
     <div class="section-center fade-in">
-      <p class="section-label">Live Example</p>
+      <p class="section-label">Live Demo</p>
       <h2 class="section-title">See It <span class="gradient-text">In Action</span></h2>
-      <p class="section-subtitle">Watch how Nexus processes a real request, saves money, and speeds up the next one.</p>
+      <p class="section-subtitle">A real request with all Nexus headers annotated.</p>
     </div>
-    <div class="example-grid fade-in">
-      <!-- Request Panel -->
-      <div class="example-panel">
-        <div class="example-panel-header">
+    <div class="demo-wrap fade-in">
+      <!-- Request -->
+      <div class="demo-terminal">
+        <div class="demo-terminal-header">
           <span class="dot dot-red"></span>
           <span class="dot dot-yellow"></span>
           <span class="dot dot-green"></span>
-          Terminal — Request
+          Terminal &mdash; Request
         </div>
-        <div class="example-panel-body">
-          <code><span class="func">$</span> curl <span class="flag">-X POST</span> <span class="string">https://nexus.company.com/v1/chat/completions</span> \
-  <span class="flag">-H</span> <span class="string">"Authorization: Bearer sk-..."</span> \
-  <span class="flag">-d</span> <span class="string">'{"model": "gpt-4o",
-    "messages": [{"role": "user",
-      "content": "How do I reverse a list in Python?"}]}'</span></code>
+        <div class="demo-terminal-body">
+          <code><span style="color:var(--blue);">$</span> curl <span style="color:var(--pink);">-X POST</span> <span style="color:var(--green);">https://nexus.company.com/v1/chat/completions</span> \
+  <span style="color:var(--pink);">-H</span> <span style="color:var(--green);">"Authorization: Bearer nxs_live_abc123"</span> \
+  <span style="color:var(--pink);">-H</span> <span style="color:var(--green);">"X-Workflow-ID: wf-deploy-42"</span> \
+  <span style="color:var(--pink);">-H</span> <span style="color:var(--green);">"X-Agent-Role: engineer"</span> \
+  <span style="color:var(--pink);">-H</span> <span style="color:var(--green);">"X-Team: platform"</span> \
+  <span style="color:var(--pink);">-H</span> <span style="color:var(--green);">"X-Nexus-Explain: true"</span> \
+  <span style="color:var(--pink);">-d</span> <span style="color:var(--green);">'{"model": "gpt-4o",
+     "messages": [{"role": "user",
+       "content": "How do I reverse a list in Python?"}]}'</span></code>
         </div>
       </div>
-      <!-- Decision Panel -->
-      <div class="example-panel">
-        <div class="example-panel-header">
-          <span class="dot dot-red"></span>
-          <span class="dot dot-yellow"></span>
+
+      <!-- Response Headers -->
+      <div class="demo-response">
+        <div class="demo-response-header">
           <span class="dot dot-green"></span>
-          Nexus — Decision Engine
+          Response Headers &mdash; Annotated
         </div>
-        <div class="example-panel-body">
-          <div class="decision-line"><span class="decision-check">✓</span> <span class="decision-label">Auth:</span> <span class="decision-value">Bearer token valid (user: jsmith@company.com)</span></div>
-          <div class="decision-line"><span class="decision-check">✓</span> <span class="decision-label">Prompt Guard:</span> <span class="decision-value">Clean (risk: 0.02)</span></div>
-          <div class="decision-line"><span class="decision-check">✓</span> <span class="decision-label">Cache:</span> <span class="decision-value">MISS (no previous match)</span></div>
-          <div class="decision-line"><span class="decision-check">✓</span> <span class="decision-label">Classify:</span> <span class="decision-value">Low complexity (score: 0.18)</span></div>
-          <div class="decision-line"><span class="decision-check">✓</span> <span class="decision-label">Route:</span> <span class="decision-value" style="color:var(--green);">gpt-4o-mini instead of gpt-4o (97% cheaper)</span></div>
-          <div class="decision-line"><span class="decision-check">✓</span> <span class="decision-label">Provider:</span> <span class="decision-value">Response in 342ms</span></div>
-          <div class="decision-line"><span class="decision-check">✓</span> <span class="decision-label">Cache:</span> <span class="decision-value">Stored for future hits</span></div>
-          <div class="decision-line"><span class="decision-check">✓</span> <span class="decision-label">Trace:</span> <span class="decision-value" style="color:var(--text-dim);">abc123-def456</span></div>
+        <div class="demo-response-body">
+          <div class="header-line"><span class="header-name">X-Nexus-Model</span><span class="header-sep">: </span><span class="header-value green">gpt-4o-mini</span><span class="header-annotation">&#x2190; Downrouted from gpt-4o (97% cheaper)</span></div>
+          <div class="header-line"><span class="header-name">X-Nexus-Tier</span><span class="header-sep">: </span><span class="header-value">fast</span><span class="header-annotation">&#x2190; Low complexity detected (score: 0.12)</span></div>
+          <div class="header-line"><span class="header-name">X-Nexus-Provider</span><span class="header-sep">: </span><span class="header-value">openai</span><span class="header-annotation">&#x2190; Best available for this tier</span></div>
+          <div class="header-line"><span class="header-name">X-Nexus-Cost</span><span class="header-sep">: </span><span class="header-value green">0.00003</span><span class="header-annotation">&#x2190; vs $0.001 direct to gpt-4o</span></div>
+          <div class="header-line"><span class="header-name">X-Nexus-Cache</span><span class="header-sep">: </span><span class="header-value">miss</span><span class="header-annotation">&#x2190; First time seeing this prompt</span></div>
+          <div class="header-line"><span class="header-name">X-Nexus-Workflow-ID</span><span class="header-sep">: </span><span class="header-value blue">wf-deploy-42</span><span class="header-annotation">&#x2190; Echoed back for correlation</span></div>
+          <div class="header-line"><span class="header-name">X-Nexus-Workflow-Step</span><span class="header-sep">: </span><span class="header-value">1</span><span class="header-annotation">&#x2190; First step in this workflow</span></div>
+          <div class="header-line"><span class="header-name">X-Nexus-Confidence</span><span class="header-sep">: </span><span class="header-value green">0.96</span><span class="header-annotation">&#x2190; High confidence in downroute quality</span></div>
+          <div class="header-line"><span class="header-name">X-Request-ID</span><span class="header-sep">: </span><span class="header-value">req_f7a2b1c8</span><span class="header-annotation">&#x2190; Unique ID for debugging</span></div>
+          <div class="header-line"><span class="header-name">Traceparent</span><span class="header-sep">: </span><span class="header-value pink">00-4bf92f-d4a3-01</span><span class="header-annotation">&#x2190; W3C trace for distributed tracing</span></div>
         </div>
       </div>
-    </div>
-    <!-- Cost Badge -->
-    <div class="cost-badge fade-in">
-      <span>Requested: <span class="highlight-red">gpt-4o ($5.00/M)</span></span>
-      &nbsp;→&nbsp;
-      <span>Routed: <span class="highlight-blue">gpt-4o-mini ($0.15/M)</span></span>
-      &nbsp;→&nbsp;
-      <span>Saved: <span class="highlight-green">97%</span></span>
-    </div>
-    <!-- Cache Hit -->
-    <div class="cache-hit-card fade-in">
-      <div class="cache-hit-title">30 minutes later, a teammate asks: "How to reverse a Python list?"</div>
-      <div class="decision-line"><span class="decision-check">✓</span> <span class="decision-label">Cache:</span> <span class="decision-value" style="color:var(--blue);">SEMANTIC HIT (similarity: 0.94)</span></div>
-      <div class="decision-line"><span class="decision-check">✓</span> <span class="decision-label">Response:</span> <span class="decision-value" style="color:var(--green);">3ms (vs 342ms). Cost: $0.00</span></div>
-    </div>
-  </div>
-</section>
 
-<!-- ════════════════ SECTION 7: ARCHITECTURE ════════════════ -->
-<section>
-  <div class="container">
-    <div class="section-center fade-in">
-      <p class="section-label">Architecture</p>
-      <h2 class="section-title">Enterprise <span class="gradient-text">Architecture</span></h2>
-      <p class="section-subtitle">A production-ready topology that scales from small teams to entire organizations.</p>
-    </div>
-    <div class="arch-diagram fade-in">
-      <div class="arch-inner">
-        <!-- Layer 1: Developer Workstations -->
-        <div class="arch-layer">
-          <div class="arch-layer-label">Developer Workstations</div>
-          <div class="arch-boxes">
-            <div class="arch-box arch-box-dev">
-              <div>Claude</div>
-              <div style="font-size:11px;color:var(--text-dim);">Code</div>
-            </div>
-            <div class="arch-box arch-box-dev">
-              <div>Copilot</div>
-              <div style="font-size:11px;color:var(--text-dim);">CLI</div>
-            </div>
-            <div class="arch-box arch-box-dev">
-              <div>Cursor</div>
-              <div style="font-size:11px;color:var(--text-dim);">IDE</div>
-            </div>
-            <div class="arch-box arch-box-dev">
-              <div>Custom</div>
-              <div style="font-size:11px;color:var(--text-dim);">App</div>
-            </div>
-          </div>
-        </div>
-        <!-- Connector -->
-        <div class="arch-connector">
-          <div class="arch-connector-line"></div>
-        </div>
-        <!-- Layer 2: Load Balancer -->
-        <div class="arch-layer">
-          <div class="arch-boxes">
-            <div class="arch-box arch-box-lb">
-              ⚖️ Load Balancer
-            </div>
-          </div>
-        </div>
-        <!-- Connector -->
-        <div class="arch-connector">
-          <div class="arch-connector-line"></div>
-        </div>
-        <!-- Layer 3: Nexus Gateway -->
-        <div class="arch-layer">
-          <div class="arch-boxes">
-            <div class="arch-box arch-box-nexus" style="display:flex;flex-direction:column;align-items:center;gap:12px;min-width:320px;">
-              <div style="font-size:16px;font-weight:800;letter-spacing:-.01em;">Nexus Gateway</div>
-              <div class="arch-nexus-inner">
-                <div class="arch-box arch-box-component">💾 Cache</div>
-                <div class="arch-box arch-box-component">🧭 Route</div>
-                <div class="arch-box arch-box-component">🛡️ Guard</div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <!-- Connector -->
-        <div class="arch-connector-multi">
-          <div class="arch-connector-line"></div>
-          <div class="arch-connector-line"></div>
-          <div class="arch-connector-line"></div>
-        </div>
-        <!-- Layer 4: Providers -->
-        <div class="arch-layer">
-          <div class="arch-layer-label">LLM Providers</div>
-          <div class="arch-boxes">
-            <div class="arch-box arch-box-provider arch-box-openai">
-              <div>OpenAI</div>
-              <span class="arch-cost-label">$$$</span>
-            </div>
-            <div class="arch-box arch-box-provider arch-box-claude">
-              <div>Claude</div>
-              <span class="arch-cost-label">$$</span>
-            </div>
-            <div class="arch-box arch-box-provider arch-box-ollama">
-              <div>Ollama</div>
-              <span class="arch-cost-label">$</span>
-            </div>
-          </div>
-        </div>
+      <!-- Cost badge -->
+      <div class="demo-cost">
+        Requested: <span class="hl-red">gpt-4o ($5.00/M tokens)</span>
+        &nbsp;&rarr;&nbsp;
+        Routed: <span class="hl-blue">gpt-4o-mini ($0.15/M tokens)</span>
+        &nbsp;&rarr;&nbsp;
+        Saved: <span class="hl-green">97% on this request</span>
+      </div>
+
+      <!-- Cache hit scenario -->
+      <div style="margin-top:24px;background:var(--card);border:1px solid rgba(59,130,246,.25);border-radius:var(--radius);padding:20px;" class="fade-in">
+        <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px;font-style:italic;">30 minutes later, a teammate asks: &ldquo;How to reverse a Python list?&rdquo;</div>
+        <div class="header-line"><span class="header-name">X-Nexus-Cache</span><span class="header-sep">: </span><span class="header-value blue">l2_semantic</span><span class="header-annotation">&#x2190; Semantic match (similarity: 0.94)</span></div>
+        <div class="header-line"><span class="header-name">X-Nexus-Cost</span><span class="header-sep">: </span><span class="header-value green">0.00000</span><span class="header-annotation">&#x2190; Free! Served from cache</span></div>
+        <div style="font-size:13px;color:var(--green);margin-top:12px;font-weight:600;">Response: 3ms (vs 342ms). Cost: $0.00</div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ════════════════ SECTION 8: DEPLOYMENT ════════════════ -->
-<section>
-  <div class="container">
-    <div class="section-center fade-in">
-      <p class="section-label">Deployment</p>
-      <h2 class="section-title">Deploy <span class="gradient-text">Your Way</span></h2>
-      <p class="section-subtitle">From local development to enterprise Kubernetes clusters.</p>
-    </div>
-    <div class="deploy-grid">
-      <div class="deploy-card fade-in">
-        <div class="deploy-card-icon">🐳</div>
-        <div class="deploy-card-title">Docker</div>
-        <div class="deploy-card-type">Development</div>
-        <div class="code-block"><code>docker compose up</code></div>
-        <ul class="deploy-card-features">
-          <li>Single container setup</li>
-          <li>Prometheus + Grafana included</li>
-          <li>Perfect for evaluation</li>
-        </ul>
-      </div>
-      <div class="deploy-card fade-in">
-        <div class="deploy-card-icon">🏗️</div>
-        <div class="deploy-card-title">Enterprise Stack</div>
-        <div class="deploy-card-type">Production</div>
-        <div class="code-block"><code>bash scripts/enterprise-init.sh</code></div>
-        <ul class="deploy-card-features">
-          <li>Qdrant + Redis + Ollama</li>
-          <li>TLS certificates auto-generated</li>
-          <li>Full monitoring stack</li>
-        </ul>
-      </div>
-      <div class="deploy-card fade-in">
-        <div class="deploy-card-icon">☸️</div>
-        <div class="deploy-card-title">Kubernetes</div>
-        <div class="deploy-card-type">Scale</div>
-        <div class="code-block"><code>helm install nexus deploy/helm/nexus/ <span class="flag">-n</span> nexus</code></div>
-        <ul class="deploy-card-features">
-          <li>HPA autoscaling</li>
-          <li>ServiceMonitor for Prometheus</li>
-          <li>Multi-tenant ready</li>
-        </ul>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ════════════════ FOOTER ════════════════ -->
+<!-- FOOTER -->
 <footer class="footer">
   <div class="container">
     <div class="footer-top">
       <div class="footer-brand">
-        <a href="index.html" class="nav-logo">
-          <div class="nav-logo-icon">N</div>
-          Nexus
-        </a>
+        <a href="index.html" class="nav-logo"><div class="nav-logo-icon">N</div> Nexus</a>
         <p class="footer-tagline">Intelligent inference routing for the modern AI stack.</p>
       </div>
       <div class="footer-col">
@@ -1490,6 +689,7 @@ client = <span class="func">OpenAI</span>(<span class="keyword">base_url</span>=
         <a href="how-it-works.html">How It Works</a>
         <a href="docs.html">Documentation</a>
         <a href="playground.html">Playground</a>
+        <a href="pricing.html">Pricing</a>
       </div>
       <div class="footer-col">
         <h4>Community</h4>
@@ -1505,7 +705,7 @@ client = <span class="func">OpenAI</span>(<span class="keyword">base_url</span>=
       </div>
     </div>
     <div class="footer-bottom">
-      <p>Built with <span class="footer-heart">♥</span> for the AI community</p>
+      <p>Built with <span class="footer-heart">&hearts;</span> for the AI community</p>
       <p>&copy; 2025 Nexus. All rights reserved.</p>
     </div>
   </div>
@@ -1515,7 +715,7 @@ client = <span class="func">OpenAI</span>(<span class="keyword">base_url</span>=
 (function() {
   'use strict';
 
-  /* ── Intersection Observer fade-in ── */
+  // Intersection Observer fade-in
   var observer = new IntersectionObserver(function(entries) {
     entries.forEach(function(entry) {
       if (entry.isIntersecting) {
@@ -1524,18 +724,15 @@ client = <span class="func">OpenAI</span>(<span class="keyword">base_url</span>=
       }
     });
   }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+  document.querySelectorAll('.fade-in').forEach(function(el) { observer.observe(el); });
 
-  document.querySelectorAll('.fade-in').forEach(function(el) {
-    observer.observe(el);
-  });
-
-  /* ── Sticky nav background ── */
+  // Sticky nav background
   var nav = document.getElementById('nav');
   window.addEventListener('scroll', function() {
     nav.classList.toggle('scrolled', window.scrollY > 20);
   }, { passive: true });
 
-  /* ── Mobile menu toggle ── */
+  // Mobile menu toggle
   var toggle = document.getElementById('mobile-toggle');
   var menu = document.getElementById('mobile-menu');
   toggle.addEventListener('click', function() {
@@ -1546,7 +743,6 @@ client = <span class="func">OpenAI</span>(<span class="keyword">base_url</span>=
     toggle.children[2].style.transform = open ? 'rotate(-45deg) translate(5px, -5px)' : '';
     document.body.style.overflow = open ? 'hidden' : '';
   });
-
   window.closeMobile = function() {
     menu.classList.remove('open');
     toggle.children[0].style.transform = '';
@@ -1554,20 +750,6 @@ client = <span class="func">OpenAI</span>(<span class="keyword">base_url</span>=
     toggle.children[2].style.transform = '';
     document.body.style.overflow = '';
   };
-
-  /* ── Pipeline pulse animation on scroll ── */
-  var pipeline = document.getElementById('pipeline');
-  if (pipeline) {
-    var pipelineObserver = new IntersectionObserver(function(entries) {
-      entries.forEach(function(entry) {
-        var dot = pipeline.querySelector('.pipeline-pulse-dot');
-        if (dot) {
-          dot.style.animationPlayState = entry.isIntersecting ? 'running' : 'paused';
-        }
-      });
-    }, { threshold: 0.2 });
-    pipelineObserver.observe(pipeline);
-  }
 })();
 </script>
 </body>

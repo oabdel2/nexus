@@ -1,1567 +1,1293 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nexus — Documentation</title>
-    <style>
-        :root {
-            --bg-primary: #0a0a0b;
-            --bg-card: #111113;
-            --bg-elevated: #161618;
-            --border-color: #1e1e22;
-            --border-hover: #2a2a30;
-            --text-primary: #f0f0f2;
-            --text-secondary: #a0a0ab;
-            --text-muted: #6b6b78;
-            --accent-blue: #3b82f6;
-            --accent-purple: #8b5cf6;
-            --accent-pink: #ec4899;
-            --gradient-accent: linear-gradient(135deg, #3b82f6, #8b5cf6, #ec4899);
-            --gradient-accent-h: linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899);
-            --code-bg: #1a1a2e;
-            --code-border: #252540;
-            --sidebar-width: 280px;
-            --nav-height: 64px;
-            --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
-            --font-mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', Consolas, monospace;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus &mdash; Documentation</title>
+<meta name="description" content="Complete API reference, configuration guide, and SDK examples for the Nexus intelligent AI inference routing gateway.">
+<style>
+:root {
+  --bg: #0a0a0b;
+  --card: #111113;
+  --border: #1e1e22;
+  --text: #e4e4e7;
+  --text-secondary: #a1a1aa;
+  --text-dim: #71717a;
+  --blue: #3b82f6;
+  --purple: #8b5cf6;
+  --pink: #ec4899;
+  --green: #22c55e;
+  --red: #ef4444;
+  --orange: #f59e0b;
+  --gradient: linear-gradient(135deg, var(--blue), var(--purple), var(--pink));
+  --gradient-h: linear-gradient(90deg, var(--blue), var(--purple), var(--pink));
+  --radius: 12px;
+  --radius-sm: 8px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+  --mono: "SF Mono", "Cascadia Code", "Fira Code", Consolas, monospace;
+  --shadow: 0 0 0 1px var(--border);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,.4);
+  --nav-height: 64px;
+  --sidebar-w: 280px;
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: calc(var(--nav-height) + 24px); }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; cursor: pointer; border: none; background: none; }
 
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* NAV */
+.nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  height: var(--nav-height); display: flex; align-items: center;
+  background: rgba(10,10,11,.85); backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+}
+.nav .container {
+  max-width: 1440px; width: 100%; margin: 0 auto; padding: 0 24px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.nav-logo {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 20px; font-weight: 700; letter-spacing: -.02em;
+}
+.nav-logo-icon {
+  width: 32px; height: 32px; border-radius: 8px; background: var(--gradient);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 16px; color: #fff;
+}
+.nav-links { display: flex; align-items: center; gap: 28px; list-style: none; }
+.nav-links a { font-size: 14px; color: var(--text-secondary); transition: color .2s; font-weight: 500; }
+.nav-links a:hover { color: #fff; }
+.nav-links a.active { color: #fff; }
+.nav-cta {
+  padding: 8px 20px; border-radius: 8px; background: var(--gradient);
+  color: #fff !important; font-weight: 600; font-size: 14px;
+  transition: opacity .2s, transform .15s;
+}
+.nav-cta:hover { opacity: .9; transform: translateY(-1px); }
+.mobile-toggle { display: none; flex-direction: column; gap: 5px; padding: 4px; }
+.mobile-toggle span { display: block; width: 22px; height: 2px; background: var(--text); border-radius: 2px; transition: transform .3s, opacity .3s; }
+.mobile-menu {
+  display: none; position: fixed;
+  top: var(--nav-height); left: 0; right: 0; bottom: 0;
+  background: rgba(10,10,11,.96); backdrop-filter: blur(16px); z-index: 99; padding: 40px 24px;
+}
+.mobile-menu.open { display: flex; flex-direction: column; gap: 24px; }
+.mobile-menu a { font-size: 18px; color: var(--text-secondary); font-weight: 500; }
+.mobile-menu a:hover { color: #fff; }
+@media (max-width: 768px) {
+  .nav-links { display: none; }
+  .mobile-toggle { display: flex; }
+}
 
-        html { scroll-behavior: smooth; scroll-padding-top: calc(var(--nav-height) + 24px); }
+/* LAYOUT */
+.docs-layout {
+  display: flex; margin-top: var(--nav-height); min-height: calc(100vh - var(--nav-height));
+}
 
-        body {
-            font-family: var(--font-family);
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            line-height: 1.7;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-        }
+/* SIDEBAR */
+.sidebar {
+  width: var(--sidebar-w); min-width: var(--sidebar-w);
+  position: fixed; top: var(--nav-height); bottom: 0; left: 0;
+  overflow-y: auto; padding: 24px 0;
+  border-right: 1px solid var(--border);
+  background: var(--bg); z-index: 50;
+}
+.sidebar::-webkit-scrollbar { width: 4px; }
+.sidebar::-webkit-scrollbar-track { background: transparent; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.sidebar-section { padding: 0 16px; margin-bottom: 24px; }
+.sidebar-label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .1em;
+  color: var(--text-dim); font-weight: 700; padding: 0 12px; margin-bottom: 8px;
+}
+.sidebar-link {
+  display: block; padding: 7px 12px; border-radius: 6px;
+  font-size: 13.5px; color: var(--text-secondary);
+  transition: background .15s, color .15s; font-weight: 500;
+}
+.sidebar-link:hover { background: rgba(255,255,255,.04); color: var(--text); }
+.sidebar-link.active { background: rgba(139,92,246,.12); color: #fff; }
+.sidebar-toggle {
+  display: none; position: fixed; bottom: 24px; right: 24px;
+  z-index: 200; width: 48px; height: 48px; border-radius: 50%;
+  background: var(--gradient); color: #fff; font-size: 20px;
+  align-items: center; justify-content: center;
+  box-shadow: 0 4px 20px rgba(139,92,246,.4);
+}
+@media (max-width: 900px) {
+  .sidebar { transform: translateX(-100%); transition: transform .3s; z-index: 90; }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-toggle { display: flex; }
+  .docs-content { margin-left: 0 !important; }
+}
 
-        /* ===================== NAV ===================== */
-        .navbar {
-            position: fixed;
-            top: 0; left: 0; right: 0;
-            height: var(--nav-height);
-            background: rgba(10,10,11,0.85);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border-bottom: 1px solid var(--border-color);
-            z-index: 1000;
-            display: flex;
-            align-items: center;
-            padding: 0 24px;
-        }
-        .nav-inner {
-            max-width: 1440px;
-            width: 100%;
-            margin: 0 auto;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        .nav-logo {
-            font-size: 1.35rem;
-            font-weight: 700;
-            text-decoration: none;
-            background: var(--gradient-accent-h);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            letter-spacing: -0.02em;
-        }
-        .nav-links { display: flex; align-items: center; gap: 8px; }
-        .nav-links a {
-            color: var(--text-secondary);
-            text-decoration: none;
-            font-size: 0.9rem;
-            padding: 6px 14px;
-            border-radius: 8px;
-            transition: color 0.2s, background 0.2s;
-        }
-        .nav-links a:hover { color: var(--text-primary); background: rgba(255,255,255,0.05); }
-        .nav-links a.active {
-            color: var(--text-primary);
-            background: rgba(139,92,246,0.15);
-        }
-        .nav-links .gh-link {
-            display: inline-flex; align-items: center; gap: 6px;
-            border: 1px solid var(--border-color);
-            padding: 6px 14px;
-            border-radius: 8px;
-        }
-        .nav-links .gh-link:hover { border-color: var(--border-hover); background: rgba(255,255,255,0.04); }
-        .nav-links .gh-link svg { width: 18px; height: 18px; fill: var(--text-secondary); }
+/* CONTENT */
+.docs-content {
+  margin-left: var(--sidebar-w); flex: 1;
+  max-width: 880px; padding: 48px 48px 120px;
+}
+@media (max-width: 1200px) { .docs-content { padding: 32px 24px 100px; } }
 
-        .mobile-toggle {
-            display: none;
-            background: none; border: none; cursor: pointer; padding: 8px;
-            color: var(--text-secondary);
-        }
-        .mobile-toggle svg { width: 24px; height: 24px; stroke: currentColor; fill: none; }
+.docs-content h1 {
+  font-size: 36px; font-weight: 800; letter-spacing: -.02em;
+  margin-bottom: 8px; line-height: 1.2;
+}
+.docs-content .doc-subtitle {
+  font-size: 17px; color: var(--text-secondary); margin-bottom: 48px; line-height: 1.7;
+}
+.docs-content h2 {
+  font-size: 26px; font-weight: 700; letter-spacing: -.015em;
+  margin-top: 64px; margin-bottom: 16px; padding-top: 32px;
+  border-top: 1px solid var(--border); line-height: 1.3;
+}
+.docs-content h2:first-of-type { margin-top: 0; border-top: none; padding-top: 0; }
+.docs-content h3 { font-size: 18px; font-weight: 700; margin-top: 32px; margin-bottom: 12px; color: var(--text); }
+.docs-content h4 { font-size: 15px; font-weight: 700; margin-top: 24px; margin-bottom: 8px; color: var(--text-secondary); }
+.docs-content p { margin-bottom: 16px; color: var(--text-secondary); font-size: 15px; line-height: 1.8; }
+.docs-content ul, .docs-content ol { margin-bottom: 16px; padding-left: 24px; }
+.docs-content li { margin-bottom: 6px; color: var(--text-secondary); font-size: 14px; line-height: 1.7; }
+.docs-content strong { color: var(--text); }
+.docs-content code:not(pre code) {
+  background: rgba(139,92,246,.1); color: var(--purple);
+  padding: 2px 7px; border-radius: 4px; font-family: var(--mono); font-size: 13px;
+}
+.gradient-text {
+  background: var(--gradient-h);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
 
-        /* ===================== LAYOUT ===================== */
-        .docs-layout {
-            display: flex;
-            margin-top: var(--nav-height);
-            min-height: calc(100vh - var(--nav-height));
-        }
+/* CODE BLOCKS */
+pre {
+  background: #0d0d10; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 20px; overflow-x: auto; margin-bottom: 20px; position: relative;
+}
+pre code {
+  font-family: var(--mono); font-size: 13px; line-height: 1.7;
+  color: var(--text-secondary); white-space: pre;
+}
+.kw { color: var(--purple); }
+.str { color: var(--green); }
+.fn { color: var(--blue); }
+.cm { color: var(--text-dim); }
+.fl { color: var(--pink); }
+.vr { color: var(--orange); }
+.num { color: #f472b6; }
 
-        /* ===================== SIDEBAR ===================== */
-        .sidebar {
-            position: fixed;
-            top: var(--nav-height);
-            left: 0;
-            width: var(--sidebar-width);
-            height: calc(100vh - var(--nav-height));
-            background: var(--bg-card);
-            border-right: 1px solid var(--border-color);
-            overflow-y: auto;
-            padding: 24px 0;
-            z-index: 900;
-            transition: transform 0.3s ease;
-        }
-        .sidebar::-webkit-scrollbar { width: 4px; }
-        .sidebar::-webkit-scrollbar-track { background: transparent; }
-        .sidebar::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
+/* TABLE */
+.doc-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; font-size: 14px; }
+.doc-table th {
+  text-align: left; padding: 10px 14px; background: rgba(139,92,246,.06);
+  border-bottom: 1px solid var(--border); color: var(--text); font-weight: 600; font-size: 13px;
+}
+.doc-table td {
+  padding: 10px 14px; border-bottom: 1px solid rgba(30,30,34,.6);
+  color: var(--text-secondary); vertical-align: top;
+}
+.doc-table td code {
+  background: rgba(139,92,246,.08); color: var(--purple);
+  padding: 2px 6px; border-radius: 3px; font-family: var(--mono); font-size: 12px;
+  white-space: nowrap;
+}
+.doc-table tr:hover td { background: rgba(255,255,255,.015); }
 
-        .sidebar-search {
-            padding: 0 16px 20px;
-        }
-        .sidebar-search input {
-            width: 100%;
-            padding: 10px 14px 10px 36px;
-            background: var(--bg-elevated);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            color: var(--text-primary);
-            font-size: 0.85rem;
-            font-family: var(--font-family);
-            outline: none;
-            transition: border-color 0.2s;
-        }
-        .sidebar-search input:focus { border-color: var(--accent-purple); }
-        .sidebar-search input::placeholder { color: var(--text-muted); }
-        .sidebar-search .search-wrap {
-            position: relative;
-        }
-        .sidebar-search .search-icon {
-            position: absolute;
-            left: 12px; top: 50%; transform: translateY(-50%);
-            width: 16px; height: 16px;
-            color: var(--text-muted);
-        }
-        .search-tooltip {
-            display: none;
-            position: absolute;
-            top: calc(100% + 6px);
-            left: 0; right: 0;
-            background: var(--bg-elevated);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 10px 14px;
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            z-index: 10;
-        }
-        .sidebar-search input:focus ~ .search-tooltip { display: block; }
+/* ENDPOINT CARD */
+.endpoint {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 24px; margin-bottom: 20px;
+}
+.endpoint-method {
+  display: inline-block; padding: 3px 10px; border-radius: 4px;
+  font-family: var(--mono); font-size: 12px; font-weight: 700;
+  margin-right: 10px; text-transform: uppercase;
+}
+.method-get { background: rgba(34,197,94,.12); color: var(--green); }
+.method-post { background: rgba(59,130,246,.12); color: var(--blue); }
+.endpoint-path { font-family: var(--mono); font-size: 14px; font-weight: 600; color: var(--text); }
+.endpoint-desc { font-size: 14px; color: var(--text-secondary); margin-top: 10px; line-height: 1.6; }
 
-        .sidebar-section { margin-bottom: 6px; }
-        .sidebar-heading {
-            padding: 8px 20px;
-            font-size: 0.7rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: var(--text-muted);
-        }
-        .sidebar-link {
-            display: block;
-            padding: 7px 20px 7px 28px;
-            color: var(--text-secondary);
-            text-decoration: none;
-            font-size: 0.85rem;
-            border-left: 2px solid transparent;
-            transition: all 0.15s;
-        }
-        .sidebar-link:hover { color: var(--text-primary); background: rgba(255,255,255,0.03); }
-        .sidebar-link.active {
-            color: var(--accent-purple);
-            border-left-color: var(--accent-purple);
-            background: rgba(139,92,246,0.08);
-        }
-        .sidebar-link.sub {
-            padding-left: 40px;
-            font-size: 0.82rem;
-        }
+/* CALLOUT */
+.callout {
+  border-left: 3px solid var(--purple); background: rgba(139,92,246,.05);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 16px 20px; margin-bottom: 20px;
+}
+.callout p { margin: 0; font-size: 14px; }
+.callout-title { font-weight: 700; color: var(--purple); margin-bottom: 4px; font-size: 13px; }
+.callout.tip { border-color: var(--green); background: rgba(34,197,94,.05); }
+.callout.tip .callout-title { color: var(--green); }
+.callout.warn { border-color: var(--orange); background: rgba(245,158,11,.05); }
+.callout.warn .callout-title { color: var(--orange); }
 
-        .sidebar-overlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.6);
-            z-index: 899;
-        }
+/* TABS */
+.tab-group { margin-bottom: 20px; }
+.tab-btns { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 0; }
+.tab-btn {
+  padding: 8px 18px; font-size: 13px; font-weight: 600;
+  color: var(--text-dim); border-bottom: 2px solid transparent;
+  transition: color .2s, border-color .2s; cursor: pointer;
+  background: none; border-top: none; border-left: none; border-right: none;
+}
+.tab-btn.active { color: var(--purple); border-bottom-color: var(--purple); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
 
-        /* ===================== MAIN ===================== */
-        .main-content {
-            margin-left: var(--sidebar-width);
-            flex: 1;
-            min-width: 0;
-            padding: 40px 56px 100px;
-            max-width: 900px;
-        }
-
-        .main-content h1 {
-            font-size: 2.2rem;
-            font-weight: 700;
-            letter-spacing: -0.03em;
-            margin-bottom: 8px;
-            background: var(--gradient-accent-h);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        .main-content .subtitle {
-            font-size: 1.05rem;
-            color: var(--text-secondary);
-            margin-bottom: 40px;
-            line-height: 1.6;
-        }
-
-        .main-content h2 {
-            font-size: 1.55rem;
-            font-weight: 700;
-            letter-spacing: -0.02em;
-            margin-top: 56px;
-            margin-bottom: 16px;
-            padding-top: 24px;
-            border-top: 1px solid var(--border-color);
-            color: var(--text-primary);
-        }
-        .main-content h2:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
-
-        .main-content h3 {
-            font-size: 1.2rem;
-            font-weight: 600;
-            margin-top: 36px;
-            margin-bottom: 12px;
-            color: var(--text-primary);
-        }
-
-        .main-content p {
-            color: var(--text-secondary);
-            margin-bottom: 16px;
-            font-size: 0.95rem;
-        }
-
-        .main-content ul, .main-content ol {
-            margin-bottom: 16px;
-            padding-left: 24px;
-        }
-        .main-content li {
-            color: var(--text-secondary);
-            font-size: 0.95rem;
-            margin-bottom: 6px;
-        }
-        .main-content li strong { color: var(--text-primary); }
-
-        .main-content a {
-            color: var(--accent-blue);
-            text-decoration: none;
-        }
-        .main-content a:hover { text-decoration: underline; }
-
-        .main-content code:not(pre code) {
-            background: var(--code-bg);
-            padding: 2px 7px;
-            border-radius: 4px;
-            font-family: var(--font-mono);
-            font-size: 0.84em;
-            color: #c9d1d9;
-            border: 1px solid var(--code-border);
-        }
-
-        .main-content strong { color: var(--text-primary); }
-
-        /* ===================== CODE BLOCKS ===================== */
-        .code-block {
-            position: relative;
-            margin: 16px 0 24px;
-            border-radius: 10px;
-            overflow: hidden;
-            border: 1px solid var(--code-border);
-            background: var(--code-bg);
-        }
-        .code-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 16px;
-            background: rgba(255,255,255,0.03);
-            border-bottom: 1px solid var(--code-border);
-        }
-        .code-lang {
-            font-size: 0.72rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-            color: var(--text-muted);
-        }
-        .copy-btn {
-            background: none;
-            border: 1px solid var(--border-color);
-            color: var(--text-muted);
-            padding: 4px 10px;
-            border-radius: 6px;
-            font-size: 0.72rem;
-            cursor: pointer;
-            font-family: var(--font-family);
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            transition: all 0.15s;
-        }
-        .copy-btn:hover { color: var(--text-primary); border-color: var(--border-hover); background: rgba(255,255,255,0.05); }
-        .copy-btn.copied { color: #34d399; border-color: #34d399; }
-        .copy-btn svg { width: 14px; height: 14px; }
-        .code-block pre {
-            margin: 0;
-            padding: 16px 20px;
-            overflow-x: auto;
-            font-family: var(--font-mono);
-            font-size: 0.84rem;
-            line-height: 1.65;
-            color: #c9d1d9;
-        }
-        .code-block pre::-webkit-scrollbar { height: 6px; }
-        .code-block pre::-webkit-scrollbar-track { background: transparent; }
-        .code-block pre::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
-
-        /* Syntax highlighting classes */
-        .hl-kw { color: #c678dd; }
-        .hl-str { color: #98c379; }
-        .hl-cm { color: #5c6370; font-style: italic; }
-        .hl-num { color: #d19a66; }
-        .hl-fn { color: #61afef; }
-        .hl-var { color: #e5c07b; }
-        .hl-op { color: #56b6c2; }
-        .hl-key { color: #e06c75; }
-        .hl-val { color: #98c379; }
-        .hl-flag { color: #56b6c2; }
-        .hl-url { color: #61afef; text-decoration: underline; }
-
-        /* ===================== TABLE ===================== */
-        .docs-table-wrap { overflow-x: auto; margin: 16px 0 24px; border-radius: 10px; border: 1px solid var(--border-color); }
-        .docs-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.88rem;
-        }
-        .docs-table th {
-            text-align: left;
-            padding: 12px 16px;
-            background: var(--bg-elevated);
-            color: var(--text-primary);
-            font-weight: 600;
-            font-size: 0.82rem;
-            border-bottom: 1px solid var(--border-color);
-        }
-        .docs-table td {
-            padding: 10px 16px;
-            border-bottom: 1px solid var(--border-color);
-            color: var(--text-secondary);
-            vertical-align: top;
-        }
-        .docs-table tr:last-child td { border-bottom: none; }
-        .docs-table tr:hover td { background: rgba(255,255,255,0.02); }
-        .docs-table code {
-            background: var(--code-bg);
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-family: var(--font-mono);
-            font-size: 0.82em;
-            color: #c9d1d9;
-        }
-
-        /* ===================== CALLOUTS ===================== */
-        .callout {
-            padding: 16px 20px;
-            border-radius: 10px;
-            margin: 16px 0 24px;
-            border-left: 3px solid;
-            font-size: 0.9rem;
-        }
-        .callout p { margin-bottom: 0; }
-        .callout-title { font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
-        .callout.info { background: rgba(59,130,246,0.08); border-color: var(--accent-blue); }
-        .callout.info .callout-title { color: var(--accent-blue); }
-        .callout.warning { background: rgba(234,179,8,0.08); border-color: #eab308; }
-        .callout.warning .callout-title { color: #eab308; }
-        .callout.tip { background: rgba(52,211,153,0.08); border-color: #34d399; }
-        .callout.tip .callout-title { color: #34d399; }
-
-        /* ===================== FLOW DIAGRAM ===================== */
-        .flow-diagram {
-            display: flex;
-            align-items: center;
-            gap: 0;
-            margin: 24px 0;
-            padding: 24px 16px;
-            overflow-x: auto;
-            flex-wrap: nowrap;
-        }
-        .flow-step {
-            background: var(--bg-elevated);
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            padding: 12px 18px;
-            font-size: 0.82rem;
-            color: var(--text-primary);
-            white-space: nowrap;
-            text-align: center;
-            flex-shrink: 0;
-        }
-        .flow-arrow {
-            color: var(--text-muted);
-            font-size: 1.2rem;
-            flex-shrink: 0;
-            padding: 0 4px;
-        }
-
-        /* ===================== BACK TO TOP ===================== */
-        .back-to-top {
-            position: fixed;
-            bottom: 32px;
-            right: 32px;
-            width: 44px; height: 44px;
-            border-radius: 12px;
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            color: var(--text-secondary);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            opacity: 0;
-            transform: translateY(12px);
-            transition: all 0.3s;
-            z-index: 800;
-        }
-        .back-to-top.visible { opacity: 1; transform: translateY(0); }
-        .back-to-top:hover { background: var(--bg-elevated); border-color: var(--border-hover); color: var(--text-primary); }
-        .back-to-top svg { width: 20px; height: 20px; }
-
-        /* ===================== RESPONSIVE ===================== */
-        @media (max-width: 1024px) {
-            .main-content { padding: 32px 32px 80px; }
-        }
-        @media (max-width: 768px) {
-            .nav-links .desktop-only { display: none; }
-            .mobile-toggle { display: block; }
-            .sidebar { transform: translateX(-100%); }
-            .sidebar.open { transform: translateX(0); }
-            .sidebar-overlay.open { display: block; }
-            .main-content { margin-left: 0; padding: 24px 20px 80px; }
-            .main-content h1 { font-size: 1.7rem; }
-            .main-content h2 { font-size: 1.3rem; }
-            .flow-diagram { flex-wrap: wrap; justify-content: center; gap: 6px; }
-            .flow-arrow { display: none; }
-            .flow-step { margin: 4px; }
-        }
-    </style>
+/* FOOTER */
+.footer {
+  padding: 80px 0 40px; border-top: 1px solid var(--border);
+  margin-left: var(--sidebar-w);
+}
+@media (max-width: 900px) { .footer { margin-left: 0; } }
+.footer .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+.footer-top {
+  display: grid; grid-template-columns: 2fr 1fr 1fr 1.5fr;
+  gap: 48px; margin-bottom: 48px;
+}
+.footer-brand .nav-logo { margin-bottom: 12px; }
+.footer-tagline { font-size: 14px; color: var(--text-dim); line-height: 1.6; max-width: 280px; }
+.footer-col h4 {
+  font-size: 13px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--text); margin-bottom: 16px;
+}
+.footer-col a { display: block; font-size: 14px; color: var(--text-dim); padding: 4px 0; transition: color .2s; }
+.footer-col a:hover { color: var(--text); }
+.footer-bottom {
+  display: flex; justify-content: space-between; align-items: center;
+  padding-top: 32px; border-top: 1px solid var(--border); flex-wrap: wrap; gap: 12px;
+}
+.footer-bottom p { font-size: 13px; color: var(--text-dim); }
+.footer-heart { color: var(--pink); }
+@media (max-width: 768px) { .footer-top { grid-template-columns: 1fr 1fr; gap: 32px; } }
+@media (max-width: 480px) { .footer-top { grid-template-columns: 1fr; } }
+</style>
 </head>
 <body>
 
-<!-- =================== NAVBAR =================== -->
-<nav class="navbar">
-    <div class="nav-inner">
-        <a href="index.html" class="nav-logo">Nexus</a>
-        <div style="display:flex;align-items:center;gap:4px;">
-            <button class="mobile-toggle" onclick="toggleSidebar()" aria-label="Toggle menu">
-                <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-            </button>
-            <div class="nav-links">
-                <a href="index.html#features" class="desktop-only">Features</a>
-                <a href="docs.html" class="active">Docs</a>
-                <a href="playground.html" class="desktop-only">Playground</a>
-                <a href="how-it-works.html" class="desktop-only">How It Works</a>
-                <a href="https://github.com/nexus-ai/nexus" class="gh-link" target="_blank" rel="noopener">
-                    <svg viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-                    <span class="desktop-only">GitHub</span>
-                </a>
-            </div>
-        </div>
-    </div>
+<!-- NAV -->
+<nav class="nav" id="nav">
+  <div class="container">
+    <a href="index.html" class="nav-logo"><div class="nav-logo-icon">N</div> Nexus</a>
+    <ul class="nav-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="how-it-works.html">How It Works</a></li>
+      <li><a href="docs.html" class="active">Docs</a></li>
+      <li><a href="playground.html">Playground</a></li>
+      <li><a href="pricing.html">Pricing</a></li>
+      <li><a href="https://github.com" target="_blank" rel="noopener">GitHub</a></li>
+      <li><a href="index.html#quickstart" class="nav-cta">Get Started Free</a></li>
+    </ul>
+    <button class="mobile-toggle" id="mobile-toggle" aria-label="Menu"><span></span><span></span><span></span></button>
+  </div>
 </nav>
-
-<!-- =================== SIDEBAR OVERLAY =================== -->
-<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
-
-<!-- =================== DOCS LAYOUT =================== -->
-<div class="docs-layout">
-
-    <!-- =================== SIDEBAR =================== -->
-    <aside class="sidebar" id="sidebar">
-        <div class="sidebar-search">
-            <div class="search-wrap">
-                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <input type="text" placeholder="Search docs..." aria-label="Search documentation">
-                <div class="search-tooltip">🔍 Full-text search coming soon. Use Ctrl+F for now.</div>
-            </div>
-        </div>
-
-        <div class="sidebar-section">
-            <div class="sidebar-heading">Getting Started</div>
-            <a href="#quick-start" class="sidebar-link" data-section="quick-start">Quick Start</a>
-            <a href="#installation" class="sidebar-link" data-section="installation">Installation</a>
-            <a href="#first-request" class="sidebar-link" data-section="first-request">First Request</a>
-        </div>
-        <div class="sidebar-section">
-            <div class="sidebar-heading">Configuration</div>
-            <a href="#yaml-reference" class="sidebar-link" data-section="yaml-reference">YAML Reference</a>
-            <a href="#environment-variables" class="sidebar-link" data-section="environment-variables">Environment Variables</a>
-            <a href="#provider-setup" class="sidebar-link" data-section="provider-setup">Provider Setup</a>
-        </div>
-        <div class="sidebar-section">
-            <div class="sidebar-heading">API Reference</div>
-            <a href="#chat-completions" class="sidebar-link" data-section="chat-completions">POST /v1/chat/completions</a>
-            <a href="#feedback" class="sidebar-link" data-section="feedback">POST /v1/feedback</a>
-            <a href="#health" class="sidebar-link" data-section="health">GET /health</a>
-            <a href="#metrics" class="sidebar-link" data-section="metrics">GET /metrics</a>
-            <a href="#dashboard" class="sidebar-link" data-section="dashboard">GET /dashboard</a>
-        </div>
-        <div class="sidebar-section">
-            <div class="sidebar-heading">Python SDK</div>
-            <a href="#sdk-installation" class="sidebar-link" data-section="sdk-installation">Installation</a>
-            <a href="#nexus-client" class="sidebar-link" data-section="nexus-client">NexusClient</a>
-            <a href="#langchain" class="sidebar-link" data-section="langchain">LangChain Integration</a>
-            <a href="#crewai" class="sidebar-link" data-section="crewai">CrewAI Integration</a>
-        </div>
-        <div class="sidebar-section">
-            <div class="sidebar-heading">Deployment</div>
-            <a href="#deploy-docker" class="sidebar-link" data-section="deploy-docker">Docker</a>
-            <a href="#deploy-kubernetes" class="sidebar-link" data-section="deploy-kubernetes">Kubernetes</a>
-            <a href="#deploy-bare-metal" class="sidebar-link" data-section="deploy-bare-metal">Bare Metal</a>
-        </div>
-        <div class="sidebar-section">
-            <div class="sidebar-heading">Architecture</div>
-            <a href="#how-routing-works" class="sidebar-link" data-section="how-routing-works">How Routing Works</a>
-            <a href="#complexity-scoring" class="sidebar-link" data-section="complexity-scoring">Complexity Scoring</a>
-            <a href="#budget-system" class="sidebar-link" data-section="budget-system">Budget System</a>
-        </div>
-    </aside>
-
-    <!-- =================== MAIN =================== -->
-    <main class="main-content">
-
-        <h1>Documentation</h1>
-        <p class="subtitle">Everything you need to integrate, configure, and deploy Nexus — the intelligent AI inference gateway that routes requests to the optimal model based on complexity, cost, and context.</p>
-
-        <!-- ===== GETTING STARTED ===== -->
-        <h2 id="quick-start">Quick Start</h2>
-        <p>Get Nexus running in under two minutes. The only prerequisite is <a href="https://docs.docker.com/get-docker/" target="_blank">Docker</a>.</p>
-
-        <div class="code-block">
-            <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
-            <pre><span class="hl-cm"># 1. Pull and run</span>
-docker compose up <span class="hl-flag">-d</span>
-
-<span class="hl-cm"># 2. Send your first request</span>
-curl http://localhost:8080/v1/chat/completions \
-  <span class="hl-flag">-H</span> <span class="hl-str">"Content-Type: application/json"</span> \
-  <span class="hl-flag">-H</span> <span class="hl-str">"X-Workflow-ID: my-first-workflow"</span> \
-  <span class="hl-flag">-H</span> <span class="hl-str">"X-Step-Number: 1"</span> \
-  <span class="hl-flag">-d</span> <span class="hl-str">'{
-    "messages": [{"role": "user", "content": "Hello, world!"}]
-  }'</span>
-
-<span class="hl-cm"># 3. Check the dashboard</span>
-open http://localhost:8080/dashboard</pre>
-        </div>
-
-        <p>That's it. Nexus will analyze the request complexity, select the most cost-effective model, and return an OpenAI-compatible response. Head to the <a href="#installation">Installation</a> section for additional deployment options.</p>
-
-        <!-- ===== INSTALLATION ===== -->
-        <h2 id="installation">Installation</h2>
-        <p>Nexus ships as a single binary and an official Docker image. Choose the method that fits your infrastructure.</p>
-
-        <h3>Docker (Recommended)</h3>
-        <p>Docker is the simplest way to run Nexus. The official image is published to the GitHub Container Registry and includes all required dependencies.</p>
-
-        <div class="code-block">
-            <div class="code-header"><span class="code-lang">yaml</span><button class="copy-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
-            <pre><span class="hl-cm"># docker-compose.yaml</span>
-<span class="hl-key">version</span>: <span class="hl-str">'3.8'</span>
-<span class="hl-key">services</span>:
-  <span class="hl-key">nexus</span>:
-    <span class="hl-key">image</span>: <span class="hl-str">ghcr.io/nexus-ai/nexus:latest</span>
-    <span class="hl-key">ports</span>:
-      - <span class="hl-str">"8080:8080"</span>
-      - <span class="hl-str">"9090:9090"</span>
-    <span class="hl-key">volumes</span>:
-      - <span class="hl-str">./config.yaml:/etc/nexus/config.yaml</span>
-    <span class="hl-key">environment</span>:
-      - <span class="hl-var">NEXUS_LOG_LEVEL</span>=<span class="hl-str">info</span></pre>
-        </div>
-
-        <p>Run with <code>docker compose up -d</code> and Nexus will be available at <code>http://localhost:8080</code>. The metrics endpoint runs on port <code>9090</code>.</p>
-
-        <h3>Go Binary</h3>
-        <p>If you prefer running Nexus directly on the host, you can download the pre-built binary or build with Go.</p>
-
-        <div class="code-block">
-            <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
-            <pre><span class="hl-cm"># Download latest release</span>
-curl <span class="hl-flag">-sSL</span> https://get.nexus-ai.dev | sh
-
-<span class="hl-cm"># Or install with Go (requires Go 1.22+)</span>
-go install github.com/nexus-ai/nexus@latest
-
-<span class="hl-cm"># Start the gateway</span>
-nexus serve <span class="hl-flag">--config</span> ./config.yaml</pre>
-        </div>
-
-        <h3>Building from Source</h3>
-        <p>Clone the repository and build locally. Useful for development or when you need custom modifications.</p>
-
-        <div class="code-block">
-            <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
-            <pre>git clone https://github.com/nexus-ai/nexus.git
-<span class="hl-kw">cd</span> nexus
-go build <span class="hl-flag">-o</span> nexus ./cmd/nexus
-./nexus serve <span class="hl-flag">--config</span> ./config.yaml</pre>
-        </div>
-
-        <!-- ===== FIRST REQUEST ===== -->
-        <h2 id="first-request">First Request</h2>
-        <p>Nexus exposes an <strong>OpenAI-compatible</strong> chat completions endpoint. Any existing code that talks to the OpenAI API can point to Nexus instead — just change the base URL.</p>
-        <p>Nexus uses two custom HTTP headers to enable intelligent workflow-aware routing:</p>
-        <ul>
-            <li><strong><code>X-Workflow-ID</code></strong> — A string identifying the logical workflow or application. Nexus uses this to track cost per workflow and learn from feedback across requests within the same workflow.</li>
-            <li><strong><code>X-Step-Number</code></strong> — An integer indicating the step within the workflow. Earlier steps in a pipeline (e.g., planning) can be routed to premium models while later, more mechanical steps (e.g., formatting) use economy models.</li>
-        </ul>
-
-        <div class="callout info">
-            <div class="callout-title">💡 Note</div>
-            <p>Both headers are optional. If omitted, Nexus uses the <code>default</code> workflow and step <code>1</code>. However, providing them enables smarter routing decisions and more granular cost tracking.</p>
-        </div>
-
-        <p>Here's a complete example with a detailed response walkthrough:</p>
-
-        <div class="code-block">
-            <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
-            <pre>curl http://localhost:8080/v1/chat/completions \
-  <span class="hl-flag">-H</span> <span class="hl-str">"Content-Type: application/json"</span> \
-  <span class="hl-flag">-H</span> <span class="hl-str">"X-Workflow-ID: onboarding-bot"</span> \
-  <span class="hl-flag">-H</span> <span class="hl-str">"X-Step-Number: 2"</span> \
-  <span class="hl-flag">-H</span> <span class="hl-str">"X-Team-ID: engineering"</span> \
-  <span class="hl-flag">-d</span> <span class="hl-str">'{
-    "messages": [
-      {"role": "system", "content": "You are a helpful onboarding assistant."},
-      {"role": "user", "content": "Explain our CI/CD pipeline and how to set up a dev environment."}
-    ],
-    "temperature": 0.7
-  }'</span></pre>
-        </div>
-
-        <p>The response follows the standard OpenAI format, with additional Nexus metadata in the <code>x-nexus-*</code> response headers:</p>
-
-        <div class="code-block">
-            <div class="code-header"><span class="code-lang">json</span><button class="copy-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
-            <pre>{
-  <span class="hl-key">"id"</span>: <span class="hl-str">"chatcmpl-nexus-abc123"</span>,
-  <span class="hl-key">"object"</span>: <span class="hl-str">"chat.completion"</span>,
-  <span class="hl-key">"model"</span>: <span class="hl-str">"claude-3-5-haiku"</span>,
-  <span class="hl-key">"choices"</span>: [
-    {
-      <span class="hl-key">"index"</span>: <span class="hl-num">0</span>,
-      <span class="hl-key">"message"</span>: {
-        <span class="hl-key">"role"</span>: <span class="hl-str">"assistant"</span>,
-        <span class="hl-key">"content"</span>: <span class="hl-str">"Here's a guide to our CI/CD pipeline..."</span>
-      },
-      <span class="hl-key">"finish_reason"</span>: <span class="hl-str">"stop"</span>
-    }
-  ],
-  <span class="hl-key">"usage"</span>: {
-    <span class="hl-key">"prompt_tokens"</span>: <span class="hl-num">42</span>,
-    <span class="hl-key">"completion_tokens"</span>: <span class="hl-num">387</span>,
-    <span class="hl-key">"total_tokens"</span>: <span class="hl-num">429</span>
-  }
-}</pre>
-        </div>
-
-        <p>Nexus also returns these response headers for observability:</p>
-        <ul>
-            <li><code>X-Nexus-Tier</code> — The tier selected (e.g., <code>mid</code>)</li>
-            <li><code>X-Nexus-Model</code> — The actual model used (e.g., <code>claude-3-5-haiku</code>)</li>
-            <li><code>X-Nexus-Complexity</code> — The computed complexity score (e.g., <code>0.48</code>)</li>
-            <li><code>X-Nexus-Cost</code> — Estimated cost of this request in USD (e.g., <code>0.00032</code>)</li>
-        </ul>
-
-        <!-- ===== CONFIGURATION ===== -->
-        <h2 id="yaml-reference">YAML Configuration Reference</h2>
-        <p>Nexus is configured through a single <code>config.yaml</code> file. Below is a complete, annotated reference covering every available option.</p>
-
-        <div class="code-block">
-            <div class="code-header"><span class="code-lang">yaml</span><button class="copy-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
-            <pre><span class="hl-cm"># ── Server ──────────────────────────────────────</span>
-<span class="hl-key">server</span>:
-  <span class="hl-key">host</span>: <span class="hl-str">0.0.0.0</span>
-  <span class="hl-key">port</span>: <span class="hl-num">8080</span>
-  <span class="hl-key">metrics_port</span>: <span class="hl-num">9090</span>
-
-<span class="hl-cm"># ── Routing ─────────────────────────────────────</span>
-<span class="hl-key">routing</span>:
-  <span class="hl-key">default_tier</span>: <span class="hl-str">mid</span>
-  <span class="hl-key">complexity_weights</span>:
-    <span class="hl-key">keyword</span>: <span class="hl-num">0.30</span>
-    <span class="hl-key">length</span>: <span class="hl-num">0.15</span>
-    <span class="hl-key">role</span>: <span class="hl-num">0.20</span>
-    <span class="hl-key">structure</span>: <span class="hl-num">0.15</span>
-    <span class="hl-key">budget</span>: <span class="hl-num">0.20</span>
-
-<span class="hl-cm"># ── Tiers ───────────────────────────────────────</span>
-<span class="hl-key">tiers</span>:
-  <span class="hl-key">economy</span>:
-    <span class="hl-key">range</span>: [<span class="hl-num">0.0</span>, <span class="hl-num">0.21</span>]
-    <span class="hl-key">models</span>:
-      - <span class="hl-key">provider</span>: <span class="hl-str">ollama</span>
-        <span class="hl-key">model</span>: <span class="hl-str">llama3.2:3b</span>
-  <span class="hl-key">cheap</span>:
-    <span class="hl-key">range</span>: [<span class="hl-num">0.21</span>, <span class="hl-num">0.35</span>]
-    <span class="hl-key">models</span>:
-      - <span class="hl-key">provider</span>: <span class="hl-str">openai</span>
-        <span class="hl-key">model</span>: <span class="hl-str">gpt-4o-mini</span>
-  <span class="hl-key">mid</span>:
-    <span class="hl-key">range</span>: [<span class="hl-num">0.35</span>, <span class="hl-num">0.56</span>]
-    <span class="hl-key">models</span>:
-      - <span class="hl-key">provider</span>: <span class="hl-str">anthropic</span>
-        <span class="hl-key">model</span>: <span class="hl-str">claude-3-5-haiku</span>
-  <span class="hl-key">premium</span>:
-    <span class="hl-key">range</span>: [<span class="hl-num">0.56</span>, <span class="hl-num">1.0</span>]
-    <span class="hl-key">models</span>:
-      - <span class="hl-key">provider</span>: <span class="hl-str">openai</span>
-        <span class="hl-key">model</span>: <span class="hl-str">gpt-4o</span>
-      - <span class="hl-key">provider</span>: <span class="hl-str">anthropic</span>
-        <span class="hl-key">model</span>: <span class="hl-str">claude-sonnet-4</span>
-
-<span class="hl-cm"># ── Providers ───────────────────────────────────</span>
-<span class="hl-key">providers</span>:
-  <span class="hl-key">openai</span>:
-    <span class="hl-key">api_key</span>: <span class="hl-str"></span>
-    <span class="hl-key">base_url</span>: <span class="hl-str">https://api.openai.com/v1</span>
-  <span class="hl-key">anthropic</span>:
-    <span class="hl-key">api_key</span>: <span class="hl-str"></span>
-    <span class="hl-key">base_url</span>: <span class="hl-str">https://api.anthropic.com/v1</span>
-  <span class="hl-key">ollama</span>:
-    <span class="hl-key">base_url</span>: <span class="hl-str">http://localhost:11434</span>
-
-<span class="hl-cm"># ── Budgets ─────────────────────────────────────</span>
-<span class="hl-key">budgets</span>:
-  <span class="hl-key">default</span>:
-    <span class="hl-key">max_daily</span>: <span class="hl-num">100.00</span>
-    <span class="hl-key">max_monthly</span>: <span class="hl-num">2000.00</span>
-    <span class="hl-key">downgrade_at</span>: <span class="hl-str">80%</span>
-  <span class="hl-key">teams</span>:
-    <span class="hl-key">engineering</span>:
-      <span class="hl-key">max_monthly</span>: <span class="hl-num">5000.00</span>
-    <span class="hl-key">support</span>:
-      <span class="hl-key">max_monthly</span>: <span class="hl-num">500.00</span>
-
-<span class="hl-cm"># ── Logging ─────────────────────────────────────</span>
-<span class="hl-key">logging</span>:
-  <span class="hl-key">level</span>: <span class="hl-str">info</span>
-  <span class="hl-key">format</span>: <span class="hl-str">json</span></pre>
-        </div>
-
-        <div class="callout tip">
-            <div class="callout-title">💡 Tip</div>
-            <p>Use <code></code> syntax anywhere in the config file to inject environment variables. Nexus resolves them at startup.</p>
-        </div>
-
-        <!-- ===== ENV VARS ===== -->
-        <h2 id="environment-variables">Environment Variables</h2>
-        <p>Nexus reads the following environment variables. These take precedence over their YAML counterparts when both are set.</p>
-
-        <div class="docs-table-wrap">
-            <table class="docs-table">
-                <thead>
-                    <tr><th>Variable</th><th>Default</th><th>Description</th></tr>
-                </thead>
-                <tbody>
-                    <tr><td><code>NEXUS_PORT</code></td><td><code>8080</code></td><td>HTTP port for the main API server.</td></tr>
-                    <tr><td><code>NEXUS_METRICS_PORT</code></td><td><code>9090</code></td><td>Port for the Prometheus metrics endpoint.</td></tr>
-                    <tr><td><code>NEXUS_LOG_LEVEL</code></td><td><code>info</code></td><td>Log level: <code>debug</code>, <code>info</code>, <code>warn</code>, <code>error</code>.</td></tr>
-                    <tr><td><code>NEXUS_LOG_FORMAT</code></td><td><code>json</code></td><td>Log format: <code>json</code> or <code>text</code>.</td></tr>
-                    <tr><td><code>NEXUS_CONFIG_PATH</code></td><td><code>/etc/nexus/config.yaml</code></td><td>Path to the YAML configuration file.</td></tr>
-                    <tr><td><code>NEXUS_DEFAULT_TIER</code></td><td><code>mid</code></td><td>Fallback tier when complexity scoring is unavailable.</td></tr>
-                    <tr><td><code>OPENAI_API_KEY</code></td><td>—</td><td>API key for the OpenAI provider.</td></tr>
-                    <tr><td><code>ANTHROPIC_API_KEY</code></td><td>—</td><td>API key for the Anthropic provider.</td></tr>
-                    <tr><td><code>OLLAMA_BASE_URL</code></td><td><code>http://localhost:11434</code></td><td>Base URL for the Ollama provider.</td></tr>
-                    <tr><td><code>NEXUS_BUDGET_DEFAULT_DAILY</code></td><td><code>100.00</code></td><td>Default daily budget limit in USD.</td></tr>
-                    <tr><td><code>NEXUS_BUDGET_DEFAULT_MONTHLY</code></td><td><code>2000.00</code></td><td>Default monthly budget limit in USD.</td></tr>
-                    <tr><td><code>NEXUS_REDIS_URL</code></td><td>—</td><td>Redis connection URL for distributed state (optional).</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- ===== PROVIDER SETUP ===== -->
-        <h2 id="provider-setup">Provider Setup</h2>
-        <p>Nexus supports multiple LLM providers out of the box. Each provider requires minimal configuration — typically just an API key and optional base URL override.</p>
-
-        <h3>OpenAI</h3>
-        <p>The most common provider. Supports all OpenAI chat models including GPT-4o and GPT-4o-mini.</p>
-        <div class="code-block">
-            <div class="code-header"><span class="code-lang">yaml</span><button class="copy-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
-            <pre><span class="hl-key">providers</span>:
-  <span class="hl-key">openai</span>:
-    <span class="hl-key">api_key</span>: <span class="hl-str"></span>
-    <span class="hl-key">base_url</span>: <span class="hl-str">https://api.openai.com/v1</span>   <span class="hl-cm"># default, can be omitted</span>
-    <span class="hl-key">timeout</span>: <span class="hl-num">60</span>                              <span class="hl-cm"># request timeout in seconds</span>
-    <span class="hl-key">max_retries</span>: <span class="hl-num">3</span>                          <span class="hl-cm"># retry on 5xx errors</span></pre>
-        </div>
-
-        <h3>Anthropic</h3>
-        <p>Native Anthropic API support. Nexus automatically translates between the OpenAI request format and the Anthropic Messages API.</p>
-        <div class="code-block">
-            <div class="code-header"><span class="code-lang">yaml</span><button class="copy-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
-            <pre><span class="hl-key">providers</span>:
-  <span class="hl-key">anthropic</span>:
-    <span class="hl-key">api_key</span>: <span class="hl-str"></span>
-    <span class="hl-key">base_url</span>: <span class="hl-str">https://api.anthropic.com/v1</span>  <span class="hl-cm"># default, can be omitted</span>
-    <span class="hl-key">api_version</span>: <span class="hl-str">2024-01-01</span>                 <span class="hl-cm"># Anthropic API version header</span></pre>
-        </div>
-
-        <h3>Ollama (Local Models)</h3>
-        <p>Use locally-hosted models through Ollama for the economy tier. No API key required — just ensure Ollama is running and accessible.</p>
-        <div class="code-block">
-            <div class="code-header"><span class="code-lang">yaml</span><button class="copy-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
-            <pre><span class="hl-key">providers</span>:
-  <span class="hl-key">ollama</span>:
-    <span class="hl-key">base_url</span>: <span class="hl-str">http://localhost:11434</span>
-    <span class="hl-cm"># No API key needed for local Ollama</span>
-
-<span class="hl-cm"># Make sure the model is pulled first:</span>
-<span class="hl-cm"># ollama pull llama3.2:3b</span></pre>
-        </div>
-
-        <h3>Custom OpenAI-Compatible Providers</h3>
-        <p>Any service that implements the OpenAI API spec can be added as a custom provider. This works with Azure OpenAI, Together AI, Groq, vLLM, and other compatible services.</p>
-        <div class="code-block">
-            <div class="code-header"><span class="code-lang">yaml</span><button class="copy-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
-            <pre><span class="hl-key">providers</span>:
-  <span class="hl-key">together</span>:
-    <span class="hl-key">api_key</span>: <span class="hl-str"></span>
-    <span class="hl-key">base_url</span>: <span class="hl-str">https://api.together.xyz/v1</span>
-    <span class="hl-key">type</span>: <span class="hl-str">openai-compatible</span>
-
-  <span class="hl-key">azure</span>:
-    <span class="hl-key">api_key</span>: <span class="hl-str"></span>
-    <span class="hl-key">base_url</span>: <span class="hl-str">https://my-resource.openai.azure.com</span>
-    <span class="hl-key">type</span>: <span class="hl-str">openai-compatible</span>
-    <span class="hl-key">headers</span>:
-      <span class="hl-key">api-version</span>: <span class="hl-str">"2024-02-01"</span>
-
-<span class="hl-cm"># Then reference in tiers:</span>
-<span class="hl-key">tiers</span>:
-  <span class="hl-key">economy</span>:
-    <span class="hl-key">range</span>: [<span class="hl-num">0.0</span>, <span class="hl-num">0.21</span>]
-    <span class="hl-key">models</span>:
-      - <span class="hl-key">provider</span>: <span class="hl-str">together</span>
-        <span class="hl-key">model</span>: <span class="hl-str">meta-llama/Llama-3.2-3B-Instruct-Turbo</span></pre>
-        </div>
-
-        <!-- ===== API REFERENCE ===== -->
-        <h2 id="chat-completions">POST /v1/chat/completions</h2>
-        <p>The primary endpoint. Accepts requests in the <strong>OpenAI Chat Completions</strong> format and returns OpenAI-compatible responses. Nexus scores the request complexity, checks budget constraints, selects the optimal tier, and forwards to the appropriate provider.</p>
-
-        <h3>Request Headers</h3>
-        <div class="docs-table-wrap">
-            <table class="docs-table">
-                <thead>
-                    <tr><th>Header</th><th>Required</th><th>Description</th></tr>
-                </thead>
-                <tbody>
-                    <tr><td><code>Content-Type</code></td><td>Yes</td><td>Must be <code>application/json</code>.</td></tr>
-                    <tr><td><code>X-Workflow-ID</code></td><td>No</td><td>Logical workflow identifier for cost tracking and routing optimization.</td></tr>
-                    <tr><td><code>X-Step-Number</code></td><td>No</td><td>Integer step within the workflow. Influences routing decisions.</td></tr>
-                    <tr><td><code>X-Team-ID</code></td><td>No</td><td>Team identifier for per-team budget enforcement.</td></tr>
-                    <tr><td><code>X-Budget-ID</code></td><td>No</td><td>Custom budget identifier. Overrides team-based budget lookup.</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <h3>Request Body</h3>
-        <div class="code-block">
-            <div class="code-header"><span class="code-lang">json</span><button class="copy-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
-            <pre>{
-  <span class="hl-key">"messages"</span>: [
-    { <span class="hl-key">"role"</span>: <span class="hl-str">"system"</span>, <span class="hl-key">"content"</span>: <span class="hl-str">"You are a helpful assistant."</span> },
-    { <span class="hl-key">"role"</span>: <span class="hl-str">"user"</span>, <span class="hl-key">"content"</span>: <span class="hl-str">"Summarize this article."</span> }
-  ],
-  <span class="hl-key">"temperature"</span>: <span class="hl-num">0.7</span>,
-  <span class="hl-key">"max_tokens"</span>: <span class="hl-num">1024</span>,
-  <span class="hl-key">"stream"</span>: <span class="hl-kw">false</span>
-}</pre>
-        </div>
-
-        <p>All standard OpenAI parameters are supported: <code>temperature</code>, <code>top_p</code>, <code>max_tokens</code>, <code>stream</code>, <code>stop</code>, <code>presence_penalty</code>, <code>frequency_penalty</code>, and <code>n</code>. They are forwarded to the selected provider as-is.</p>
-
-        <h3>Response</h3>
-        <p>Returns a standard OpenAI Chat Completion object. The <code>model</code> field reflects the actual model that served the request, not necessarily what was requested.</p>
-
-        <!-- ===== FEEDBACK ===== -->
-        <h2 id="feedback">POST /v1/feedback</h2>
-        <p>Submit quality feedback after receiving a response. Nexus uses this data to improve routing decisions over time — if a particular type of request consistently gets low ratings on a cheaper model, Nexus will learn to route similar requests to a higher tier.</p>
-
-        <h3>Request Body</h3>
-        <div class="code-block">
-            <div class="code-header"><span class="code-lang">json</span><button class="copy-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
-            <pre>{
-  <span class="hl-key">"workflow_id"</span>: <span class="hl-str">"onboarding-bot"</span>,
-  <span class="hl-key">"step_number"</span>: <span class="hl-num">2</span>,
-  <span class="hl-key">"rating"</span>: <span class="hl-num">4</span>,
-  <span class="hl-key">"comment"</span>: <span class="hl-str">"Good response but slightly verbose."</span>
-}</pre>
-        </div>
-
-        <div class="docs-table-wrap">
-            <table class="docs-table">
-                <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
-                <tbody>
-                    <tr><td><code>workflow_id</code></td><td>string</td><td>The workflow that generated the response.</td></tr>
-                    <tr><td><code>step_number</code></td><td>integer</td><td>The step within the workflow.</td></tr>
-                    <tr><td><code>rating</code></td><td>integer</td><td>Quality rating from <strong>1</strong> (poor) to <strong>5</strong> (excellent).</td></tr>
-                    <tr><td><code>comment</code></td><td>string</td><td>Optional free-text feedback.</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <p>Returns <code>204 No Content</code> on success.</p>
-
-        <!-- ===== HEALTH ===== -->
-        <h2 id="health">GET /health</h2>
-        <p>A lightweight health check endpoint for load balancers and orchestrators. Returns the current status, version, and uptime.</p>
-
-        <div class="code-block">
-            <div class="code-header"><span class="code-lang">json</span><button class="copy-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
-            <pre>{
-  <span class="hl-key">"status"</span>: <span class="hl-str">"healthy"</span>,
-  <span class="hl-key">"version"</span>: <span class="hl-str">"0.1.0"</span>,
-  <span class="hl-key">"uptime"</span>: <span class="hl-str">"24h3m"</span>
-}</pre>
-        </div>
-
-        <p>Returns HTTP <code>200</code> when healthy, <code>503</code> when the gateway is degraded (e.g., all providers unreachable). Use this for Kubernetes liveness probes.</p>
-
-        <!-- ===== METRICS ===== -->
-        <h2 id="metrics">GET /metrics</h2>
-        <p>Exposes Prometheus-compatible metrics on the configured metrics port (default <code>9090</code>). Scrape this endpoint with Prometheus, Datadog, or any compatible collector.</p>
-
-        <h3>Key Metrics</h3>
-        <div class="docs-table-wrap">
-            <table class="docs-table">
-                <thead><tr><th>Metric</th><th>Type</th><th>Description</th></tr></thead>
-                <tbody>
-                    <tr><td><code>nexus_requests_total</code></td><td>Counter</td><td>Total number of requests processed, labeled by <code>tier</code>, <code>provider</code>, <code>model</code>, and <code>status</code>.</td></tr>
-                    <tr><td><code>nexus_routing_duration_seconds</code></td><td>Histogram</td><td>Time spent on complexity scoring and tier selection (excludes provider latency).</td></tr>
-                    <tr><td><code>nexus_provider_duration_seconds</code></td><td>Histogram</td><td>End-to-end latency for each provider request, labeled by <code>provider</code> and <code>model</code>.</td></tr>
-                    <tr><td><code>nexus_cost_total</code></td><td>Counter</td><td>Cumulative estimated cost in USD, labeled by <code>team</code>, <code>workflow</code>, and <code>tier</code>.</td></tr>
-                    <tr><td><code>nexus_tier_usage</code></td><td>Counter</td><td>Number of requests per tier — useful for understanding tier distribution.</td></tr>
-                    <tr><td><code>nexus_budget_remaining</code></td><td>Gauge</td><td>Remaining budget for each team/workflow as a percentage.</td></tr>
-                    <tr><td><code>nexus_complexity_score</code></td><td>Histogram</td><td>Distribution of complexity scores across requests.</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- ===== DASHBOARD ===== -->
-        <h2 id="dashboard">GET /dashboard</h2>
-        <p>Nexus includes a built-in web dashboard at <code>/dashboard</code> that provides a real-time view of your gateway's operation. The dashboard is served from the main API port — no additional configuration required.</p>
-
-        <p>The dashboard displays:</p>
-        <ul>
-            <li><strong>Live Request Feed</strong> — Real-time stream of incoming requests with complexity scores, tier selections, and latency.</li>
-            <li><strong>Cost Tracking</strong> — Daily and monthly cost breakdown by team, workflow, and tier with trend charts.</li>
-            <li><strong>Budget Status</strong> — Visual indicators for each team's budget consumption with alerts for approaching limits.</li>
-            <li><strong>Tier Distribution</strong> — Pie and bar charts showing how requests are distributed across model tiers.</li>
-            <li><strong>Provider Health</strong> — Latency percentiles and error rates for each configured provider.</li>
-        </ul>
-
-        <div class="callout info">
-            <div class="callout-title">💡 Note</div>
-            <p>The dashboard is read-only and requires no authentication by default. In production, place Nexus behind a reverse proxy and restrict access to <code>/dashboard</code> as needed.</p>
-        </div>
-
-        <!-- ===== PYTHON SDK ===== -->
-        <h2 id="sdk-installation">Python SDK Installation</h2>
-        <p>The official Python SDK provides a high-level client with workflow context management, automatic retries, and integrations for popular frameworks.</p>
-
-        <div class="code-block">
-            <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
-            <pre><span class="hl-cm"># Install from PyPI</span>
-pip install nexus-gateway
-
-<span class="hl-cm"># With optional integrations</span>
-pip install nexus-gateway[langchain,crewai]</pre>
-        </div>
-
-        <p>Requires Python 3.9 or later. The SDK has minimal dependencies — only <code>httpx</code> and <code>pydantic</code>.</p>
-
-        <!-- ===== NEXUS CLIENT ===== -->
-        <h2 id="nexus-client">NexusClient</h2>
-        <p>The core client class. Manages connections, retries, and workflow state.</p>
-
-        <div class="code-block">
-            <div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
-            <pre><span class="hl-kw">from</span> nexus <span class="hl-kw">import</span> NexusClient
-
-client = NexusClient(
-    base_url=<span class="hl-str">"http://localhost:8080"</span>,
-    default_workflow=<span class="hl-str">"my-app"</span>
-)
-
-<span class="hl-cm"># Simple request</span>
-response = client.chat(
-    messages=[{<span class="hl-str">"role"</span>: <span class="hl-str">"user"</span>, <span class="hl-str">"content"</span>: <span class="hl-str">"What is 2+2?"</span>}],
-    step=<span class="hl-num">1</span>
-)
-<span class="hl-fn">print</span>(response.content)       <span class="hl-cm"># "4"</span>
-<span class="hl-fn">print</span>(response.model)         <span class="hl-cm"># "llama3.2:3b" (economy tier — simple question)</span>
-<span class="hl-fn">print</span>(response.tier)          <span class="hl-cm"># "economy"</span>
-<span class="hl-fn">print</span>(response.cost)          <span class="hl-cm"># 0.0 (local model)</span>
-
-<span class="hl-cm"># With workflow context manager</span>
-<span class="hl-kw">with</span> client.workflow(<span class="hl-str">"data-pipeline"</span>) <span class="hl-kw">as</span> wf:
-    plan = wf.chat(<span class="hl-str">"Plan the ETL pipeline"</span>, step=<span class="hl-num">1</span>)
-    code = wf.chat(<span class="hl-str">"Write the extraction code"</span>, step=<span class="hl-num">2</span>)
-    test = wf.chat(<span class="hl-str">"Write unit tests"</span>, step=<span class="hl-num">3</span>)
-
-<span class="hl-cm"># Async support</span>
-<span class="hl-kw">import</span> asyncio
-<span class="hl-kw">from</span> nexus <span class="hl-kw">import</span> AsyncNexusClient
-
-<span class="hl-kw">async def</span> <span class="hl-fn">main</span>():
-    client = AsyncNexusClient(base_url=<span class="hl-str">"http://localhost:8080"</span>)
-    response = <span class="hl-kw">await</span> client.chat(
-        messages=[{<span class="hl-str">"role"</span>: <span class="hl-str">"user"</span>, <span class="hl-str">"content"</span>: <span class="hl-str">"Hello!"</span>}]
-    )
-    <span class="hl-fn">print</span>(response.content)
-
-asyncio.run(main())</pre>
-        </div>
-
-        <!-- ===== LANGCHAIN ===== -->
-        <h2 id="langchain">LangChain Integration</h2>
-        <p>Drop-in replacement for LangChain's LLM classes. Nexus handles routing transparently while LangChain manages the chain logic.</p>
-
-        <div class="code-block">
-            <div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
-            <pre><span class="hl-kw">from</span> nexus.integrations <span class="hl-kw">import</span> NexusLangChain
-<span class="hl-kw">from</span> langchain_core.prompts <span class="hl-kw">import</span> ChatPromptTemplate
-<span class="hl-kw">from</span> langchain_core.output_parsers <span class="hl-kw">import</span> StrOutputParser
-
-<span class="hl-cm"># Initialize Nexus as a LangChain LLM</span>
-llm = NexusLangChain(
-    base_url=<span class="hl-str">"http://localhost:8080"</span>,
-    workflow_id=<span class="hl-str">"langchain-app"</span>
-)
-
-<span class="hl-cm"># Use in any LangChain chain</span>
-prompt = ChatPromptTemplate.from_messages([
-    (<span class="hl-str">"system"</span>, <span class="hl-str">"You are a concise assistant."</span>),
-    (<span class="hl-str">"user"</span>, <span class="hl-str">"{input}"</span>)
-])
-parser = StrOutputParser()
-
-chain = prompt | llm | parser
-result = chain.invoke({<span class="hl-str">"input"</span>: <span class="hl-str">"What is machine learning?"</span>})</pre>
-        </div>
-
-        <!-- ===== CREWAI ===== -->
-        <h2 id="crewai">CrewAI Integration</h2>
-        <p>Use Nexus as the LLM backend for CrewAI agents. Nexus automatically tracks each agent's step within the crew workflow and routes accordingly — planning agents get premium models, execution agents get economy models.</p>
-
-        <div class="code-block">
-            <div class="code-header"><span class="code-lang">python</span><button class="copy-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
-            <pre><span class="hl-kw">from</span> nexus.integrations <span class="hl-kw">import</span> NexusCrewAI
-<span class="hl-kw">from</span> crewai <span class="hl-kw">import</span> Agent, Task, Crew
-
-<span class="hl-cm"># Initialize Nexus as the LLM</span>
-llm = NexusCrewAI(base_url=<span class="hl-str">"http://localhost:8080"</span>)
-
-<span class="hl-cm"># Define agents — Nexus routes each one optimally</span>
-researcher = Agent(
-    role=<span class="hl-str">"Senior Researcher"</span>,
-    goal=<span class="hl-str">"Find and analyze relevant data"</span>,
-    backstory=<span class="hl-str">"Expert at research and analysis."</span>,
-    llm=llm  <span class="hl-cm"># Nexus automatically tracks crew steps</span>
-)
-
-writer = Agent(
-    role=<span class="hl-str">"Technical Writer"</span>,
-    goal=<span class="hl-str">"Write clear documentation"</span>,
-    backstory=<span class="hl-str">"Skilled technical communicator."</span>,
-    llm=llm
-)
-
-<span class="hl-cm"># Create tasks and crew</span>
-research_task = Task(
-    description=<span class="hl-str">"Research the latest trends in AI inference."</span>,
-    agent=researcher,
-    expected_output=<span class="hl-str">"A summary of current trends."</span>
-)
-write_task = Task(
-    description=<span class="hl-str">"Write a blog post based on the research."</span>,
-    agent=writer,
-    expected_output=<span class="hl-str">"A polished blog post."</span>
-)
-
-crew = Crew(agents=[researcher, writer], tasks=[research_task, write_task])
-result = crew.kickoff()</pre>
-        </div>
-
-        <!-- ===== DEPLOYMENT ===== -->
-        <h2 id="deploy-docker">Deployment: Docker</h2>
-        <p>For production deployments, use the full Docker Compose stack with Redis for distributed state, Prometheus for metrics collection, and Grafana for dashboards.</p>
-
-        <div class="code-block">
-            <div class="code-header"><span class="code-lang">yaml</span><button class="copy-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
-            <pre><span class="hl-cm"># docker-compose.prod.yaml</span>
-<span class="hl-key">version</span>: <span class="hl-str">'3.8'</span>
-
-<span class="hl-key">services</span>:
-  <span class="hl-key">nexus</span>:
-    <span class="hl-key">image</span>: <span class="hl-str">ghcr.io/nexus-ai/nexus:latest</span>
-    <span class="hl-key">restart</span>: <span class="hl-str">always</span>
-    <span class="hl-key">ports</span>:
-      - <span class="hl-str">"8080:8080"</span>
-    <span class="hl-key">volumes</span>:
-      - <span class="hl-str">./config.yaml:/etc/nexus/config.yaml:ro</span>
-    <span class="hl-key">environment</span>:
-      - <span class="hl-var">OPENAI_API_KEY</span>
-      - <span class="hl-var">ANTHROPIC_API_KEY</span>
-      - <span class="hl-var">NEXUS_REDIS_URL</span>=<span class="hl-str">redis://redis:6379</span>
-    <span class="hl-key">depends_on</span>:
-      - <span class="hl-str">redis</span>
-    <span class="hl-key">healthcheck</span>:
-      <span class="hl-key">test</span>: [<span class="hl-str">"CMD"</span>, <span class="hl-str">"curl"</span>, <span class="hl-str">"-f"</span>, <span class="hl-str">"http://localhost:8080/health"</span>]
-      <span class="hl-key">interval</span>: <span class="hl-str">30s</span>
-      <span class="hl-key">timeout</span>: <span class="hl-str">5s</span>
-      <span class="hl-key">retries</span>: <span class="hl-num">3</span>
-
-  <span class="hl-key">redis</span>:
-    <span class="hl-key">image</span>: <span class="hl-str">redis:7-alpine</span>
-    <span class="hl-key">restart</span>: <span class="hl-str">always</span>
-    <span class="hl-key">volumes</span>:
-      - <span class="hl-str">redis-data:/data</span>
-
-  <span class="hl-key">prometheus</span>:
-    <span class="hl-key">image</span>: <span class="hl-str">prom/prometheus:latest</span>
-    <span class="hl-key">restart</span>: <span class="hl-str">always</span>
-    <span class="hl-key">volumes</span>:
-      - <span class="hl-str">./prometheus.yml:/etc/prometheus/prometheus.yml:ro</span>
-    <span class="hl-key">ports</span>:
-      - <span class="hl-str">"9090:9090"</span>
-
-  <span class="hl-key">grafana</span>:
-    <span class="hl-key">image</span>: <span class="hl-str">grafana/grafana:latest</span>
-    <span class="hl-key">restart</span>: <span class="hl-str">always</span>
-    <span class="hl-key">ports</span>:
-      - <span class="hl-str">"3000:3000"</span>
-    <span class="hl-key">volumes</span>:
-      - <span class="hl-str">grafana-data:/var/lib/grafana</span>
-
-<span class="hl-key">volumes</span>:
-  <span class="hl-key">redis-data</span>:
-  <span class="hl-key">grafana-data</span>:</pre>
-        </div>
-
-        <div class="callout warning">
-            <div class="callout-title">⚠️ Security</div>
-            <p>Never commit API keys to version control. Use <code>.env</code> files or a secrets manager, and pass keys through environment variables.</p>
-        </div>
-
-        <!-- ===== KUBERNETES ===== -->
-        <h2 id="deploy-kubernetes">Deployment: Kubernetes</h2>
-        <p>Nexus provides an official Helm chart for production Kubernetes deployments. The chart includes configurable replicas, resource limits, autoscaling, and Prometheus ServiceMonitor.</p>
-
-        <h3>Helm Chart</h3>
-        <div class="code-block">
-            <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
-            <pre><span class="hl-cm"># Add the Nexus Helm repository</span>
-helm repo add nexus https://charts.nexus-ai.dev
-helm repo update
-
-<span class="hl-cm"># Install with default values</span>
-helm install nexus nexus/nexus-gateway \
-  <span class="hl-flag">--set</span> config.providers.openai.apiKey=<span class="hl-var"></span> \
-  <span class="hl-flag">--set</span> config.providers.anthropic.apiKey=<span class="hl-var"></span> \
-  <span class="hl-flag">--namespace</span> nexus \
-  <span class="hl-flag">--create-namespace</span>
-
-<span class="hl-cm"># Or install with a custom values file</span>
-helm install nexus nexus/nexus-gateway \
-  <span class="hl-flag">-f</span> values.yaml \
-  <span class="hl-flag">--namespace</span> nexus</pre>
-        </div>
-
-        <h3>Kubernetes Manifests</h3>
-        <p>If you prefer plain YAML manifests over Helm, here are the core resources:</p>
-
-        <div class="code-block">
-            <div class="code-header"><span class="code-lang">yaml</span><button class="copy-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
-            <pre><span class="hl-cm"># configmap.yaml</span>
-<span class="hl-key">apiVersion</span>: <span class="hl-str">v1</span>
-<span class="hl-key">kind</span>: <span class="hl-str">ConfigMap</span>
-<span class="hl-key">metadata</span>:
-  <span class="hl-key">name</span>: <span class="hl-str">nexus-config</span>
-  <span class="hl-key">namespace</span>: <span class="hl-str">nexus</span>
-<span class="hl-key">data</span>:
-  <span class="hl-key">config.yaml</span>: |
-    <span class="hl-key">server</span>:
-      <span class="hl-key">host</span>: <span class="hl-str">0.0.0.0</span>
-      <span class="hl-key">port</span>: <span class="hl-num">8080</span>
-    <span class="hl-key">routing</span>:
-      <span class="hl-key">default_tier</span>: <span class="hl-str">mid</span>
-<span class="hl-cm">---</span>
-<span class="hl-cm"># deployment.yaml</span>
-<span class="hl-key">apiVersion</span>: <span class="hl-str">apps/v1</span>
-<span class="hl-key">kind</span>: <span class="hl-str">Deployment</span>
-<span class="hl-key">metadata</span>:
-  <span class="hl-key">name</span>: <span class="hl-str">nexus</span>
-  <span class="hl-key">namespace</span>: <span class="hl-str">nexus</span>
-<span class="hl-key">spec</span>:
-  <span class="hl-key">replicas</span>: <span class="hl-num">3</span>
-  <span class="hl-key">selector</span>:
-    <span class="hl-key">matchLabels</span>:
-      <span class="hl-key">app</span>: <span class="hl-str">nexus</span>
-  <span class="hl-key">template</span>:
-    <span class="hl-key">metadata</span>:
-      <span class="hl-key">labels</span>:
-        <span class="hl-key">app</span>: <span class="hl-str">nexus</span>
-    <span class="hl-key">spec</span>:
-      <span class="hl-key">containers</span>:
-        - <span class="hl-key">name</span>: <span class="hl-str">nexus</span>
-          <span class="hl-key">image</span>: <span class="hl-str">ghcr.io/nexus-ai/nexus:latest</span>
-          <span class="hl-key">ports</span>:
-            - <span class="hl-key">containerPort</span>: <span class="hl-num">8080</span>
-              <span class="hl-key">name</span>: <span class="hl-str">http</span>
-            - <span class="hl-key">containerPort</span>: <span class="hl-num">9090</span>
-              <span class="hl-key">name</span>: <span class="hl-str">metrics</span>
-          <span class="hl-key">envFrom</span>:
-            - <span class="hl-key">secretRef</span>:
-                <span class="hl-key">name</span>: <span class="hl-str">nexus-secrets</span>
-          <span class="hl-key">volumeMounts</span>:
-            - <span class="hl-key">name</span>: <span class="hl-str">config</span>
-              <span class="hl-key">mountPath</span>: <span class="hl-str">/etc/nexus</span>
-          <span class="hl-key">resources</span>:
-            <span class="hl-key">requests</span>:
-              <span class="hl-key">cpu</span>: <span class="hl-str">100m</span>
-              <span class="hl-key">memory</span>: <span class="hl-str">128Mi</span>
-            <span class="hl-key">limits</span>:
-              <span class="hl-key">cpu</span>: <span class="hl-str">500m</span>
-              <span class="hl-key">memory</span>: <span class="hl-str">256Mi</span>
-          <span class="hl-key">livenessProbe</span>:
-            <span class="hl-key">httpGet</span>:
-              <span class="hl-key">path</span>: <span class="hl-str">/health</span>
-              <span class="hl-key">port</span>: <span class="hl-str">http</span>
-            <span class="hl-key">initialDelaySeconds</span>: <span class="hl-num">5</span>
-          <span class="hl-key">readinessProbe</span>:
-            <span class="hl-key">httpGet</span>:
-              <span class="hl-key">path</span>: <span class="hl-str">/health</span>
-              <span class="hl-key">port</span>: <span class="hl-str">http</span>
-      <span class="hl-key">volumes</span>:
-        - <span class="hl-key">name</span>: <span class="hl-str">config</span>
-          <span class="hl-key">configMap</span>:
-            <span class="hl-key">name</span>: <span class="hl-str">nexus-config</span>
-<span class="hl-cm">---</span>
-<span class="hl-cm"># service.yaml</span>
-<span class="hl-key">apiVersion</span>: <span class="hl-str">v1</span>
-<span class="hl-key">kind</span>: <span class="hl-str">Service</span>
-<span class="hl-key">metadata</span>:
-  <span class="hl-key">name</span>: <span class="hl-str">nexus</span>
-  <span class="hl-key">namespace</span>: <span class="hl-str">nexus</span>
-<span class="hl-key">spec</span>:
-  <span class="hl-key">selector</span>:
-    <span class="hl-key">app</span>: <span class="hl-str">nexus</span>
-  <span class="hl-key">ports</span>:
-    - <span class="hl-key">name</span>: <span class="hl-str">http</span>
-      <span class="hl-key">port</span>: <span class="hl-num">80</span>
-      <span class="hl-key">targetPort</span>: <span class="hl-num">8080</span>
-    - <span class="hl-key">name</span>: <span class="hl-str">metrics</span>
-      <span class="hl-key">port</span>: <span class="hl-num">9090</span>
-      <span class="hl-key">targetPort</span>: <span class="hl-num">9090</span></pre>
-        </div>
-
-        <!-- ===== BARE METAL ===== -->
-        <h2 id="deploy-bare-metal">Deployment: Bare Metal</h2>
-        <p>Run Nexus directly on a Linux server using systemd for process management and nginx as a reverse proxy.</p>
-
-        <h3>systemd Service</h3>
-        <div class="code-block">
-            <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
-            <pre><span class="hl-cm"># /etc/systemd/system/nexus.service</span>
-[Unit]
-<span class="hl-key">Description</span>=<span class="hl-str">Nexus AI Inference Gateway</span>
-<span class="hl-key">After</span>=<span class="hl-str">network.target</span>
-
-[Service]
-<span class="hl-key">Type</span>=<span class="hl-str">simple</span>
-<span class="hl-key">User</span>=<span class="hl-str">nexus</span>
-<span class="hl-key">Group</span>=<span class="hl-str">nexus</span>
-<span class="hl-key">ExecStart</span>=<span class="hl-str">/usr/local/bin/nexus serve --config /etc/nexus/config.yaml</span>
-<span class="hl-key">Restart</span>=<span class="hl-str">always</span>
-<span class="hl-key">RestartSec</span>=<span class="hl-num">5</span>
-<span class="hl-key">EnvironmentFile</span>=<span class="hl-str">/etc/nexus/env</span>
-
-[Install]
-<span class="hl-key">WantedBy</span>=<span class="hl-str">multi-user.target</span></pre>
-        </div>
-
-        <div class="code-block">
-            <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
-            <pre><span class="hl-cm"># Install and start the service</span>
-sudo useradd <span class="hl-flag">--system</span> <span class="hl-flag">--no-create-home</span> nexus
-sudo mkdir <span class="hl-flag">-p</span> /etc/nexus
-sudo cp config.yaml /etc/nexus/
-sudo cp nexus /usr/local/bin/
-
-<span class="hl-cm"># Create environment file with secrets</span>
-sudo tee /etc/nexus/env &lt;&lt;<span class="hl-str">EOF</span>
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
-<span class="hl-str">EOF</span>
-sudo chmod <span class="hl-num">600</span> /etc/nexus/env
-
-<span class="hl-cm"># Enable and start</span>
-sudo systemctl daemon-reload
-sudo systemctl enable nexus
-sudo systemctl start nexus
-sudo systemctl status nexus</pre>
-        </div>
-
-        <h3>Nginx Reverse Proxy</h3>
-        <div class="code-block">
-            <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
-            <pre><span class="hl-cm"># /etc/nginx/sites-available/nexus</span>
-<span class="hl-kw">server</span> {
-    <span class="hl-key">listen</span> <span class="hl-num">443</span> ssl http2;
-    <span class="hl-key">server_name</span> nexus.example.com;
-
-    <span class="hl-key">ssl_certificate</span>     /etc/letsencrypt/live/nexus.example.com/fullchain.pem;
-    <span class="hl-key">ssl_certificate_key</span> /etc/letsencrypt/live/nexus.example.com/privkey.pem;
-
-    <span class="hl-kw">location</span> / {
-        <span class="hl-key">proxy_pass</span>       http://127.0.0.1:8080;
-        <span class="hl-key">proxy_set_header</span> Host System.Management.Automation.Internal.Host.InternalHost;
-        <span class="hl-key">proxy_set_header</span> X-Real-IP ;
-        <span class="hl-key">proxy_set_header</span> X-Forwarded-For ;
-        <span class="hl-key">proxy_set_header</span> X-Forwarded-Proto ;
-        <span class="hl-key">proxy_read_timeout</span> <span class="hl-num">120</span>s;
-    }
-
-    <span class="hl-cm"># Restrict dashboard access by IP</span>
-    <span class="hl-kw">location</span> /dashboard {
-        <span class="hl-key">allow</span>   10.0.0.0/8;
-        <span class="hl-key">deny</span>    all;
-        <span class="hl-key">proxy_pass</span> http://127.0.0.1:8080;
-    }
-
-    <span class="hl-cm"># Block external access to metrics</span>
-    <span class="hl-kw">location</span> /metrics {
-        <span class="hl-key">deny</span> all;
-    }
-}</pre>
-        </div>
-
-        <!-- ===== ARCHITECTURE ===== -->
-        <h2 id="how-routing-works">How Routing Works</h2>
-        <p>Every request to Nexus flows through a deterministic pipeline. Understanding this pipeline helps you configure tiers and budgets for optimal results.</p>
-
-        <div class="flow-diagram">
-            <div class="flow-step">📥 Request</div>
-            <div class="flow-arrow">→</div>
-            <div class="flow-step">📋 Header Extraction</div>
-            <div class="flow-arrow">→</div>
-            <div class="flow-step">🧮 Complexity Scoring</div>
-            <div class="flow-arrow">→</div>
-            <div class="flow-step">💰 Budget Check</div>
-            <div class="flow-arrow">→</div>
-            <div class="flow-step">🎯 Tier Selection</div>
-            <div class="flow-arrow">→</div>
-            <div class="flow-step">🔀 Provider Routing</div>
-            <div class="flow-arrow">→</div>
-            <div class="flow-step">📤 Response</div>
-        </div>
-
-        <ol>
-            <li><strong>Header Extraction</strong> — Nexus reads <code>X-Workflow-ID</code>, <code>X-Step-Number</code>, <code>X-Team-ID</code>, and <code>X-Budget-ID</code> from the request. These provide context for routing and budget decisions.</li>
-            <li><strong>Complexity Scoring</strong> — The request body is analyzed using the CASTER-inspired algorithm (see below). The result is a score between 0.0 and 1.0.</li>
-            <li><strong>Budget Check</strong> — If the team or workflow is approaching its budget limit, the score is adjusted downward to favor cheaper tiers. At 100% budget consumption, requests are automatically downgraded to the economy tier.</li>
-            <li><strong>Tier Selection</strong> — The final score is mapped to a tier using the configured ranges (e.g., 0.0–0.21 = economy, 0.21–0.35 = cheap, etc.).</li>
-            <li><strong>Provider Routing</strong> — Within the selected tier, Nexus picks a provider based on availability and latency. If multiple models are configured in a tier, Nexus load-balances across them.</li>
-            <li><strong>Response</strong> — The provider's response is returned to the client with additional <code>X-Nexus-*</code> headers for observability.</li>
-        </ol>
-
-        <!-- ===== COMPLEXITY SCORING ===== -->
-        <h2 id="complexity-scoring">Complexity Scoring</h2>
-        <p>The complexity scoring engine is inspired by the CASTER (Complexity-Aware Smart Tier-based Efficient Routing) research. It analyzes five dimensions of each request and produces a composite score between <strong>0.0</strong> (trivial) and <strong>1.0</strong> (highly complex).</p>
-
-        <h3>Scoring Dimensions</h3>
-
-        <p><strong>1. Keyword Analysis (weight: 0.30)</strong></p>
-        <p>The message content is scanned for keywords that indicate complexity level:</p>
-        <ul>
-            <li><strong>High-complexity keywords</strong> — "analyze", "compare", "evaluate", "architect", "design", "optimize", "debug", "refactor", "explain in detail", "trade-offs"</li>
-            <li><strong>Medium-complexity keywords</strong> — "summarize", "describe", "implement", "write", "create", "list"</li>
-            <li><strong>Low-complexity keywords</strong> — "hello", "thanks", "yes", "no", "what is", "define"</li>
-        </ul>
-        <p>The keyword score is calculated as the ratio of high-complexity keywords to total keywords found, normalized to the [0, 1] range.</p>
-
-        <p><strong>2. Length Scoring (weight: 0.15)</strong></p>
-        <p>Longer messages tend to contain more nuanced requests. The length score is based on total token count across all messages, with a logarithmic curve that plateaus around 2000 tokens.</p>
-
-        <p><strong>3. Role Weight (weight: 0.20)</strong></p>
-        <p>System messages with detailed instructions signal more complex tasks. This dimension considers the number of messages, the presence and length of system prompts, and the depth of the conversation.</p>
-
-        <p><strong>4. Structure Analysis (weight: 0.15)</strong></p>
-        <p>Requests containing code blocks, JSON, bullet lists, or multi-part questions receive higher structure scores. This captures the structural complexity that keyword analysis alone might miss.</p>
-
-        <p><strong>5. Budget Pressure (weight: 0.20)</strong></p>
-        <p>As a team or workflow approaches its budget limit, this dimension increases, pushing the overall score downward and favoring cheaper tiers. At 80% budget consumption (configurable via <code>downgrade_at</code>), the pressure starts affecting routing.</p>
-
-        <h3>Final Formula</h3>
-        <div class="code-block">
-            <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
-            <pre>score = keyword × <span class="hl-num">0.30</span> + length × <span class="hl-num">0.15</span> + role × <span class="hl-num">0.20</span> + structure × <span class="hl-num">0.15</span> + budget × <span class="hl-num">0.20</span>
-
-<span class="hl-cm"># Example: "Explain the trade-offs between microservices and monoliths"</span>
-<span class="hl-cm"># keyword  = 0.85 (high-complexity: "explain", "trade-offs")</span>
-<span class="hl-cm"># length   = 0.15 (short message)</span>
-<span class="hl-cm"># role     = 0.10 (single user message, no system prompt)</span>
-<span class="hl-cm"># structure = 0.05 (plain text, no code or lists)</span>
-<span class="hl-cm"># budget   = 0.50 (team at 40% of monthly budget)</span>
-
-<span class="hl-cm"># score = 0.85×0.30 + 0.15×0.15 + 0.10×0.20 + 0.05×0.15 + 0.50×0.20</span>
-<span class="hl-cm"># score = 0.255 + 0.0225 + 0.02 + 0.0075 + 0.10 = 0.405</span>
-<span class="hl-cm"># → Tier: "mid" (range 0.35–0.56) → Model: claude-3-5-haiku</span></pre>
-        </div>
-
-        <div class="callout tip">
-            <div class="callout-title">💡 Tip</div>
-            <p>You can customize the weights in your <code>config.yaml</code> under <code>routing.complexity_weights</code>. The weights must sum to 1.0.</p>
-        </div>
-
-        <!-- ===== BUDGET SYSTEM ===== -->
-        <h2 id="budget-system">Budget System</h2>
-        <p>Nexus provides fine-grained cost controls through its budget system. Budgets can be set at the organization level (default), per team, or per workflow.</p>
-
-        <h3>Budget Hierarchy</h3>
-        <ul>
-            <li><strong>Default Budget</strong> — Applied to all requests that don't match a team or workflow-specific budget. Set under <code>budgets.default</code>.</li>
-            <li><strong>Team Budgets</strong> — Override the default for requests with a matching <code>X-Team-ID</code> header. Configured under <code>budgets.teams</code>.</li>
-            <li><strong>Workflow Budgets</strong> — Most granular level. Override both default and team budgets for requests with a matching <code>X-Budget-ID</code> header.</li>
-        </ul>
-
-        <h3>Automatic Downgrade Behavior</h3>
-        <p>When a budget reaches the <code>downgrade_at</code> threshold (default: 80%), Nexus begins progressively routing requests to cheaper tiers. The budget pressure component of the complexity score increases linearly from the threshold to the limit:</p>
-        <ul>
-            <li><strong>0–80% consumed</strong> — No downgrade pressure. Routing is based purely on request complexity.</li>
-            <li><strong>80–100% consumed</strong> — Increasing downgrade pressure. Complex requests may be routed to mid instead of premium.</li>
-            <li><strong>100% consumed</strong> — All requests are routed to the economy tier regardless of complexity. A <code>X-Nexus-Budget-Exceeded: true</code> header is included in responses.</li>
-        </ul>
-
-        <h3>Budget Reset Schedules</h3>
-        <p>Daily budgets reset at midnight UTC. Monthly budgets reset on the 1st of each month at midnight UTC. The reset schedule is not configurable in the current version — future releases will support custom reset cron expressions.</p>
-
-        <div class="code-block">
-            <div class="code-header"><span class="code-lang">yaml</span><button class="copy-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div>
-            <pre><span class="hl-cm"># Example: Strict budget for the support team</span>
-<span class="hl-key">budgets</span>:
-  <span class="hl-key">default</span>:
-    <span class="hl-key">max_daily</span>: <span class="hl-num">100.00</span>
-    <span class="hl-key">max_monthly</span>: <span class="hl-num">2000.00</span>
-    <span class="hl-key">downgrade_at</span>: <span class="hl-str">80%</span>       <span class="hl-cm"># start downgrading at 80% usage</span>
-  <span class="hl-key">teams</span>:
-    <span class="hl-key">engineering</span>:
-      <span class="hl-key">max_monthly</span>: <span class="hl-num">5000.00</span>   <span class="hl-cm"># higher limit for engineering</span>
-      <span class="hl-key">downgrade_at</span>: <span class="hl-str">90%</span>      <span class="hl-cm"># more headroom before downgrade</span>
-    <span class="hl-key">support</span>:
-      <span class="hl-key">max_monthly</span>: <span class="hl-num">500.00</span>    <span class="hl-cm"># conservative limit for support</span>
-      <span class="hl-key">max_daily</span>: <span class="hl-num">25.00</span>       <span class="hl-cm"># with daily cap to prevent spikes</span></pre>
-        </div>
-
-    </main>
+<div class="mobile-menu" id="mobile-menu">
+  <a href="index.html" onclick="closeMobile()">Home</a>
+  <a href="how-it-works.html" onclick="closeMobile()">How It Works</a>
+  <a href="docs.html" onclick="closeMobile()">Docs</a>
+  <a href="playground.html" onclick="closeMobile()">Playground</a>
+  <a href="pricing.html" onclick="closeMobile()">Pricing</a>
+  <a href="https://github.com" target="_blank" rel="noopener">GitHub</a>
+  <a href="index.html#quickstart" class="nav-cta" style="text-align:center;display:block;margin-top:16px;" onclick="closeMobile()">Get Started Free</a>
 </div>
 
-<!-- =================== BACK TO TOP =================== -->
-<button class="back-to-top" id="backToTop" onclick="window.scrollTo({top:0})" aria-label="Back to top">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="18 15 12 9 6 15"/></svg>
-</button>
+<!-- SIDEBAR TOGGLE (mobile) -->
+<button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">&#9776;</button>
+
+<!-- LAYOUT -->
+<div class="docs-layout">
+
+<!-- SIDEBAR -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-section">
+    <div class="sidebar-label">Getting Started</div>
+    <a href="#getting-started" class="sidebar-link active">Quick Start</a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Reference</div>
+    <a href="#api-reference" class="sidebar-link">API Reference</a>
+    <a href="#headers" class="sidebar-link">Headers</a>
+    <a href="#configuration" class="sidebar-link">Configuration</a>
+    <a href="#cli" class="sidebar-link">CLI Commands</a>
+    <a href="#sdk" class="sidebar-link">SDK Examples</a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Deep Dive</div>
+    <a href="#caching" class="sidebar-link">Caching (7 Layers)</a>
+    <a href="#routing" class="sidebar-link">Routing &amp; Classification</a>
+    <a href="#security" class="sidebar-link">Security</a>
+    <a href="#observability" class="sidebar-link">Observability</a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-label">Help</div>
+    <a href="#troubleshooting" class="sidebar-link">Troubleshooting</a>
+  </div>
+</aside>
+
+<!-- MAIN CONTENT -->
+<main class="docs-content">
+
+<h1><span class="gradient-text">Nexus Documentation</span></h1>
+<p class="doc-subtitle">Everything you need to deploy, configure, and operate the Nexus intelligent AI inference gateway.</p>
+
+<!-- 1. GETTING STARTED -->
+<h2 id="getting-started">Getting Started</h2>
+<p>Go from zero to optimized AI inference in <strong>3 steps</strong>.</p>
+
+<h3>Step 1 &mdash; Install</h3>
+<pre><code><span class="cm"># Docker Compose (recommended)</span>
+git clone https://github.com/nexus-ai/nexus &amp;&amp; cd nexus
+docker compose up -d
+
+<span class="cm"># Or install the CLI</span>
+curl -fsSL https://get.nexus.ai | sh</code></pre>
+
+<h3>Step 2 &mdash; Configure</h3>
+<p>Run the interactive wizard or create <code>nexus.yaml</code> manually:</p>
+<pre><code><span class="cm"># Interactive wizard</span>
+nexus init
+
+<span class="cm"># Or minimal config:</span>
+<span class="kw">server</span>:
+  <span class="kw">port</span>: <span class="num">8080</span>
+<span class="kw">providers</span>:
+  - <span class="kw">name</span>: <span class="str">openai</span>
+    <span class="kw">api_key</span>: <span class="vr">${OPENAI_API_KEY}</span>
+    <span class="kw">models</span>: [<span class="str">gpt-4o</span>, <span class="str">gpt-4o-mini</span>]
+  - <span class="kw">name</span>: <span class="str">anthropic</span>
+    <span class="kw">api_key</span>: <span class="vr">${ANTHROPIC_API_KEY}</span>
+    <span class="kw">models</span>: [<span class="str">claude-sonnet-4-20250514</span>, <span class="str">claude-haiku</span>]</code></pre>
+
+<h3>Step 3 &mdash; Send Your First Request</h3>
+<pre><code><span class="fn">curl</span> <span class="fl">-X POST</span> http://localhost:8080/v1/chat/completions \
+  <span class="fl">-H</span> <span class="str">"Content-Type: application/json"</span> \
+  <span class="fl">-H</span> <span class="str">"Authorization: Bearer nxs_live_abc123"</span> \
+  <span class="fl">-d</span> <span class="str">'{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "Hello world"}]
+  }'</span></code></pre>
+<div class="callout tip">
+  <div class="callout-title">&#x1f4a1; Tip</div>
+  <p>Nexus is fully OpenAI-compatible. Just change your <code>base_url</code> to point at Nexus and all existing code works instantly.</p>
+</div>
+
+<!-- 2. API REFERENCE -->
+<h2 id="api-reference">API Reference</h2>
+<p>Complete list of every Nexus endpoint.</p>
+
+<h3>Chat Completions</h3>
+<div class="endpoint">
+  <span class="endpoint-method method-post">POST</span>
+  <span class="endpoint-path">/v1/chat/completions</span>
+  <p class="endpoint-desc">Main chat endpoint. Fully OpenAI-compatible. Nexus analyzes, routes, and optimizes every request.</p>
+</div>
+<pre><code><span class="cm">// Request body (OpenAI format)</span>
+{
+  <span class="str">"model"</span>: <span class="str">"gpt-4o"</span>,
+  <span class="str">"messages"</span>: [
+    {<span class="str">"role"</span>: <span class="str">"system"</span>, <span class="str">"content"</span>: <span class="str">"You are a helpful assistant."</span>},
+    {<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: <span class="str">"Explain quicksort"</span>}
+  ],
+  <span class="str">"temperature"</span>: <span class="num">0.7</span>,
+  <span class="str">"stream"</span>: <span class="kw">true</span>
+}
+
+<span class="cm">// Response (standard OpenAI format + Nexus headers)</span>
+{
+  <span class="str">"id"</span>: <span class="str">"chatcmpl-abc123"</span>,
+  <span class="str">"object"</span>: <span class="str">"chat.completion"</span>,
+  <span class="str">"model"</span>: <span class="str">"gpt-4o-mini"</span>,  <span class="cm">// Nexus may downroute</span>
+  <span class="str">"choices"</span>: [{
+    <span class="str">"message"</span>: {<span class="str">"role"</span>: <span class="str">"assistant"</span>, <span class="str">"content"</span>: <span class="str">"..."</span>},
+    <span class="str">"finish_reason"</span>: <span class="str">"stop"</span>
+  }],
+  <span class="str">"usage"</span>: {<span class="str">"prompt_tokens"</span>: <span class="num">42</span>, <span class="str">"completion_tokens"</span>: <span class="num">156</span>}
+}</code></pre>
+
+<h3>Feedback</h3>
+<div class="endpoint">
+  <span class="endpoint-method method-post">POST</span>
+  <span class="endpoint-path">/v1/feedback</span>
+  <p class="endpoint-desc">Submit quality feedback per workflow step. Helps Nexus learn which routing decisions produce the best results.</p>
+</div>
+<pre><code>{
+  <span class="str">"workflow_id"</span>: <span class="str">"wf-abc123"</span>,
+  <span class="str">"step"</span>: <span class="num">3</span>,
+  <span class="str">"rating"</span>: <span class="num">5</span>,
+  <span class="str">"comment"</span>: <span class="str">"Response was accurate and fast"</span>
+}</code></pre>
+
+<h3>Health &amp; Readiness</h3>
+<div class="endpoint">
+  <span class="endpoint-method method-get">GET</span>
+  <span class="endpoint-path">/health</span>
+  <p class="endpoint-desc">Overall gateway health status.</p>
+</div>
+<div class="endpoint">
+  <span class="endpoint-method method-get">GET</span>
+  <span class="endpoint-path">/health/live</span>
+  <p class="endpoint-desc">Kubernetes liveness probe. Returns 200 if the process is running.</p>
+</div>
+<div class="endpoint">
+  <span class="endpoint-method method-get">GET</span>
+  <span class="endpoint-path">/health/ready</span>
+  <p class="endpoint-desc">Kubernetes readiness probe. Returns 200 only when all providers are connected and cache is warm.</p>
+</div>
+
+<h3>Observability</h3>
+<div class="endpoint">
+  <span class="endpoint-method method-get">GET</span>
+  <span class="endpoint-path">/metrics</span>
+  <p class="endpoint-desc">Prometheus-format metrics. Scrape this endpoint with your monitoring stack.</p>
+</div>
+<div class="endpoint">
+  <span class="endpoint-method method-get">GET</span>
+  <span class="endpoint-path">/dashboard</span>
+  <p class="endpoint-desc">Real-time cost savings dashboard (HTML). Open in a browser.</p>
+</div>
+<div class="endpoint">
+  <span class="endpoint-method method-get">GET</span>
+  <span class="endpoint-path">/dashboard/events</span>
+  <p class="endpoint-desc">Server-Sent Events stream. Powers the live dashboard with real-time request data.</p>
+</div>
+<div class="endpoint">
+  <span class="endpoint-method method-get">GET</span>
+  <span class="endpoint-path">/dashboard/api/stats</span>
+  <p class="endpoint-desc">Aggregate statistics JSON: total requests, savings, cache hit rate, model distribution.</p>
+</div>
+
+<h3>Gateway Info</h3>
+<div class="endpoint">
+  <span class="endpoint-method method-get">GET</span>
+  <span class="endpoint-path">/</span>
+  <p class="endpoint-desc">Returns gateway info: version, uptime, configured providers, feature flags.</p>
+</div>
+
+<h3>Synonym Management</h3>
+<div class="endpoint">
+  <span class="endpoint-method method-get">GET</span>
+  <span class="endpoint-path">/api/synonyms/stats</span>
+  <p class="endpoint-desc">Synonym system statistics: total synonyms, auto-learned count, promotion rate.</p>
+</div>
+<div class="endpoint">
+  <span class="endpoint-method method-get">GET</span>
+  <span class="endpoint-path">/api/synonyms/candidates</span>
+  <p class="endpoint-desc">List synonym candidates detected by the learning system, pending review.</p>
+</div>
+<div class="endpoint">
+  <span class="endpoint-method method-get">GET</span>
+  <span class="endpoint-path">/api/synonyms/learned</span>
+  <p class="endpoint-desc">List all learned synonyms currently active in the routing classifier.</p>
+</div>
+<div class="endpoint">
+  <span class="endpoint-method method-post">POST</span>
+  <span class="endpoint-path">/api/synonyms/promote</span>
+  <p class="endpoint-desc">Promote a synonym candidate to active status.</p>
+</div>
+<div class="endpoint">
+  <span class="endpoint-method method-post">POST</span>
+  <span class="endpoint-path">/api/synonyms/add</span>
+  <p class="endpoint-desc">Manually add a new synonym mapping.</p>
+</div>
+
+<h3>Circuit Breakers</h3>
+<div class="endpoint">
+  <span class="endpoint-method method-get">GET</span>
+  <span class="endpoint-path">/api/circuit-breakers</span>
+  <p class="endpoint-desc">Circuit breaker status per provider: state (closed/open/half-open), failure count, last failure time.</p>
+</div>
+
+<h3>Eval &amp; Shadow</h3>
+<div class="endpoint">
+  <span class="endpoint-method method-get">GET</span>
+  <span class="endpoint-path">/api/eval/stats</span>
+  <p class="endpoint-desc">Confidence map data from the eval system. Shows quality scores per model per task type.</p>
+</div>
+<div class="endpoint">
+  <span class="endpoint-method method-get">GET</span>
+  <span class="endpoint-path">/api/shadow/stats</span>
+  <p class="endpoint-desc">Shadow evaluation results: compares downrouted model output vs premium model output.</p>
+</div>
+<div class="endpoint">
+  <span class="endpoint-method method-get">GET</span>
+  <span class="endpoint-path">/api/compression/stats</span>
+  <p class="endpoint-desc">Compression metrics: avg compression ratio, tokens saved, techniques used.</p>
+</div>
+
+<h3>A/B Experiments</h3>
+<div class="endpoint">
+  <span class="endpoint-method method-get">GET</span>
+  <span class="endpoint-path">/api/experiments</span>
+  <p class="endpoint-desc">List all A/B experiments with their status, variant distribution, and creation date.</p>
+</div>
+<div class="endpoint">
+  <span class="endpoint-method method-get">GET</span>
+  <span class="endpoint-path">/api/experiments/{id}/results</span>
+  <p class="endpoint-desc">Results for a specific experiment including statistical significance, p-value, and per-variant metrics.</p>
+</div>
+<div class="endpoint">
+  <span class="endpoint-method method-post">POST</span>
+  <span class="endpoint-path">/api/experiments</span>
+  <p class="endpoint-desc">Create a new A/B experiment. Define variants, traffic split, and success metrics.</p>
+</div>
+<pre><code>{
+  <span class="str">"name"</span>: <span class="str">"sonnet-vs-haiku-for-code"</span>,
+  <span class="str">"variants"</span>: [
+    {<span class="str">"name"</span>: <span class="str">"control"</span>, <span class="str">"model"</span>: <span class="str">"claude-sonnet-4-20250514"</span>, <span class="str">"weight"</span>: <span class="num">50</span>},
+    {<span class="str">"name"</span>: <span class="str">"challenger"</span>, <span class="str">"model"</span>: <span class="str">"claude-haiku"</span>, <span class="str">"weight"</span>: <span class="num">50</span>}
+  ],
+  <span class="str">"metric"</span>: <span class="str">"quality_score"</span>
+}</code></pre>
+<div class="endpoint">
+  <span class="endpoint-method method-post">POST</span>
+  <span class="endpoint-path">/api/experiments/{id}/toggle</span>
+  <p class="endpoint-desc">Enable or disable an experiment.</p>
+</div>
+
+<h3>Inspect (Dry Run)</h3>
+<div class="endpoint">
+  <span class="endpoint-method method-post">POST</span>
+  <span class="endpoint-path">/api/inspect</span>
+  <p class="endpoint-desc">Dry-run routing analysis. Returns what Nexus <em>would</em> do without making a provider call.</p>
+</div>
+<pre><code><span class="cm">// Request</span>
+{
+  <span class="str">"messages"</span>: [{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: <span class="str">"Explain quicksort in Python"</span>}]
+}
+
+<span class="cm">// Response</span>
+{
+  <span class="str">"complexity_score"</span>: <span class="num">0.32</span>,
+  <span class="str">"selected_tier"</span>: <span class="str">"mid"</span>,
+  <span class="str">"selected_model"</span>: <span class="str">"gpt-4o-mini"</span>,
+  <span class="str">"cache_status"</span>: <span class="str">"miss"</span>,
+  <span class="str">"estimated_cost"</span>: <span class="num">0.0003</span>,
+  <span class="str">"would_cascade"</span>: <span class="kw">false</span>,
+  <span class="str">"experiment"</span>: <span class="kw">null</span>
+}</code></pre>
+
+<h3>API Key Management</h3>
+<div class="endpoint">
+  <span class="endpoint-method method-post">POST</span>
+  <span class="endpoint-path">/api/keys/generate</span>
+  <p class="endpoint-desc">Generate a new API key with optional scope, rate limit, and team assignment.</p>
+</div>
+<div class="endpoint">
+  <span class="endpoint-method method-post">POST</span>
+  <span class="endpoint-path">/api/keys/revoke</span>
+  <p class="endpoint-desc">Revoke an existing API key immediately.</p>
+</div>
+
+<h3>Usage &amp; Billing</h3>
+<div class="endpoint">
+  <span class="endpoint-method method-get">GET</span>
+  <span class="endpoint-path">/api/usage</span>
+  <p class="endpoint-desc">Usage stats: requests by team, model, day. Cost breakdown and savings summary.</p>
+</div>
+<div class="endpoint">
+  <span class="endpoint-method method-post">POST</span>
+  <span class="endpoint-path">/webhooks/stripe</span>
+  <p class="endpoint-desc">Stripe webhook handler for subscription events (checkout, invoice, cancellation).</p>
+</div>
+
+<h3>Admin</h3>
+<div class="endpoint">
+  <span class="endpoint-method method-get">GET</span>
+  <span class="endpoint-path">/api/admin/subscriptions</span>
+  <p class="endpoint-desc">List all active subscriptions.</p>
+</div>
+<div class="endpoint">
+  <span class="endpoint-method method-get">GET</span>
+  <span class="endpoint-path">/api/admin/keys</span>
+  <p class="endpoint-desc">List all API keys with usage metadata.</p>
+</div>
+<div class="endpoint">
+  <span class="endpoint-method method-get">GET</span>
+  <span class="endpoint-path">/api/admin/devices</span>
+  <p class="endpoint-desc">List registered devices and their last-seen timestamps.</p>
+</div>
+
+<!-- 3. HEADERS -->
+<h2 id="headers">Headers Reference</h2>
+
+<h3>Request Headers</h3>
+<table class="doc-table">
+  <thead><tr><th>Header</th><th>Description</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td><code>Authorization</code></td><td>API key authentication. All keys use the <code>nxs_live_</code> prefix.</td><td><code>Bearer nxs_live_abc123</code></td></tr>
+    <tr><td><code>X-Workflow-ID</code></td><td>Workflow identifier for multi-step agent tracking. Nexus groups requests by workflow for cost attribution and step counting.</td><td><code>wf-build-pipeline-42</code></td></tr>
+    <tr><td><code>X-Agent-Role</code></td><td>Agent role hint. Nexus uses this for routing optimization (e.g., &ldquo;tester&rdquo; gets cheaper models).</td><td><code>engineer</code>, <code>architect</code>, <code>tester</code></td></tr>
+    <tr><td><code>X-Team</code></td><td>Team identifier for per-team cost attribution and billing dashboards.</td><td><code>platform-team</code></td></tr>
+    <tr><td><code>X-Nexus-Explain</code></td><td>When set to <code>true</code>, includes a detailed routing explanation in the response body.</td><td><code>true</code></td></tr>
+  </tbody>
+</table>
+
+<h3>Response Headers</h3>
+<table class="doc-table">
+  <thead><tr><th>Header</th><th>Description</th><th>Example</th></tr></thead>
+  <tbody>
+    <tr><td><code>X-Nexus-Model</code></td><td>The actual model that handled the request (may differ from requested model).</td><td><code>gpt-4o-mini</code></td></tr>
+    <tr><td><code>X-Nexus-Tier</code></td><td>Which routing tier was selected: <code>premium</code>, <code>mid</code>, or <code>fast</code>.</td><td><code>mid</code></td></tr>
+    <tr><td><code>X-Nexus-Provider</code></td><td>Which provider backend handled the request.</td><td><code>openai</code></td></tr>
+    <tr><td><code>X-Nexus-Cost</code></td><td>Dollar cost of this individual request.</td><td><code>0.0012</code></td></tr>
+    <tr><td><code>X-Nexus-Cache</code></td><td>Cache hit source. Empty on miss.</td><td><code>l1_exact</code>, <code>l2_bm25</code>, <code>l2_semantic</code></td></tr>
+    <tr><td><code>X-Nexus-Workflow-ID</code></td><td>Echo of the workflow ID for correlation.</td><td><code>wf-build-pipeline-42</code></td></tr>
+    <tr><td><code>X-Nexus-Workflow-Step</code></td><td>Auto-incrementing step number within the workflow.</td><td><code>3</code></td></tr>
+    <tr><td><code>X-Nexus-Confidence</code></td><td>Eval confidence score (0&ndash;1). How confident Nexus is that the downrouted model matched premium quality.</td><td><code>0.94</code></td></tr>
+    <tr><td><code>X-Request-ID</code></td><td>Unique request identifier for tracing and support.</td><td><code>req_a1b2c3d4</code></td></tr>
+    <tr><td><code>Traceparent</code></td><td>W3C Trace Context header for distributed tracing integration.</td><td><code>00-abc123-def456-01</code></td></tr>
+  </tbody>
+</table>
+
+<!-- 4. CONFIGURATION -->
+<h2 id="configuration">Configuration Guide</h2>
+<p>Nexus is configured via <code>nexus.yaml</code>. Every section is optional with sensible defaults.</p>
+
+<h3>server</h3>
+<pre><code><span class="kw">server</span>:
+  <span class="kw">port</span>: <span class="num">8080</span>              <span class="cm"># Listen port (default: 8080)</span>
+  <span class="kw">host</span>: <span class="str">0.0.0.0</span>          <span class="cm"># Bind address (default: 0.0.0.0)</span>
+  <span class="kw">tls</span>:
+    <span class="kw">enabled</span>: <span class="kw">true</span>
+    <span class="kw">cert</span>: <span class="str">/etc/nexus/tls/cert.pem</span>
+    <span class="kw">key</span>: <span class="str">/etc/nexus/tls/key.pem</span>
+  <span class="kw">read_timeout</span>: <span class="str">30s</span>       <span class="cm"># Max request read time</span>
+  <span class="kw">write_timeout</span>: <span class="str">120s</span>     <span class="cm"># Max response write time</span>
+  <span class="kw">max_body_size</span>: <span class="str">10MB</span>     <span class="cm"># Max request body</span></code></pre>
+
+<h3>providers</h3>
+<pre><code><span class="kw">providers</span>:
+  - <span class="kw">name</span>: <span class="str">openai</span>
+    <span class="kw">api_key</span>: <span class="vr">${OPENAI_API_KEY}</span>
+    <span class="kw">models</span>: [<span class="str">gpt-4o</span>, <span class="str">gpt-4o-mini</span>, <span class="str">gpt-4-turbo</span>]
+    <span class="kw">tier</span>: <span class="str">premium</span>            <span class="cm"># premium | mid | fast</span>
+    <span class="kw">weight</span>: <span class="num">100</span>              <span class="cm"># Load balancing weight</span>
+    <span class="kw">timeout</span>: <span class="str">60s</span>
+    <span class="kw">max_retries</span>: <span class="num">3</span>
+  - <span class="kw">name</span>: <span class="str">anthropic</span>
+    <span class="kw">api_key</span>: <span class="vr">${ANTHROPIC_API_KEY}</span>
+    <span class="kw">models</span>: [<span class="str">claude-sonnet-4-20250514</span>, <span class="str">claude-haiku</span>]
+    <span class="kw">tier</span>: <span class="str">mid</span>
+  - <span class="kw">name</span>: <span class="str">ollama</span>
+    <span class="kw">base_url</span>: <span class="str">http://localhost:11434</span>
+    <span class="kw">models</span>: [<span class="str">llama3</span>, <span class="str">codellama</span>]
+    <span class="kw">tier</span>: <span class="str">fast</span></code></pre>
+
+<h3>router</h3>
+<pre><code><span class="kw">router</span>:
+  <span class="kw">smart_classifier</span>:
+    <span class="kw">enabled</span>: <span class="kw">true</span>
+    <span class="kw">algorithm</span>: <span class="str">tfidf</span>        <span class="cm"># TF-IDF based complexity scoring</span>
+    <span class="kw">threshold_low</span>: <span class="num">0.3</span>      <span class="cm"># Below this = fast tier</span>
+    <span class="kw">threshold_high</span>: <span class="num">0.7</span>     <span class="cm"># Above this = premium tier</span>
+    <span class="kw">features</span>:               <span class="cm"># Scoring features</span>
+      - <span class="str">token_count</span>
+      - <span class="str">vocabulary_richness</span>
+      - <span class="str">code_density</span>
+      - <span class="str">question_complexity</span>
+      - <span class="str">domain_specificity</span>
+  <span class="kw">default_tier</span>: <span class="str">mid</span>        <span class="cm"># Fallback when classifier is uncertain</span>
+  <span class="kw">agent_role_overrides</span>:    <span class="cm"># Override tier based on agent role</span>
+    <span class="kw">architect</span>: <span class="str">premium</span>
+    <span class="kw">tester</span>: <span class="str">fast</span></code></pre>
+
+<h3>cache</h3>
+<pre><code><span class="kw">cache</span>:
+  <span class="kw">enabled</span>: <span class="kw">true</span>
+  <span class="kw">l1_exact</span>:               <span class="cm"># Layer 1: exact hash match (in-memory)</span>
+    <span class="kw">max_size</span>: <span class="num">10000</span>
+    <span class="kw">ttl</span>: <span class="str">1h</span>
+  <span class="kw">l2_bm25</span>:                <span class="cm"># Layer 2: BM25 keyword match</span>
+    <span class="kw">enabled</span>: <span class="kw">true</span>
+    <span class="kw">threshold</span>: <span class="num">0.85</span>
+  <span class="kw">l2_semantic</span>:             <span class="cm"># Layer 3: semantic vector similarity</span>
+    <span class="kw">enabled</span>: <span class="kw">true</span>
+    <span class="kw">threshold</span>: <span class="num">0.92</span>
+    <span class="kw">backend</span>: <span class="str">qdrant</span>
+  <span class="kw">l3_cluster</span>:              <span class="cm"># Layer 4: cross-user cluster cache</span>
+    <span class="kw">enabled</span>: <span class="kw">true</span>
+  <span class="kw">l4_stale</span>:                <span class="cm"># Layer 5: stale-while-revalidate</span>
+    <span class="kw">enabled</span>: <span class="kw">true</span>
+    <span class="kw">max_stale</span>: <span class="str">24h</span>
+  <span class="kw">l5_prefetch</span>:             <span class="cm"># Layer 6: predictive prefetch</span>
+    <span class="kw">enabled</span>: <span class="kw">false</span>
+  <span class="kw">l6_compressed</span>:           <span class="cm"># Layer 7: compressed response cache</span>
+    <span class="kw">enabled</span>: <span class="kw">true</span>
+    <span class="kw">algorithm</span>: <span class="str">zstd</span>
+  <span class="kw">redis_url</span>: <span class="str">redis://localhost:6379</span></code></pre>
+
+<h3>compression</h3>
+<pre><code><span class="kw">compression</span>:
+  <span class="kw">enabled</span>: <span class="kw">true</span>
+  <span class="kw">strategies</span>:
+    - <span class="str">whitespace</span>             <span class="cm"># Remove unnecessary whitespace</span>
+    - <span class="str">synonym_replace</span>        <span class="cm"># Replace verbose phrases</span>
+    - <span class="str">system_prompt_cache</span>    <span class="cm"># Deduplicate system prompts</span>
+  <span class="kw">min_tokens</span>: <span class="num">100</span>           <span class="cm"># Only compress above this</span>
+  <span class="kw">target_ratio</span>: <span class="num">0.8</span>        <span class="cm"># Target 80% of original size</span></code></pre>
+
+<h3>cascade</h3>
+<pre><code><span class="kw">cascade</span>:
+  <span class="kw">enabled</span>: <span class="kw">true</span>
+  <span class="kw">confidence_threshold</span>: <span class="num">0.7</span>  <span class="cm"># Escalate if confidence &lt; this</span>
+  <span class="kw">max_escalations</span>: <span class="num">2</span>        <span class="cm"># Max tier jumps per request</span>
+  <span class="kw">timeout_per_tier</span>: <span class="str">10s</span>     <span class="cm"># Timeout before cascade</span></code></pre>
+
+<h3>eval</h3>
+<pre><code><span class="kw">eval</span>:
+  <span class="kw">enabled</span>: <span class="kw">true</span>
+  <span class="kw">shadow</span>:
+    <span class="kw">enabled</span>: <span class="kw">true</span>
+    <span class="kw">sample_rate</span>: <span class="num">0.05</span>      <span class="cm"># Shadow eval 5% of requests</span>
+    <span class="kw">premium_model</span>: <span class="str">gpt-4o</span>  <span class="cm"># Compare against this</span>
+  <span class="kw">confidence_decay</span>: <span class="num">0.995</span>  <span class="cm"># Confidence decays over time</span>
+  <span class="kw">min_samples</span>: <span class="num">50</span>          <span class="cm"># Min samples before trusting score</span></code></pre>
+
+<h3>experiment</h3>
+<pre><code><span class="kw">experiment</span>:
+  <span class="kw">enabled</span>: <span class="kw">true</span>
+  <span class="kw">auto_conclude</span>: <span class="kw">true</span>       <span class="cm"># Auto-end when significance reached</span>
+  <span class="kw">significance_level</span>: <span class="num">0.05</span>  <span class="cm"># p-value threshold</span>
+  <span class="kw">min_sample_size</span>: <span class="num">100</span></code></pre>
+
+<h3>workflow</h3>
+<pre><code><span class="kw">workflow</span>:
+  <span class="kw">enabled</span>: <span class="kw">true</span>
+  <span class="kw">max_steps</span>: <span class="num">50</span>              <span class="cm"># Max steps per workflow</span>
+  <span class="kw">step_timeout</span>: <span class="str">120s</span>
+  <span class="kw">cost_budget</span>: <span class="num">5.00</span>          <span class="cm"># Max $ per workflow</span>
+  <span class="kw">auto_downgrade</span>: <span class="kw">true</span>       <span class="cm"># Auto-downroute when nearing budget</span></code></pre>
+
+<h3>telemetry &amp; tracing</h3>
+<pre><code><span class="kw">telemetry</span>:
+  <span class="kw">enabled</span>: <span class="kw">true</span>
+  <span class="kw">prometheus</span>:
+    <span class="kw">enabled</span>: <span class="kw">true</span>
+    <span class="kw">port</span>: <span class="num">9090</span>
+  <span class="kw">log_level</span>: <span class="str">info</span>           <span class="cm"># debug | info | warn | error</span>
+
+<span class="kw">tracing</span>:
+  <span class="kw">enabled</span>: <span class="kw">true</span>
+  <span class="kw">exporter</span>: <span class="str">otlp</span>            <span class="cm"># otlp | jaeger | zipkin</span>
+  <span class="kw">endpoint</span>: <span class="str">http://localhost:4318</span>
+  <span class="kw">sample_rate</span>: <span class="num">1.0</span>          <span class="cm"># 1.0 = trace every request</span></code></pre>
+
+<h3>security</h3>
+<pre><code><span class="kw">security</span>:
+  <span class="kw">api_keys</span>:
+    <span class="kw">enabled</span>: <span class="kw">true</span>
+    <span class="kw">prefix</span>: <span class="str">nxs_live_</span>
+  <span class="kw">rate_limit</span>:
+    <span class="kw">enabled</span>: <span class="kw">true</span>
+    <span class="kw">requests_per_minute</span>: <span class="num">60</span>
+    <span class="kw">burst</span>: <span class="num">10</span>
+  <span class="kw">ip_allowlist</span>: []           <span class="cm"># Empty = allow all</span>
+  <span class="kw">ip_denylist</span>: []
+  <span class="kw">cors</span>:
+    <span class="kw">enabled</span>: <span class="kw">true</span>
+    <span class="kw">origins</span>: [<span class="str">"*"</span>]
+  <span class="kw">prompt_guard</span>:
+    <span class="kw">enabled</span>: <span class="kw">true</span>
+    <span class="kw">block_pii</span>: <span class="kw">true</span>         <span class="cm"># Detect &amp; redact PII</span>
+    <span class="kw">block_injection</span>: <span class="kw">true</span>   <span class="cm"># Block prompt injection</span>
+    <span class="kw">max_risk_score</span>: <span class="num">0.8</span>
+  <span class="kw">tls</span>:
+    <span class="kw">min_version</span>: <span class="str">1.2</span>
+  <span class="kw">audit_log</span>:
+    <span class="kw">enabled</span>: <span class="kw">true</span>
+    <span class="kw">destination</span>: <span class="str">file</span>       <span class="cm"># file | syslog | webhook</span>
+  <span class="kw">hmac_signing</span>: <span class="kw">false</span>
+  <span class="kw">request_signing</span>: <span class="kw">false</span>
+  <span class="kw">header_sanitization</span>: <span class="kw">true</span>
+  <span class="kw">max_token_limit</span>: <span class="num">128000</span></code></pre>
+
+<h3>billing, notification &amp; storage</h3>
+<pre><code><span class="kw">billing</span>:
+  <span class="kw">provider</span>: <span class="str">stripe</span>
+  <span class="kw">webhook_secret</span>: <span class="vr">${STRIPE_WEBHOOK_SECRET}</span>
+  <span class="kw">plans</span>:
+    <span class="kw">free</span>: { <span class="kw">requests_per_day</span>: <span class="num">100</span> }
+    <span class="kw">pro</span>: { <span class="kw">requests_per_day</span>: <span class="num">10000</span> }
+    <span class="kw">enterprise</span>: { <span class="kw">requests_per_day</span>: <span class="num">-1</span> }  <span class="cm"># unlimited</span>
+
+<span class="kw">notification</span>:
+  <span class="kw">slack_webhook</span>: <span class="vr">${SLACK_WEBHOOK_URL}</span>
+  <span class="kw">email</span>:
+    <span class="kw">enabled</span>: <span class="kw">false</span>
+  <span class="kw">on_circuit_break</span>: <span class="kw">true</span>
+  <span class="kw">on_budget_exceed</span>: <span class="kw">true</span>
+
+<span class="kw">storage</span>:
+  <span class="kw">backend</span>: <span class="str">sqlite</span>           <span class="cm"># sqlite | postgres</span>
+  <span class="kw">path</span>: <span class="str">./data/nexus.db</span></code></pre>
+
+<!-- 5. CLI -->
+<h2 id="cli">CLI Reference</h2>
+
+<h3><code>nexus</code> / <code>nexus serve</code></h3>
+<p>Start the Nexus gateway.</p>
+<pre><code>nexus serve <span class="fl">--config</span> nexus.yaml <span class="fl">--port</span> <span class="num">8080</span> <span class="fl">--log-level</span> info</code></pre>
+<table class="doc-table">
+  <thead><tr><th>Flag</th><th>Default</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>--config</code></td><td><code>nexus.yaml</code></td><td>Path to configuration file</td></tr>
+    <tr><td><code>--port</code></td><td><code>8080</code></td><td>Override listen port</td></tr>
+    <tr><td><code>--log-level</code></td><td><code>info</code></td><td>Log verbosity (debug, info, warn, error)</td></tr>
+    <tr><td><code>--no-cache</code></td><td><code>false</code></td><td>Disable caching for debugging</td></tr>
+  </tbody>
+</table>
+
+<h3><code>nexus init</code></h3>
+<p>Interactive configuration wizard. Walks through provider setup, cache config, and security options.</p>
+<pre><code>nexus init
+<span class="cm"># Prompts for: providers, models, cache backend, security settings</span>
+<span class="cm"># Generates: nexus.yaml with your choices</span></code></pre>
+
+<h3><code>nexus status</code></h3>
+<p>Show gateway health, uptime, provider status, and savings summary.</p>
+<pre><code>nexus status
+<span class="cm"># Output:</span>
+<span class="cm"># Gateway:    &#10003; running (uptime: 4d 12h)</span>
+<span class="cm"># Providers:  openai &#10003;  anthropic &#10003;  ollama &#10003;</span>
+<span class="cm"># Requests:   12,847 (today) / 89,231 (total)</span>
+<span class="cm"># Savings:    $1,247.83 (67% reduction)</span>
+<span class="cm"># Cache Rate: 42.3% hit rate</span></code></pre>
+
+<h3><code>nexus validate</code></h3>
+<p>Validate configuration file without starting the server.</p>
+<pre><code>nexus validate <span class="fl">--config</span> nexus.yaml
+<span class="cm"># &#10003; Configuration valid (14 providers, 7 cache layers, security enabled)</span></code></pre>
+
+<h3><code>nexus inspect</code></h3>
+<p>Offline routing analysis. See exactly what Nexus would do with a prompt.</p>
+<pre><code>nexus inspect <span class="str">"Implement a binary search tree in Rust with generics"</span>
+<span class="cm"># Complexity: 0.72 (high)</span>
+<span class="cm"># Tier:       premium</span>
+<span class="cm"># Model:      gpt-4o</span>
+<span class="cm"># Reason:     code_density=0.8, domain_specificity=0.9</span></code></pre>
+
+<h3><code>nexus version</code></h3>
+<pre><code>nexus version
+<span class="cm"># nexus v1.0.0 (build abc123, go1.22)</span></code></pre>
+
+<!-- 6. SDK -->
+<h2 id="sdk">SDK Examples</h2>
+<p>Nexus is OpenAI-compatible. Use any existing SDK &mdash; just change the base URL.</p>
+
+<div class="tab-group" id="sdk-tabs">
+  <div class="tab-btns">
+    <button class="tab-btn active" data-tab="sdk-python">Python</button>
+    <button class="tab-btn" data-tab="sdk-node">Node.js</button>
+    <button class="tab-btn" data-tab="sdk-go">Go</button>
+    <button class="tab-btn" data-tab="sdk-curl">curl</button>
+  </div>
+  <div class="tab-panel active" id="sdk-python">
+<pre><code><span class="kw">from</span> openai <span class="kw">import</span> OpenAI
+
+client = OpenAI(
+    <span class="fn">base_url</span>=<span class="str">"http://localhost:8080/v1"</span>,
+    <span class="fn">api_key</span>=<span class="str">"nxs_live_abc123"</span>
+)
+
+response = client.chat.completions.create(
+    <span class="fn">model</span>=<span class="str">"gpt-4o"</span>,
+    <span class="fn">messages</span>=[{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: <span class="str">"Explain quicksort"</span>}],
+    <span class="fn">extra_headers</span>={
+        <span class="str">"X-Workflow-ID"</span>: <span class="str">"wf-docs-demo"</span>,
+        <span class="str">"X-Team"</span>: <span class="str">"platform"</span>,
+    }
+)
+
+<span class="fn">print</span>(response.choices[<span class="num">0</span>].message.content)
+<span class="cm"># Check which model actually handled it:</span>
+<span class="cm"># response.headers["X-Nexus-Model"]  =  "gpt-4o-mini"</span></code></pre>
+  </div>
+  <div class="tab-panel" id="sdk-node">
+<pre><code><span class="kw">import</span> OpenAI <span class="kw">from</span> <span class="str">"openai"</span>;
+
+<span class="kw">const</span> client = <span class="kw">new</span> <span class="fn">OpenAI</span>({
+  <span class="fn">baseURL</span>: <span class="str">"http://localhost:8080/v1"</span>,
+  <span class="fn">apiKey</span>: <span class="str">"nxs_live_abc123"</span>,
+});
+
+<span class="kw">const</span> response = <span class="kw">await</span> client.chat.completions.<span class="fn">create</span>({
+  <span class="fn">model</span>: <span class="str">"gpt-4o"</span>,
+  <span class="fn">messages</span>: [{ <span class="fn">role</span>: <span class="str">"user"</span>, <span class="fn">content</span>: <span class="str">"Explain quicksort"</span> }],
+}, {
+  <span class="fn">headers</span>: {
+    <span class="str">"X-Workflow-ID"</span>: <span class="str">"wf-docs-demo"</span>,
+    <span class="str">"X-Team"</span>: <span class="str">"platform"</span>,
+  }
+});
+
+console.<span class="fn">log</span>(response.choices[<span class="num">0</span>].message.content);</code></pre>
+  </div>
+  <div class="tab-panel" id="sdk-go">
+<pre><code><span class="kw">package</span> main
+
+<span class="kw">import</span> (
+    <span class="str">"context"</span>
+    <span class="str">"fmt"</span>
+    openai <span class="str">"github.com/sashabaranov/go-openai"</span>
+)
+
+<span class="kw">func</span> <span class="fn">main</span>() {
+    config := openai.<span class="fn">DefaultConfig</span>(<span class="str">"nxs_live_abc123"</span>)
+    config.BaseURL = <span class="str">"http://localhost:8080/v1"</span>
+    client := openai.<span class="fn">NewClientWithConfig</span>(config)
+
+    resp, _ := client.<span class="fn">CreateChatCompletion</span>(
+        context.<span class="fn">Background</span>(),
+        openai.ChatCompletionRequest{
+            Model: <span class="str">"gpt-4o"</span>,
+            Messages: []openai.ChatCompletionMessage{
+                {Role: <span class="str">"user"</span>, Content: <span class="str">"Explain quicksort"</span>},
+            },
+        },
+    )
+    fmt.<span class="fn">Println</span>(resp.Choices[<span class="num">0</span>].Message.Content)
+}</code></pre>
+  </div>
+  <div class="tab-panel" id="sdk-curl">
+<pre><code><span class="fn">curl</span> <span class="fl">-X POST</span> http://localhost:8080/v1/chat/completions \
+  <span class="fl">-H</span> <span class="str">"Content-Type: application/json"</span> \
+  <span class="fl">-H</span> <span class="str">"Authorization: Bearer nxs_live_abc123"</span> \
+  <span class="fl">-H</span> <span class="str">"X-Workflow-ID: wf-docs-demo"</span> \
+  <span class="fl">-H</span> <span class="str">"X-Team: platform"</span> \
+  <span class="fl">-H</span> <span class="str">"X-Nexus-Explain: true"</span> \
+  <span class="fl">-d</span> <span class="str">'{
+    "model": "gpt-4o",
+    "messages": [{"role": "user", "content": "Explain quicksort"}]
+  }'</span>
+
+<span class="cm"># Response headers will include:</span>
+<span class="cm"># X-Nexus-Model: gpt-4o-mini</span>
+<span class="cm"># X-Nexus-Tier: mid</span>
+<span class="cm"># X-Nexus-Cost: 0.0003</span>
+<span class="cm"># X-Nexus-Cache: miss</span></code></pre>
+  </div>
+</div>
+
+<!-- 7. CACHING -->
+<h2 id="caching">Caching (7 Layers)</h2>
+<p>Nexus uses a <strong>7-layer cache hierarchy</strong> to maximize hit rates while maintaining response quality. Each layer is progressively more flexible in matching.</p>
+
+<table class="doc-table">
+  <thead><tr><th>Layer</th><th>Type</th><th>Match Method</th><th>Speed</th><th>Accuracy</th></tr></thead>
+  <tbody>
+    <tr><td><strong>L1</strong></td><td>Exact Match</td><td>SHA-256 hash of normalized prompt</td><td>&lt; 1ms</td><td>100%</td></tr>
+    <tr><td><strong>L2a</strong></td><td>BM25 Keyword</td><td>TF-IDF keyword similarity (threshold: 0.85)</td><td>2&ndash;3ms</td><td>~95%</td></tr>
+    <tr><td><strong>L2b</strong></td><td>Semantic</td><td>Vector embedding cosine similarity (threshold: 0.92)</td><td>3&ndash;5ms</td><td>~93%</td></tr>
+    <tr><td><strong>L3</strong></td><td>Cluster</td><td>Cross-user shared cache (team/org level)</td><td>5ms</td><td>~90%</td></tr>
+    <tr><td><strong>L4</strong></td><td>Stale-While-Revalidate</td><td>Returns stale response, refreshes in background</td><td>&lt; 1ms</td><td>Varies</td></tr>
+    <tr><td><strong>L5</strong></td><td>Predictive Prefetch</td><td>Pre-fetches likely next requests in a workflow</td><td>0ms *</td><td>~85%</td></tr>
+    <tr><td><strong>L6</strong></td><td>Compressed</td><td>Zstd-compressed responses for storage efficiency</td><td>1&ndash;2ms</td><td>100%</td></tr>
+  </tbody>
+</table>
+
+<h3>Tuning Tips</h3>
+<ul>
+  <li><strong>Raise semantic threshold</strong> (0.92 &rarr; 0.95) if you see incorrect cache hits on similar but different prompts.</li>
+  <li><strong>Lower BM25 threshold</strong> (0.85 &rarr; 0.80) for higher hit rates on keyword-heavy prompts (e.g., code questions).</li>
+  <li><strong>Enable prefetch</strong> for sequential workflows where step N+1 is predictable from step N.</li>
+  <li><strong>Set TTL per use case:</strong> short (5m) for rapidly changing data, long (24h) for stable knowledge questions.</li>
+</ul>
+
+<div class="callout tip">
+  <div class="callout-title">&#x1f4a1; Cache Hit Identification</div>
+  <p>Check the <code>X-Nexus-Cache</code> response header. Values: <code>l1_exact</code>, <code>l2_bm25</code>, <code>l2_semantic</code>, <code>l3_cluster</code>, <code>l4_stale</code>, <code>l5_prefetch</code>, <code>l6_compressed</code>, or empty on miss.</p>
+</div>
+
+<!-- 8. ROUTING -->
+<h2 id="routing">Routing &amp; Classification</h2>
+<p>Nexus routes every request to the optimal model tier using a <strong>TF-IDF based complexity classifier</strong>.</p>
+
+<h3>Complexity Scoring Formula</h3>
+<p>Each prompt is scored on a 0&ndash;1 scale using weighted features:</p>
+<pre><code><span class="cm">complexity = w1*token_count_norm + w2*vocab_richness</span>
+<span class="cm">           + w3*code_density + w4*question_depth</span>
+<span class="cm">           + w5*domain_specificity</span>
+
+<span class="cm">Tier assignment:</span>
+  score &lt; <span class="num">0.3</span>  =  <span class="str">fast</span>     (gpt-4o-mini, claude-haiku, llama3)
+  score &lt; <span class="num">0.7</span>  =  <span class="str">mid</span>      (claude-sonnet-4-20250514, gpt-4-turbo)
+  score &ge; <span class="num">0.7</span>  =  <span class="str">premium</span>  (gpt-4o, claude-opus)</code></pre>
+
+<h3>TF-IDF Classifier</h3>
+<p>The classifier uses <strong>Term Frequency &ndash; Inverse Document Frequency</strong> to identify domain-specific vocabulary. Prompts containing rare technical terms (e.g., &ldquo;monad transformer&rdquo;, &ldquo;CRDT&rdquo;) score higher on domain specificity.</p>
+
+<h3>Cascade Behavior</h3>
+<p>When the eval system detects low confidence from a cheaper model, Nexus <strong>cascades</strong> to the next tier:</p>
+<ol>
+  <li>Request starts at the classified tier (e.g., <strong>fast</strong>)</li>
+  <li>Model returns a response with confidence score</li>
+  <li>If confidence &lt; <code>cascade.confidence_threshold</code> (default: 0.7), Nexus escalates to <strong>mid</strong></li>
+  <li>If still below threshold, escalates to <strong>premium</strong></li>
+  <li>Max escalations controlled by <code>cascade.max_escalations</code></li>
+</ol>
+<div class="callout warn">
+  <div class="callout-title">&#x26a0;&#xfe0f; Cascade adds latency</div>
+  <p>Each escalation adds a full round-trip. For latency-sensitive use cases, set <code>max_escalations: 1</code> or start at a higher tier.</p>
+</div>
+
+<!-- 9. SECURITY -->
+<h2 id="security">Security</h2>
+<p>Nexus provides <strong>12+ security layers</strong> to protect your AI infrastructure.</p>
+
+<table class="doc-table">
+  <thead><tr><th>#</th><th>Layer</th><th>Description</th><th>Config Key</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td><strong>API Key Auth</strong></td><td>All requests require a valid <code>nxs_live_*</code> key. Keys can be scoped to teams, models, and rate limits.</td><td><code>security.api_keys</code></td></tr>
+    <tr><td>2</td><td><strong>Rate Limiting</strong></td><td>Per-key and per-IP rate limits with configurable burst allowance.</td><td><code>security.rate_limit</code></td></tr>
+    <tr><td>3</td><td><strong>IP Allow/Deny Lists</strong></td><td>Whitelist corporate CIDRs or block known bad actors.</td><td><code>security.ip_allowlist</code></td></tr>
+    <tr><td>4</td><td><strong>TLS Encryption</strong></td><td>Enforce TLS 1.2+ for all connections. Auto-generate certs or bring your own.</td><td><code>security.tls</code></td></tr>
+    <tr><td>5</td><td><strong>PII Detection</strong></td><td>Scans prompts for personally identifiable information. Can redact or block.</td><td><code>security.prompt_guard.block_pii</code></td></tr>
+    <tr><td>6</td><td><strong>Injection Protection</strong></td><td>Detects and blocks prompt injection attacks using pattern matching and ML scoring.</td><td><code>security.prompt_guard.block_injection</code></td></tr>
+    <tr><td>7</td><td><strong>CORS Policy</strong></td><td>Control which origins can make cross-origin requests to the gateway.</td><td><code>security.cors</code></td></tr>
+    <tr><td>8</td><td><strong>Audit Logging</strong></td><td>Every request logged with user, model, cost, and routing decision. Supports file, syslog, or webhook.</td><td><code>security.audit_log</code></td></tr>
+    <tr><td>9</td><td><strong>HMAC Signing</strong></td><td>Verify request integrity with HMAC-SHA256 signatures.</td><td><code>security.hmac_signing</code></td></tr>
+    <tr><td>10</td><td><strong>Header Sanitization</strong></td><td>Strip sensitive headers before forwarding to providers.</td><td><code>security.header_sanitization</code></td></tr>
+    <tr><td>11</td><td><strong>Token Limits</strong></td><td>Enforce maximum token limits per request to prevent cost explosions.</td><td><code>security.max_token_limit</code></td></tr>
+    <tr><td>12</td><td><strong>Request Signing</strong></td><td>Cryptographic request signing for mutual authentication in zero-trust environments.</td><td><code>security.request_signing</code></td></tr>
+  </tbody>
+</table>
+
+<!-- 10. OBSERVABILITY -->
+<h2 id="observability">Observability</h2>
+
+<h3>Prometheus Metrics</h3>
+<p>Scrape <code>/metrics</code> for a full set of Prometheus metrics:</p>
+<table class="doc-table">
+  <thead><tr><th>Metric</th><th>Type</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>nexus_requests_total</code></td><td>Counter</td><td>Total requests by model, tier, provider, status</td></tr>
+    <tr><td><code>nexus_request_duration_seconds</code></td><td>Histogram</td><td>Request latency distribution</td></tr>
+    <tr><td><code>nexus_tokens_total</code></td><td>Counter</td><td>Tokens processed (prompt + completion)</td></tr>
+    <tr><td><code>nexus_cost_dollars</code></td><td>Counter</td><td>Cumulative cost in dollars</td></tr>
+    <tr><td><code>nexus_savings_dollars</code></td><td>Counter</td><td>Cumulative savings vs direct provider calls</td></tr>
+    <tr><td><code>nexus_cache_hits_total</code></td><td>Counter</td><td>Cache hits by layer (l1, l2_bm25, l2_semantic, etc.)</td></tr>
+    <tr><td><code>nexus_cache_misses_total</code></td><td>Counter</td><td>Cache misses</td></tr>
+    <tr><td><code>nexus_circuit_breaker_state</code></td><td>Gauge</td><td>Circuit breaker state per provider (0=closed, 1=open)</td></tr>
+    <tr><td><code>nexus_cascade_escalations_total</code></td><td>Counter</td><td>Number of cascade tier escalations</td></tr>
+    <tr><td><code>nexus_compression_ratio</code></td><td>Gauge</td><td>Average prompt compression ratio</td></tr>
+    <tr><td><code>nexus_shadow_eval_score</code></td><td>Gauge</td><td>Shadow evaluation quality score</td></tr>
+    <tr><td><code>nexus_active_workflows</code></td><td>Gauge</td><td>Currently active workflow count</td></tr>
+  </tbody>
+</table>
+
+<h3>Distributed Tracing</h3>
+<p>Nexus emits <strong>W3C Trace Context</strong> headers on every response. Configure the exporter to send spans to Jaeger, Zipkin, or any OTLP-compatible backend.</p>
+<pre><code><span class="cm"># Each request generates a trace with spans for:</span>
+<span class="cm"># auth - prompt_guard - cache_lookup - classify</span>
+<span class="cm"># route - provider_call - cache_store - eval</span></code></pre>
+
+<h3>Dashboard</h3>
+<p>Open <code>http://localhost:8080/dashboard</code> in a browser for a real-time dashboard showing:</p>
+<ul>
+  <li>Live request stream with routing decisions</li>
+  <li>Cost savings (actual vs. would-have-been)</li>
+  <li>Cache hit rate over time</li>
+  <li>Model distribution pie chart</li>
+  <li>Provider health status</li>
+</ul>
+
+<!-- 11. TROUBLESHOOTING -->
+<h2 id="troubleshooting">Troubleshooting</h2>
+
+<h3>Common Errors</h3>
+<table class="doc-table">
+  <thead><tr><th>Error</th><th>Cause</th><th>Fix</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>401 Unauthorized</code></td>
+      <td>Missing or invalid API key</td>
+      <td>Ensure <code>Authorization: Bearer nxs_live_...</code> header is set. Generate a key with <code>POST /api/keys/generate</code>.</td>
+    </tr>
+    <tr>
+      <td><code>429 Too Many Requests</code></td>
+      <td>Rate limit exceeded</td>
+      <td>Increase <code>security.rate_limit.requests_per_minute</code> or add burst capacity.</td>
+    </tr>
+    <tr>
+      <td><code>502 Bad Gateway</code></td>
+      <td>All providers down (circuit breakers open)</td>
+      <td>Check <code>GET /api/circuit-breakers</code>. Verify provider API keys. Wait for half-open recovery.</td>
+    </tr>
+    <tr>
+      <td><code>503 Service Unavailable</code></td>
+      <td>Gateway not ready</td>
+      <td>Check <code>GET /health/ready</code>. Ensure providers are configured and cache backend is accessible.</td>
+    </tr>
+    <tr>
+      <td><code>413 Payload Too Large</code></td>
+      <td>Request exceeds <code>max_body_size</code></td>
+      <td>Increase <code>server.max_body_size</code> or compress prompts with the compression middleware.</td>
+    </tr>
+    <tr>
+      <td>Cache always misses</td>
+      <td>Cache not configured or TTL expired</td>
+      <td>Verify <code>cache.enabled: true</code>. Check TTLs. Verify cache backend (Redis/Qdrant) is connected.</td>
+    </tr>
+    <tr>
+      <td>Model not downrouting</td>
+      <td>Classifier confidence too low</td>
+      <td>Check <code>/api/eval/stats</code> for confidence scores. Lower <code>router.smart_classifier.threshold_low</code>.</td>
+    </tr>
+    <tr>
+      <td>Cascade loops</td>
+      <td>All tiers returning low confidence</td>
+      <td>Set <code>cascade.max_escalations: 1</code>. Review shadow eval stats for model quality issues.</td>
+    </tr>
+    <tr>
+      <td>High latency on first request</td>
+      <td>Cold cache + TF-IDF model loading</td>
+      <td>Normal on first start. Use <code>/health/ready</code> to wait for warmup. Consider predictive prefetch.</td>
+    </tr>
+    <tr>
+      <td>PII blocked unexpectedly</td>
+      <td>Prompt guard false positive</td>
+      <td>Lower <code>security.prompt_guard.max_risk_score</code> or add patterns to allowlist.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Debug Mode</h3>
+<pre><code><span class="cm"># Start with debug logging</span>
+nexus serve <span class="fl">--log-level</span> debug
+
+<span class="cm"># Or inspect a single request</span>
+<span class="fn">curl</span> <span class="fl">-v</span> <span class="fl">-H</span> <span class="str">"X-Nexus-Explain: true"</span> \
+  http://localhost:8080/v1/chat/completions \
+  <span class="fl">-d</span> <span class="str">'{"model":"gpt-4o","messages":[{"role":"user","content":"test"}]}'</span>
+<span class="cm"># The response body will include a "_nexus" object with full routing explanation</span></code></pre>
+
+<h3>Getting Help</h3>
+<ul>
+  <li><strong>GitHub Issues:</strong> Report bugs and request features</li>
+  <li><strong>Discord:</strong> Real-time community support</li>
+  <li><strong>Dashboard:</strong> <code>/dashboard</code> shows live system health</li>
+  <li><strong>Metrics:</strong> <code>/metrics</code> for Prometheus-compatible monitoring</li>
+</ul>
+
+</main>
+</div>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <a href="index.html" class="nav-logo"><div class="nav-logo-icon">N</div> Nexus</a>
+        <p class="footer-tagline">Intelligent inference routing for the modern AI stack.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Product</h4>
+        <a href="index.html#features">Features</a>
+        <a href="how-it-works.html">How It Works</a>
+        <a href="docs.html">Documentation</a>
+        <a href="playground.html">Playground</a>
+        <a href="pricing.html">Pricing</a>
+      </div>
+      <div class="footer-col">
+        <h4>Community</h4>
+        <a href="https://github.com" target="_blank" rel="noopener">GitHub</a>
+        <a href="#">Blog</a>
+        <a href="#">Twitter</a>
+        <a href="#">Discord</a>
+      </div>
+      <div class="footer-col">
+        <h4>Getting Started</h4>
+        <p style="font-size:14px;color:var(--text-dim);line-height:1.6;">Deploy in minutes with Docker Compose or Helm.</p>
+        <a href="index.html#quickstart" style="display:inline-block;margin-top:12px;padding:10px 20px;border-radius:var(--radius-sm);background:var(--gradient);color:#fff;font-weight:600;font-size:14px;">Get Started &rarr;</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>Built with <span class="footer-heart">&hearts;</span> for the AI community</p>
+      <p>&copy; 2025 Nexus. All rights reserved.</p>
+    </div>
+  </div>
+</footer>
 
 <script>
-// =================== COPY TO CLIPBOARD ===================
-function copyCode(btn) {
-    const pre = btn.closest('.code-block').querySelector('pre');
-    const text = pre.textContent;
-    navigator.clipboard.writeText(text).then(() => {
-        btn.classList.add('copied');
-        const orig = btn.innerHTML;
-        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Copied!';
-        setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = orig; }, 2000);
-    });
-}
-
-// =================== MOBILE SIDEBAR TOGGLE ===================
-function toggleSidebar() {
-    document.getElementById('sidebar').classList.toggle('open');
-    document.getElementById('sidebarOverlay').classList.toggle('open');
-}
-
-// =================== SCROLL SPY ===================
 (function() {
-    const links = document.querySelectorAll('.sidebar-link[data-section]');
-    const sections = [];
-    links.forEach(link => {
-        const id = link.getAttribute('data-section');
-        const el = document.getElementById(id);
-        if (el) sections.push({ id, el, link });
-    });
+  'use strict';
 
-    function onScroll() {
-        const scrollY = window.scrollY + 100;
-        let current = sections[0];
-        for (const s of sections) {
-            if (s.el.offsetTop <= scrollY) current = s;
-        }
-        links.forEach(l => l.classList.remove('active'));
-        if (current) current.link.classList.add('active');
+  // Mobile menu
+  var toggle = document.getElementById('mobile-toggle');
+  var menu = document.getElementById('mobile-menu');
+  toggle.addEventListener('click', function() {
+    menu.classList.toggle('open');
+    var open = menu.classList.contains('open');
+    toggle.children[0].style.transform = open ? 'rotate(45deg) translate(5px, 5px)' : '';
+    toggle.children[1].style.opacity = open ? '0' : '1';
+    toggle.children[2].style.transform = open ? 'rotate(-45deg) translate(5px, -5px)' : '';
+    document.body.style.overflow = open ? 'hidden' : '';
+  });
+  window.closeMobile = function() {
+    menu.classList.remove('open');
+    toggle.children[0].style.transform = '';
+    toggle.children[1].style.opacity = '1';
+    toggle.children[2].style.transform = '';
+    document.body.style.overflow = '';
+  };
+
+  // Sidebar toggle (mobile)
+  var sidebarToggle = document.getElementById('sidebar-toggle');
+  var sidebar = document.getElementById('sidebar');
+  if (sidebarToggle) {
+    sidebarToggle.addEventListener('click', function() {
+      sidebar.classList.toggle('open');
+    });
+  }
+
+  // Active sidebar link tracking
+  var sidebarLinks = document.querySelectorAll('.sidebar-link');
+  var sections = [];
+  sidebarLinks.forEach(function(link) {
+    var id = link.getAttribute('href');
+    if (id && id.startsWith('#')) {
+      var el = document.querySelector(id);
+      if (el) sections.push({ el: el, link: link });
     }
+  });
 
-    window.addEventListener('scroll', onScroll, { passive: true });
-    onScroll();
-})();
+  function updateActive() {
+    var scrollPos = window.scrollY + 100;
+    var current = sections[0];
+    for (var i = 0; i < sections.length; i++) {
+      if (sections[i].el.offsetTop <= scrollPos) current = sections[i];
+    }
+    sidebarLinks.forEach(function(l) { l.classList.remove('active'); });
+    if (current) current.link.classList.add('active');
+  }
+  window.addEventListener('scroll', updateActive, { passive: true });
+  updateActive();
 
-// =================== BACK TO TOP ===================
-(function() {
-    const btn = document.getElementById('backToTop');
-    window.addEventListener('scroll', function() {
-        btn.classList.toggle('visible', window.scrollY > 400);
-    }, { passive: true });
-})();
-
-// =================== CLOSE SIDEBAR ON LINK CLICK (mobile) ===================
-document.querySelectorAll('.sidebar-link').forEach(link => {
-    link.addEventListener('click', () => {
-        if (window.innerWidth <= 768) {
-            document.getElementById('sidebar').classList.remove('open');
-            document.getElementById('sidebarOverlay').classList.remove('open');
-        }
+  // Close sidebar on link click (mobile)
+  sidebarLinks.forEach(function(link) {
+    link.addEventListener('click', function() {
+      if (window.innerWidth <= 900) sidebar.classList.remove('open');
     });
-});
+  });
+
+  // Tabs
+  document.querySelectorAll('.tab-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var group = this.closest('.tab-group');
+      group.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+      group.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+      this.classList.add('active');
+      var panel = document.getElementById(this.getAttribute('data-tab'));
+      if (panel) panel.classList.add('active');
+    });
+  });
+})();
 </script>
 </body>
 </html>
