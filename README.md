@@ -10,10 +10,12 @@
 
 **Agentic-first inference optimization gateway with adaptive model routing**
 
-![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go&logoColor=white)
-![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)
-![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
-![Version](https://img.shields.io/badge/version-0.1.0-orange)
+[![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![License: BSL 1.1](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](LICENSE)
+[![CI](https://github.com/oabdel2/nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/oabdel2/nexus/actions)
+[![Tests](https://img.shields.io/badge/tests-32%20E2E%20%2B%20120%2B%20unit-brightgreen)](tests/)
+[![Version](https://img.shields.io/badge/version-0.1.0-orange)](https://github.com/oabdel2/nexus/releases)
+[![Zero Deps](https://img.shields.io/badge/deps-only%20yaml.v3-purple)](go.mod)
 
 ---
 
@@ -21,18 +23,41 @@ Nexus is the **first production implementation** of concepts from the [CASTER re
 
 ## Features
 
+### Inference Optimization
 - ✅ **Adaptive Model Routing** — CASTER-inspired complexity scoring routes each request to the optimal model tier
-- ✅ **Workflow-Aware** — Tracks multi-step workflows via `X-Workflow-ID` headers, optimizes across the entire pipeline
-- ✅ **4-Tier Model Selection** — Economy → Cheap → Mid → Premium based on task complexity
+- ✅ **Cascade Routing** — Try cheap model first, auto-escalate if confidence < 0.78 (40-70% cost savings)
+- ✅ **Prompt Compression** — Strip redundant tokens before forwarding (20-35% fewer tokens billed)
+- ✅ **Confidence Scoring** — 6-signal heuristic evaluator with per-task-type learning confidence map
+- ✅ **Workflow-Aware** — Tracks multi-step workflows via `X-Workflow-ID`, optimizes across entire pipeline
 - ✅ **Budget-Aware Routing** — Automatically downgrades tiers when workflow budget runs low
-- ✅ **L1 Exact Cache** — SHA-256 hash-based cache with TTL and LRU eviction, sub-millisecond responses
-- ✅ **OpenAI-Compatible API** — Drop-in replacement for `/v1/chat/completions`
-- ✅ **Multi-Provider Support** — OpenAI, Anthropic, GitHub Copilot, Ollama (any OpenAI-compatible endpoint)
-- ✅ **Prometheus Metrics** — Requests, tokens, cost, cache hits, latency buckets
-- ✅ **Circuit Breaker** — Auto-disables unhealthy providers, self-healing after recovery
-- ✅ **Feedback Loop** — `POST /v1/feedback` for quality signal collection per workflow step
-- ✅ **Streaming Support** — SSE streaming for real-time token delivery
-- ✅ **Zero External Dependencies** — Only `gopkg.in/yaml.v3` beyond the Go standard library
+
+### Caching (7 Layers)
+- ✅ **L1 Exact Cache** — SHA-256 hash-based, sub-millisecond responses
+- ✅ **L2 BM25 Fuzzy** — Keyword-based similarity matching
+- ✅ **L2 Semantic** — BGE-M3 embedding similarity with adaptive thresholds
+- ✅ **Reranker** — Cross-encoder verification for uncertain matches
+- ✅ **Synonym Learning** — Auto-discovers and promotes query synonyms
+- ✅ **Feedback Loop** — Quality signals adjust cache confidence
+- ✅ **Shadow Mode** — Compare cache vs fresh responses for validation
+
+### Security (12 Layers)
+- ✅ **Panic Recovery** → **Body Size Limit** → **Request Timeout** → **Security Headers**
+- ✅ **Request ID** → **Request Logger** → **CORS** → **IP Allowlist**
+- ✅ **Rate Limiting** → **OIDC SSO** → **Input Validation** → **Prompt Injection Guard** (16 patterns)
+- ✅ **TLS/mTLS**, **RBAC** with wildcard permissions, **Audit Logging**
+
+### Infrastructure
+- ✅ **OpenAI-Compatible API** — Drop-in `/v1/chat/completions` replacement
+- ✅ **Multi-Provider** — OpenAI, Anthropic, Ollama (any OpenAI-compatible endpoint)
+- ✅ **Circuit Breaker** — 3-state machine with exponential backoff and automatic failover
+- ✅ **Prometheus Metrics** — Requests, tokens, cost, cache hits, compression, cascade, confidence histograms
+- ✅ **W3C Distributed Tracing** — Traceparent propagation, structured span logging
+- ✅ **Grafana Dashboards** — 4 pre-built dashboards (overview, cache, routing, security)
+- ✅ **Helm Chart** — Production Kubernetes deployment with HPA, ServiceMonitor, Ingress
+- ✅ **Billing System** — Subscriptions, API keys, device tracking, Stripe webhooks
+- ✅ **Model Warmup** — Preloads models to GPU on startup (43s → 2.6s first request)
+- ✅ **Streaming Support** — SSE streaming with real-time usage extraction
+- ✅ **Zero External Dependencies** — Only `gopkg.in/yaml.v3` beyond Go stdlib
 
 ## Architecture
 
@@ -557,19 +582,26 @@ CASTER optimizes individual requests. Nexus extends this with **workflow-level o
 
 ## Roadmap
 
-- [ ] L2 semantic cache (vector similarity search)
+- [x] ~~L2 semantic cache~~ ✅ 7-layer cache with BGE-M3 embeddings
+- [x] ~~Multi-provider failover~~ ✅ Circuit breaker with automatic failover
+- [x] ~~Dockerfile + Helm chart~~ ✅ Full Kubernetes deployment
+- [x] ~~Dashboard UI~~ ✅ Real-time SSE dashboard + Grafana
+- [x] ~~Cascade routing~~ ✅ Try cheap → escalate if confidence low
+- [x] ~~Prompt compression~~ ✅ 20-35% token reduction
+- [x] ~~Confidence scoring~~ ✅ 6-signal evaluator with learning map
 - [ ] ML-based classifier (upgrade from rule-based keyword matching)
-- [ ] Multi-provider failover chains
-- [ ] Dockerfile + Helm chart for Kubernetes deployment
-- [ ] Dashboard UI for real-time monitoring
 - [ ] A/B testing framework for routing strategies
-- [ ] Anthropic native provider (non-OpenAI-compatible)
+- [ ] Python / Node.js / Go SDKs
+- [ ] Anthropic native provider adapter
 - [ ] Request priority queuing
-- [ ] Token budget estimation before routing
+- [ ] Admin dashboard with Clerk SSO
 
 ## License
 
-Apache License 2.0 — see [LICENSE](LICENSE) for details.
+Business Source License 1.1 — see [LICENSE](LICENSE) for details.
+
+The BSL allows free use for all purposes except offering Nexus as a hosted/managed service.
+On April 6, 2030, this converts automatically to Apache License 2.0.
 
 ---
 
