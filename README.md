@@ -10,7 +10,7 @@
 
 **Agentic-first inference optimization gateway with adaptive model routing**
 
-[![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![Go Version](https://img.shields.io/badge/Go-1.23+-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![License: BSL 1.1](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](LICENSE)
 [![CI](https://github.com/oabdel2/nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/oabdel2/nexus/actions)
 [![Tests](https://img.shields.io/badge/tests-32%20E2E%20%2B%20120%2B%20unit-brightgreen)](tests/)
@@ -96,38 +96,68 @@ Nexus is the **first production implementation** of concepts from the [CASTER re
 
 ## Quick Start
 
+### 60-Second Start (Ollama, no API keys)
+
+```bash
+# 1. Install Ollama (https://ollama.com) then pull a model
+ollama pull llama3.1
+
+# 2. Clone & build
+git clone https://github.com/oabdel2/nexus.git && cd nexus
+go build -o nexus ./cmd/nexus/
+
+# 3. Run with the minimal config
+./nexus serve -config configs/nexus.minimal.yaml
+
+# 4. Send a request
+curl -s http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"auto","messages":[{"role":"user","content":"Hello!"}]}'
+```
+
+Open the live dashboard at **http://localhost:8080/dashboard**.
+
 ### Prerequisites
 
-- Go 1.24 or later
-- At least one LLM provider API key (OpenAI, Anthropic, GitHub Copilot, or a local Ollama instance)
+- Go 1.23 or later
+- At least one LLM provider: a local [Ollama](https://ollama.com) instance (no API key needed), or an API key for OpenAI / Anthropic / GitHub Copilot
 
 ### Build & Run
 
 ```bash
 # Clone
-git clone https://github.com/your-org/nexus.git
+git clone https://github.com/oabdel2/nexus.git
 cd nexus
 
 # Build
 go build -o nexus ./cmd/nexus/
 
-# Run with GitHub Copilot
-export GITHUB_COPILOT_TOKEN=$(gh auth token)
-./nexus --config configs/nexus.yaml --port 8080
+# Run with minimal config (Ollama only, no API keys)
+./nexus serve -config configs/nexus.minimal.yaml
 
-# Run with OpenAI
-export OPENAI_API_KEY=sk-...
-./nexus --config configs/nexus.yaml --port 8080
+# Or run with full config and provider API keys
+export GITHUB_COPILOT_TOKEN=$(gh auth token)
+./nexus serve -config configs/nexus.yaml
 ```
 
-### CLI Flags
+### CLI Commands
+
+| Command | Description |
+|---------|-------------|
+| `nexus serve` | Start the gateway server (default if no command given) |
+| `nexus init` | Interactive configuration wizard |
+| `nexus status` | Show gateway health and stats |
+| `nexus validate` | Validate a configuration file |
+| `nexus inspect <prompt>` | Analyze how a prompt would be routed |
+| `nexus version` | Show version information |
+
+### Serve Flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `-config` | `configs/nexus.yaml` | Path to configuration file |
 | `-port` | `0` (use config) | Override server port |
 | `-log-level` | (from config) | Log level: `debug`, `info`, `warn`, `error` |
-| `-version` | — | Show version and exit |
 
 ### Send Your First Request
 

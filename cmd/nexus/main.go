@@ -141,6 +141,7 @@ logger := slog.New(handler)
 for i := range cfg.Providers {
 cfg.Providers[i].APIKey = os.ExpandEnv(cfg.Providers[i].APIKey)
 }
+cfg.ExpandSecrets()
 
 srv := gateway.New(cfg, logger)
 
@@ -301,6 +302,12 @@ fmt.Println("\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\
 info, infoErr := fetchJSON(client, *addr+"/")
 if infoErr != nil {
 fmt.Printf("  Status:     \u274c Unreachable (%v)\n", infoErr)
+fmt.Println()
+fmt.Println("  Possible fixes:")
+fmt.Println("    1. Start the gateway:  nexus serve -config configs/nexus.yaml")
+fmt.Println("    2. Check the address:  nexus status -addr http://host:port")
+fmt.Println("    3. Validate config:    nexus validate -config configs/nexus.yaml")
+fmt.Println()
 os.Exit(1)
 }
 

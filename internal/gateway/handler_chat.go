@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -38,14 +39,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 	start := time.Now()
 
-	// Parse request
+	// Parse request using streaming decoder to avoid full-body copy
 	var req provider.ChatRequest
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		writeNexusError(w, errInvalidRequest("Failed to read request body"), http.StatusBadRequest)
-		return
-	}
-	if err := json.Unmarshal(body, &req); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeNexusError(w, errInvalidRequest("Invalid JSON in request body"), http.StatusBadRequest)
 		return
 	}
@@ -408,7 +404,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		// Reuse the cascade response — avoid double-send to cheap model
 		resp = cascadeResp
 	} else {
-		err = provider.RetryWithBackoff(provider.RetryConfig{
+		err := provider.RetryWithBackoff(provider.RetryConfig{
 			MaxRetries: 2,
 			BaseDelay:  100 * time.Millisecond,
 			MaxDelay:   2 * time.Second,
@@ -503,7 +499,15 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	// Shadow evaluation: compare primary vs comparison tier on sample % of requests
 	if s.cfg.Eval.ShadowEnabled && s.cfg.Eval.ShadowSampleRate > 0 {
 		if shouldShadow(workflowID, s.cfg.Eval.ShadowSampleRate) {
-			go s.runShadowEval(r.Context(), req, promptText, selection, resp)
+			select {
+			case s.shadowSem <- struct{}{}:
+				go func() {
+					defer func() { <-s.shadowSem }()
+					s.runShadowEval(r.Context(), req, promptText, selection, resp)
+				}()
+			default:
+				// Shadow eval dropped — backpressure
+			}
 		}
 	}
 
@@ -676,21 +680,27 @@ func extractPromptText(messages []provider.Message) string {
 		}
 	}
 	// Fallback: concatenate all messages
-	var parts []string
-	for _, m := range messages {
-		parts = append(parts, m.Content)
+	var b strings.Builder
+	for i, m := range messages {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString(m.Content)
 	}
-	return strings.Join(parts, "\n")
+	return b.String()
 }
 
 // fullPromptText returns the full concatenation of all messages.
 // Used for prompt guard checks where the entire conversation must be scanned.
 func fullPromptText(messages []provider.Message) string {
-	var parts []string
-	for _, m := range messages {
-		parts = append(parts, m.Content)
+	var b strings.Builder
+	for i, m := range messages {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString(m.Content)
 	}
-	return strings.Join(parts, "\n")
+	return b.String()
 }
 
 // providerToCompressMessages converts provider.Message slice to compress.Message slice.
@@ -738,11 +748,21 @@ func (tw *streamTeeWriter) Write(p []byte) (int, error) {
 	// Forward to the real writer first.
 	n, err := tw.w.Write(p)
 
-	// Capture each line for the buffer.
-	for _, line := range strings.Split(string(p), "\n") {
-		line = strings.TrimSpace(line)
-		if line != "" {
-			tw.buf.WriteChunk(line)
+	// Capture each line for the buffer using bytes operations to avoid string copy.
+	remaining := p
+	for len(remaining) > 0 {
+		idx := bytes.IndexByte(remaining, '\n')
+		var line []byte
+		if idx >= 0 {
+			line = remaining[:idx]
+			remaining = remaining[idx+1:]
+		} else {
+			line = remaining
+			remaining = nil
+		}
+		line = bytes.TrimSpace(line)
+		if len(line) > 0 {
+			tw.buf.WriteChunk(string(line))
 		}
 	}
 	return n, err

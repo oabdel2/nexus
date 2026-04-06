@@ -5,10 +5,19 @@ import (
 	"net/http"
 )
 
+func errSynonymRegistryDisabled() *NexusError {
+	return &NexusError{
+		Code:       "FEATURE_DISABLED",
+		Message:    "Synonym registry is not enabled",
+		Suggestion: "Enable L2 BM25 or semantic cache in config to activate synonym learning",
+		DocsURL:    "https://nexus-gateway.dev/docs/config#cache",
+	}
+}
+
 func (s *Server) handleSynonymStats(w http.ResponseWriter, r *http.Request) {
 	registry := s.cache.Registry()
 	if registry == nil {
-		http.Error(w, "synonym registry not enabled", http.StatusServiceUnavailable)
+		writeNexusError(w, errSynonymRegistryDisabled(), http.StatusServiceUnavailable)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -18,7 +27,7 @@ func (s *Server) handleSynonymStats(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSynonymCandidates(w http.ResponseWriter, r *http.Request) {
 	registry := s.cache.Registry()
 	if registry == nil {
-		http.Error(w, "synonym registry not enabled", http.StatusServiceUnavailable)
+		writeNexusError(w, errSynonymRegistryDisabled(), http.StatusServiceUnavailable)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -28,7 +37,7 @@ func (s *Server) handleSynonymCandidates(w http.ResponseWriter, r *http.Request)
 func (s *Server) handleSynonymLearned(w http.ResponseWriter, r *http.Request) {
 	registry := s.cache.Registry()
 	if registry == nil {
-		http.Error(w, "synonym registry not enabled", http.StatusServiceUnavailable)
+		writeNexusError(w, errSynonymRegistryDisabled(), http.StatusServiceUnavailable)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -37,37 +46,42 @@ func (s *Server) handleSynonymLearned(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSynonymPromote(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		writeNexusError(w, errMethodNotAllowed(), http.StatusMethodNotAllowed)
 		return
 	}
 	registry := s.cache.Registry()
 	if registry == nil {
-		http.Error(w, "synonym registry not enabled", http.StatusServiceUnavailable)
+		writeNexusError(w, errSynonymRegistryDisabled(), http.StatusServiceUnavailable)
 		return
 	}
 	var req struct {
 		Term string `json:"term"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		writeNexusError(w, errInvalidRequest("Invalid JSON in request body"), http.StatusBadRequest)
 		return
 	}
 	if registry.ManualPromote(req.Term) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "promoted", "term": req.Term})
 	} else {
-		http.Error(w, "candidate not found", http.StatusNotFound)
+		writeNexusError(w, &NexusError{
+			Code:       "NOT_FOUND",
+			Message:    "Synonym candidate not found: " + req.Term,
+			Suggestion: "Check available candidates at GET /api/synonyms/candidates",
+			DocsURL:    "https://nexus-gateway.dev/docs/api#synonyms",
+		}, http.StatusNotFound)
 	}
 }
 
 func (s *Server) handleSynonymAdd(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		writeNexusError(w, errMethodNotAllowed(), http.StatusMethodNotAllowed)
 		return
 	}
 	registry := s.cache.Registry()
 	if registry == nil {
-		http.Error(w, "synonym registry not enabled", http.StatusServiceUnavailable)
+		writeNexusError(w, errSynonymRegistryDisabled(), http.StatusServiceUnavailable)
 		return
 	}
 	var req struct {
@@ -76,9 +90,32 @@ func (s *Server) handleSynonymAdd(w http.ResponseWriter, r *http.Request) {
 		Type      string `json:"type"` // "synonym" or "key_noun"
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		writeNexusError(w, errInvalidRequest("Invalid JSON in request body"), http.StatusBadRequest)
 		return
 	}
+
+	// Validate term and expansion to prevent cache poisoning
+	if req.Term == "" || len(req.Term) > 100 {
+		http.Error(w, `{"error":"term must be 1-100 characters"}`, http.StatusBadRequest)
+		return
+	}
+	if req.Type != "key_noun" && (req.Expansion == "" || len(req.Expansion) > 200) {
+		http.Error(w, `{"error":"expansion must be 1-200 characters"}`, http.StatusBadRequest)
+		return
+	}
+	for _, c := range req.Term {
+		if c < 0x20 || c == 0x7f {
+			http.Error(w, `{"error":"term contains invalid characters"}`, http.StatusBadRequest)
+			return
+		}
+	}
+	for _, c := range req.Expansion {
+		if c < 0x20 || c == 0x7f {
+			http.Error(w, `{"error":"expansion contains invalid characters"}`, http.StatusBadRequest)
+			return
+		}
+	}
+
 	if req.Type == "key_noun" {
 		registry.ManualAddKeyNoun(req.Term)
 	} else {
@@ -153,7 +190,7 @@ func (s *Server) handleCompressionStats(w http.ResponseWriter, r *http.Request) 
 // that would be made WITHOUT actually sending the request.
 func (s *Server) handleInspect(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeNexusError(w, errMethodNotAllowed(), http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -162,11 +199,11 @@ func (s *Server) handleInspect(w http.ResponseWriter, r *http.Request) {
 		Role   string `json:"role"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		writeNexusError(w, errInvalidRequest("Invalid JSON in request body"), http.StatusBadRequest)
 		return
 	}
 	if req.Prompt == "" {
-		http.Error(w, `{"error":"prompt is required"}`, http.StatusBadRequest)
+		writeNexusError(w, errInvalidRequest("prompt field is required"), http.StatusBadRequest)
 		return
 	}
 

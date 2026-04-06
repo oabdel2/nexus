@@ -1,0 +1,25 @@
+# Minimal Nexus config — works with a local Ollama instance.
+# Start Ollama, then: nexus serve -config configs/nexus.minimal.yaml
+
+server:
+  port: 8080
+
+providers:
+  - name: ollama
+    type: ollama
+    base_url: http://localhost:11434/v1
+    enabled: true
+    priority: 1
+    models:
+      - name: llama3.1
+        tier: cheap
+        cost_per_1k_tokens: 0.0
+        max_tokens: 8192
+
+cache:
+  enabled: true
+  l1_enabled: true
+
+telemetry:
+  log_level: info
+  log_format: text
