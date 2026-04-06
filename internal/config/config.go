@@ -187,6 +187,7 @@ type RouterConfig struct {
 	BudgetEnabled    bool    `yaml:"budget_enabled"`
 	DefaultBudget    float64 `yaml:"default_budget"`
 	ComplexityWeights ComplexityWeights `yaml:"complexity_weights"`
+	SmartClassifier  bool    `yaml:"smart_classifier"` // enable TF-IDF hybrid classifier (default true)
 }
 
 type ComplexityWeights struct {

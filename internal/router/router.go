@@ -15,24 +15,34 @@ type ModelSelection struct {
 }
 
 type Router struct {
-	cfg       config.RouterConfig
-	providers []config.ProviderConfig
-	logger    *slog.Logger
+	cfg             config.RouterConfig
+	providers       []config.ProviderConfig
+	logger          *slog.Logger
+	smartClassifier *SmartClassifier
 }
 
 func New(cfg config.RouterConfig, providers []config.ProviderConfig, logger *slog.Logger) *Router {
-	return &Router{
+	r := &Router{
 		cfg:       cfg,
 		providers: providers,
 		logger:    logger,
 	}
+	if cfg.SmartClassifier {
+		r.smartClassifier = NewSmartClassifier()
+	}
+	return r
 }
 
 // tierFallbackOrder defines the upgrade path when a tier has no available model.
 var tierFallbackOrder = []string{"economy", "cheap", "mid", "premium"}
 
 func (r *Router) Route(prompt string, role string, stepRatio float64, budgetRatio float64, contextLen int) ModelSelection {
-	score := ClassifyComplexity(prompt, role, stepRatio, budgetRatio, contextLen)
+	var score ComplexityScore
+	if r.smartClassifier != nil {
+		score = r.smartClassifier.Classify(prompt, role, stepRatio, budgetRatio, contextLen)
+	} else {
+		score = ClassifyComplexity(prompt, role, stepRatio, budgetRatio, contextLen)
+	}
 
 	w := r.cfg.ComplexityWeights
 	// Include length and structure scores in the prompt complexity weight
