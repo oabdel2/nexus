@@ -139,6 +139,15 @@ func errMethodNotAllowed() *NexusError {
 	}
 }
 
+func errServiceOverloaded() *NexusError {
+	return &NexusError{
+		Code:       "SERVICE_OVERLOADED",
+		Message:    "Too many concurrent requests",
+		Suggestion: "Retry with exponential backoff. Current limit: configured in server.max_concurrent",
+		DocsURL:    "https://nexus-gateway.dev/docs/troubleshooting#overloaded",
+	}
+}
+
 // itoa is a simple int-to-string without importing strconv.
 func itoa(n int) string {
 	if n == 0 {

@@ -27,7 +27,7 @@ type WorkflowState struct {
 	Steps         []StepRecord `json:"steps"`
 	CreatedAt     time.Time    `json:"created_at"`
 	LastActivity  time.Time    `json:"last_activity"`
-	mu            sync.Mutex
+	mu            sync.RWMutex
 }
 
 func (w *WorkflowState) AddStep(step StepRecord) {
@@ -44,6 +44,8 @@ func (w *WorkflowState) AddStep(step StepRecord) {
 }
 
 func (w *WorkflowState) GetBudgetRatio() float64 {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
 	if w.Budget <= 0 {
 		return 1.0
 	}
@@ -51,6 +53,8 @@ func (w *WorkflowState) GetBudgetRatio() float64 {
 }
 
 func (w *WorkflowState) GetStepRatio() float64 {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
 	if w.TotalSteps <= 0 {
 		return 0.5
 	}

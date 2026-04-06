@@ -178,9 +178,10 @@ type StorageYAMLConfig struct {
 }
 
 type ServerConfig struct {
-	Port         int           `yaml:"port"`
-	ReadTimeout  time.Duration `yaml:"read_timeout"`
-	WriteTimeout time.Duration `yaml:"write_timeout"`
+	Port          int           `yaml:"port"`
+	ReadTimeout   time.Duration `yaml:"read_timeout"`
+	WriteTimeout  time.Duration `yaml:"write_timeout"`
+	MaxConcurrent int           `yaml:"max_concurrent"`
 }
 
 type ProviderConfig struct {

@@ -3,6 +3,7 @@ package billing
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -115,13 +116,18 @@ func HashKey(rawKey string) string {
 // ValidateKey validates a raw API key and returns the key record.
 // Checks: exists, active, not expired, subscription active.
 func (s *APIKeyStore) ValidateKey(rawKey string) (*APIKey, error) {
-	keyHash := HashKey(rawKey)
+	computedHash := HashKey(rawKey)
 
 	s.mu.RLock()
-	key, ok := s.keys[keyHash]
+	var key *APIKey
+	for _, k := range s.keys {
+		if subtle.ConstantTimeCompare([]byte(computedHash), []byte(k.KeyHash)) == 1 {
+			key = k
+		}
+	}
 	s.mu.RUnlock()
 
-	if !ok {
+	if key == nil {
 		return nil, fmt.Errorf("invalid API key")
 	}
 	if !key.Active {
