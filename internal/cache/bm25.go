@@ -4,6 +4,7 @@ import (
 	"math"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 )
@@ -15,14 +16,16 @@ import (
 // BM25 formula: score(q,d) = Σ IDF(qi) * (tf * (k1+1)) / (tf + k1 * (1 - b + b * |d|/avgdl))
 // where k1=1.5, b=0.75 are standard parameters
 type BM25Cache struct {
-	mu         sync.RWMutex
-	docs       []bm25Doc
-	df         map[string]int // document frequency per term
-	ttl        time.Duration
-	maxEntries int
-	threshold  float64
-	hits       int64
-	misses     int64
+	mu            sync.RWMutex
+	docs          []bm25Doc
+	df            map[string]int // document frequency per term
+	invertedIdx   map[string][]int // term → doc indices for O(1) candidate lookup
+	totalTokenLen int              // running sum of doc token lengths for O(1) avgdl
+	ttl           time.Duration
+	maxEntries    int
+	threshold     float64
+	hits          int64
+	misses        int64
 }
 
 type bm25Doc struct {
@@ -48,10 +51,11 @@ var stopwords = map[string]bool{
 
 func NewBM25Cache(ttl time.Duration, maxEntries int, threshold float64) *BM25Cache {
 	c := &BM25Cache{
-		df:         make(map[string]int),
-		ttl:        ttl,
-		maxEntries: maxEntries,
-		threshold:  threshold,
+		df:          make(map[string]int),
+		invertedIdx: make(map[string][]int),
+		ttl:         ttl,
+		maxEntries:  maxEntries,
+		threshold:   threshold,
 	}
 	go c.cleanup()
 	return c
@@ -141,14 +145,14 @@ func (c *BM25Cache) Store(prompt, model string, response []byte) {
 		response:  response,
 		createdAt: time.Now(),
 	})
+	c.totalTokenLen += len(tokens)
+	c.rebuildInvertedIndex()
 }
 
 func (c *BM25Cache) Lookup(prompt, model string) ([]byte, bool) {
 	queryTokens := Tokenize(prompt)
 	if len(queryTokens) == 0 {
-		c.mu.Lock()
-		c.misses++
-		c.mu.Unlock()
+		atomic.AddInt64(&c.misses, 1)
 		return nil, false
 	}
 
@@ -156,18 +160,22 @@ func (c *BM25Cache) Lookup(prompt, model string) ([]byte, bool) {
 	n := len(c.docs)
 	if n == 0 {
 		c.mu.RUnlock()
-		c.mu.Lock()
-		c.misses++
-		c.mu.Unlock()
+		atomic.AddInt64(&c.misses, 1)
 		return nil, false
 	}
 
-	// Calculate average document length
-	var totalLen int
-	for i := range c.docs {
-		totalLen += len(c.docs[i].tokens)
+	// Use inverted index to find candidate docs sharing at least one query term
+	candidates := make(map[int]struct{})
+	for _, qt := range queryTokens {
+		if indices, ok := c.invertedIdx[qt]; ok {
+			for _, idx := range indices {
+				candidates[idx] = struct{}{}
+			}
+		}
 	}
-	avgdl := float64(totalLen) / float64(n)
+
+	// Calculate average document length from running total
+	avgdl := float64(c.totalTokenLen) / float64(n)
 
 	const k1 = 1.5
 	const b = 0.75
@@ -176,7 +184,7 @@ func (c *BM25Cache) Lookup(prompt, model string) ([]byte, bool) {
 	bestIdx := -1
 	now := time.Now()
 
-	for i := range c.docs {
+	for i := range candidates {
 		doc := &c.docs[i]
 		// Skip expired entries
 		if now.Sub(doc.createdAt) > c.ttl {
@@ -208,28 +216,29 @@ func (c *BM25Cache) Lookup(prompt, model string) ([]byte, bool) {
 			bestIdx = i
 		}
 	}
+
+	// Copy response while still holding RLock (prevents TOCTOU race)
+	var resp []byte
+	if bestIdx >= 0 && bestScore >= c.threshold {
+		resp = make([]byte, len(c.docs[bestIdx].response))
+		copy(resp, c.docs[bestIdx].response)
+	}
 	c.mu.RUnlock()
 
-	if bestIdx >= 0 && bestScore >= c.threshold {
-		c.mu.Lock()
-		c.hits++
-		c.mu.Unlock()
-		c.mu.RLock()
-		resp := c.docs[bestIdx].response
-		c.mu.RUnlock()
+	if resp != nil {
+		atomic.AddInt64(&c.hits, 1)
 		return resp, true
 	}
 
-	c.mu.Lock()
-	c.misses++
-	c.mu.Unlock()
+	atomic.AddInt64(&c.misses, 1)
 	return nil, false
 }
 
 func (c *BM25Cache) Stats() (hits, misses int64, size int) {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.hits, c.misses, len(c.docs)
+	size = len(c.docs)
+	c.mu.RUnlock()
+	return atomic.LoadInt64(&c.hits), atomic.LoadInt64(&c.misses), size
 }
 
 func (c *BM25Cache) evictOldest() {
@@ -242,6 +251,8 @@ func (c *BM25Cache) evictOldest() {
 			oldestIdx = i
 		}
 	}
+	// Update running totals
+	c.totalTokenLen -= len(c.docs[oldestIdx].tokens)
 	// Remove DF counts for the evicted doc
 	for term := range c.docs[oldestIdx].termFreq {
 		c.df[term]--
@@ -250,6 +261,7 @@ func (c *BM25Cache) evictOldest() {
 		}
 	}
 	c.docs = append(c.docs[:oldestIdx], c.docs[oldestIdx+1:]...)
+	c.rebuildInvertedIndex()
 }
 
 func (c *BM25Cache) cleanup() {
@@ -259,9 +271,11 @@ func (c *BM25Cache) cleanup() {
 	for range ticker.C {
 		c.mu.Lock()
 		now := time.Now()
+		changed := false
 		i := 0
 		for i < len(c.docs) {
 			if now.Sub(c.docs[i].createdAt) > c.ttl {
+				c.totalTokenLen -= len(c.docs[i].tokens)
 				// Remove DF counts
 				for term := range c.docs[i].termFreq {
 					c.df[term]--
@@ -270,10 +284,25 @@ func (c *BM25Cache) cleanup() {
 					}
 				}
 				c.docs = append(c.docs[:i], c.docs[i+1:]...)
+				changed = true
 			} else {
 				i++
 			}
 		}
+		if changed {
+			c.rebuildInvertedIndex()
+		}
 		c.mu.Unlock()
+	}
+}
+
+// rebuildInvertedIndex reconstructs the term → doc indices mapping.
+// Caller must hold c.mu write lock.
+func (c *BM25Cache) rebuildInvertedIndex() {
+	c.invertedIdx = make(map[string][]int, len(c.df))
+	for i, doc := range c.docs {
+		for term := range doc.termFreq {
+			c.invertedIdx[term] = append(c.invertedIdx[term], i)
+		}
 	}
 }

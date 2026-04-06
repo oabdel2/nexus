@@ -9,6 +9,7 @@ import (
 	"math"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -37,6 +38,7 @@ type semanticEntry struct {
 	embedding []float64
 	response  []byte
 	createdAt time.Time
+	bucketKey string // LSH bucket key for fast lookup filtering
 }
 
 // NewSemanticCache creates a new embedding-based semantic cache.
@@ -80,16 +82,25 @@ func (c *SemanticCache) Store(prompt, model string, response []byte) {
 		embedding: emb,
 		response:  response,
 		createdAt: time.Now(),
+		bucketKey: lshBucketKey(emb),
 	})
 }
 
 func (c *SemanticCache) Lookup(prompt, model string) ([]byte, bool) {
 	expanded := expandSynonyms(prompt)
+
+	// Skip expensive embedding API call if cache is empty
+	c.mu.RLock()
+	empty := len(c.entries) == 0
+	c.mu.RUnlock()
+	if empty {
+		atomic.AddInt64(&c.misses, 1)
+		return nil, false
+	}
+
 	emb, err := c.getEmbedding(expanded)
 	if err != nil {
-		c.mu.Lock()
-		c.misses++
-		c.mu.Unlock()
+		atomic.AddInt64(&c.misses, 1)
 		return nil, false
 	}
 	emb = normalizeVector(emb)
@@ -104,14 +115,12 @@ func (c *SemanticCache) Lookup(prompt, model string) ([]byte, bool) {
 		confidentHitThreshold = 0.95
 	}
 
+	// LSH: compute query bucket and valid neighbor buckets
+	queryBucket := lshBucketKey(emb)
+	validBuckets := lshNeighborKeys(queryBucket)
+
+	// Single read-locked section: find best match AND copy all needed data
 	c.mu.RLock()
-	if len(c.entries) == 0 {
-		c.mu.RUnlock()
-		c.mu.Lock()
-		c.misses++
-		c.mu.Unlock()
-		return nil, false
-	}
 
 	bestScore := -1.0
 	bestIdx := -1
@@ -122,64 +131,59 @@ func (c *SemanticCache) Lookup(prompt, model string) ([]byte, bool) {
 		if now.Sub(entry.createdAt) > c.ttl {
 			continue
 		}
+		// LSH filter: skip entries in distant buckets
+		if entry.bucketKey != "" && !validBuckets[entry.bucketKey] {
+			continue
+		}
 		score := dotProduct(emb, entry.embedding)
 		if score > bestScore {
 			bestScore = score
 			bestIdx = i
 		}
 	}
+
+	// Copy all needed data while still holding RLock (prevents TOCTOU race)
+	var cachedPrompt string
+	var resp []byte
+	if bestIdx >= 0 {
+		cachedPrompt = c.entries[bestIdx].prompt
+		resp = make([]byte, len(c.entries[bestIdx].response))
+		copy(resp, c.entries[bestIdx].response)
+	}
 	c.mu.RUnlock()
 
 	if bestIdx < 0 || bestScore < threshold {
 		// Record near-miss for synonym learning
 		if bestIdx >= 0 && bestScore >= 0.55 && defaultRegistry != nil {
-			c.mu.RLock()
-			cachedPrompt := c.entries[bestIdx].prompt
-			c.mu.RUnlock()
 			defaultRegistry.RecordNearMiss(prompt, cachedPrompt, bestScore)
 		}
-		c.mu.Lock()
-		c.misses++
-		c.mu.Unlock()
+		atomic.AddInt64(&c.misses, 1)
 		return nil, false
 	}
 
-	// Get cached prompt for filter checks
-	c.mu.RLock()
-	cachedPrompt := c.entries[bestIdx].prompt
-	c.mu.RUnlock()
-
 	// Apply negation and key noun filters
 	if hasOppositeIntent(prompt, cachedPrompt) || hasDifferentKeyNoun(prompt, cachedPrompt) {
-		c.mu.Lock()
-		c.misses++
-		c.mu.Unlock()
+		atomic.AddInt64(&c.misses, 1)
 		return nil, false
 	}
 
 	// Confidence gating: uncertain zone goes through reranker
 	if bestScore < confidentHitThreshold && c.reranker != nil {
 		if !c.reranker.Verify(prompt, cachedPrompt) {
-			c.mu.Lock()
-			c.misses++
-			c.mu.Unlock()
+			atomic.AddInt64(&c.misses, 1)
 			return nil, false
 		}
 	}
 
-	c.mu.Lock()
-	c.hits++
-	c.mu.Unlock()
-	c.mu.RLock()
-	resp := c.entries[bestIdx].response
-	c.mu.RUnlock()
+	atomic.AddInt64(&c.hits, 1)
 	return resp, true
 }
 
 func (c *SemanticCache) Stats() (hits, misses int64, size int) {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.hits, c.misses, len(c.entries)
+	size = len(c.entries)
+	c.mu.RUnlock()
+	return atomic.LoadInt64(&c.hits), atomic.LoadInt64(&c.misses), size
 }
 
 // getEmbedding calls the configured embedding backend.
@@ -357,4 +361,47 @@ func (c *SemanticCache) cleanup() {
 		}
 		c.mu.Unlock()
 	}
+}
+
+// lshBucketKey computes a locality-sensitive hash bucket key from an embedding.
+// Uses the sign of evenly-spaced dimensions to create a coarse spatial hash.
+const lshBits = 8
+
+func lshBucketKey(emb []float64) string {
+	n := len(emb)
+	if n == 0 {
+		return ""
+	}
+	key := make([]byte, lshBits)
+	step := n / lshBits
+	if step == 0 {
+		step = 1
+	}
+	for i := 0; i < lshBits; i++ {
+		idx := i * step
+		if idx >= n {
+			idx = n - 1
+		}
+		if emb[idx] >= 0 {
+			key[i] = '1'
+		} else {
+			key[i] = '0'
+		}
+	}
+	return string(key)
+}
+
+// lshNeighborKeys returns the bucket key and all single-bit-flip neighbors.
+func lshNeighborKeys(key string) map[string]bool {
+	m := map[string]bool{key: true}
+	for i := 0; i < len(key); i++ {
+		b := []byte(key)
+		if b[i] == '1' {
+			b[i] = '0'
+		} else {
+			b[i] = '1'
+		}
+		m[string(b)] = true
+	}
+	return m
 }

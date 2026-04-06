@@ -571,11 +571,12 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 
 	// Build prompt text for classification (from potentially compressed messages)
 	promptText := extractPromptText(req.Messages)
-	contextLen := len(promptText)
+	guardText := fullPromptText(req.Messages)
+	contextLen := len(guardText)
 
 	// Check for prompt injection
 	if guard := security.GetPromptGuard(r.Context()); guard != nil {
-		result := guard.Check(promptText)
+		result := guard.Check(guardText)
 		if result.Blocked {
 			s.logger.Warn("prompt injection blocked",
 				"threats", result.Threats,
@@ -716,8 +717,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Cascade: try cheap model first if router picked expensive tier
+	var cascadeResp *provider.ChatResponse
 	if s.cfg.Cascade.Enabled && s.cascade != nil && s.cascade.ShouldCascade(selection.Score, selection.Tier) {
-		cascadeResult := s.tryCheapFirst(r.Context(), req, selection, promptText)
+		cascadeResult, cheapResp := s.tryCheapFirst(r.Context(), req, selection, promptText)
 		if cascadeResult != nil && !cascadeResult.Escalated {
 			s.metrics.RecordCascadeAttempt("accepted")
 			s.Dashboard.RecordCascade(true)
@@ -727,6 +729,10 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 			)
 			// Cheap model was good enough — update selection to cheap
 			selection = s.cascade.CheapSelection()
+			// Reuse cheap response for non-streaming to avoid double-send
+			if !req.Stream && cheapResp != nil {
+				cascadeResp = cheapResp
+			}
 		} else if cascadeResult != nil {
 			s.metrics.RecordCascadeAttempt("escalated")
 			s.Dashboard.RecordCascade(false)
@@ -889,40 +895,45 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	sendSpan.SetAttribute("provider.stream", "false")
 
 	var resp *provider.ChatResponse
-	err = provider.RetryWithBackoff(provider.RetryConfig{
-		MaxRetries: 2,
-		BaseDelay:  100 * time.Millisecond,
-		MaxDelay:   2 * time.Second,
-	}, func() error {
-		var sendErr error
-		resp, sendErr = p.Send(r.Context(), req)
-		return sendErr
-	})
-	latencyMs := time.Since(start).Milliseconds()
-	if err != nil {
-		sendSpan.SetStatus("error")
-		sendSpan.SetAttribute("error", err.Error())
-		s.tracer.EndSpan(sendSpan)
-		s.logger.Error("request error", "error", err, "provider", selection.Provider)
-		s.health.RecordFailure(selection.Provider, err)
+	if cascadeResp != nil {
+		// Reuse the cascade response — avoid double-send to cheap model
+		resp = cascadeResp
+	} else {
+		err = provider.RetryWithBackoff(provider.RetryConfig{
+			MaxRetries: 2,
+			BaseDelay:  100 * time.Millisecond,
+			MaxDelay:   2 * time.Second,
+		}, func() error {
+			var sendErr error
+			resp, sendErr = p.Send(r.Context(), req)
+			return sendErr
+		})
+		if err != nil {
+			sendSpan.SetStatus("error")
+			sendSpan.SetAttribute("error", err.Error())
+			s.tracer.EndSpan(sendSpan)
+			s.logger.Error("request error", "error", err, "provider", selection.Provider)
+			s.health.RecordFailure(selection.Provider, err)
+			if cb := s.cbPool.Get(selection.Provider); cb != nil {
+				cb.RecordFailure()
+			}
+			if s.eventBus != nil {
+				s.eventBus.Emit(events.RequestError, map[string]interface{}{
+					"provider":    selection.Provider,
+					"error":       err.Error(),
+					"workflow_id": workflowID,
+					"model":       selection.Model,
+				})
+			}
+			writeNexusError(w, errProviderError(err.Error()), http.StatusBadGateway)
+			return
+		}
+		s.health.RecordSuccess(selection.Provider)
 		if cb := s.cbPool.Get(selection.Provider); cb != nil {
-			cb.RecordFailure()
+			cb.RecordSuccess()
 		}
-		if s.eventBus != nil {
-			s.eventBus.Emit(events.RequestError, map[string]interface{}{
-				"provider":    selection.Provider,
-				"error":       err.Error(),
-				"workflow_id": workflowID,
-				"model":       selection.Model,
-			})
-		}
-		writeNexusError(w, errProviderError(err.Error()), http.StatusBadGateway)
-		return
 	}
-	s.health.RecordSuccess(selection.Provider)
-	if cb := s.cbPool.Get(selection.Provider); cb != nil {
-		cb.RecordSuccess()
-	}
+	latencyMs := time.Since(start).Milliseconds()
 
 	tokens := resp.Usage.TotalTokens
 	cost := float64(tokens) / 1000.0 * s.router.GetModelCost(selection.Provider, selection.Model)
@@ -1198,6 +1209,24 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 func extractPromptText(messages []provider.Message) string {
+	// Use the last user message for routing and cache key.
+	// This dramatically improves cache hit rates for multi-turn conversations.
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "user" && messages[i].Content != "" {
+			return messages[i].Content
+		}
+	}
+	// Fallback: concatenate all messages
+	var parts []string
+	for _, m := range messages {
+		parts = append(parts, m.Content)
+	}
+	return strings.Join(parts, "\n")
+}
+
+// fullPromptText returns the full concatenation of all messages.
+// Used for prompt guard checks where the entire conversation must be scanned.
+func fullPromptText(messages []provider.Message) string {
 	var parts []string
 	for _, m := range messages {
 		parts = append(parts, m.Content)
@@ -1328,16 +1357,16 @@ func compressToProviderMessages(msgs []compress.Message) []provider.Message {
 }
 
 // tryCheapFirst sends the request to the cheapest model and scores confidence.
-// Returns nil if cascade is not applicable, otherwise a CascadeResult.
-func (s *Server) tryCheapFirst(ctx context.Context, req provider.ChatRequest, original router.ModelSelection, promptText string) *router.CascadeResult {
+// Returns nil if cascade is not applicable, otherwise a CascadeResult and the cheap response.
+func (s *Server) tryCheapFirst(ctx context.Context, req provider.ChatRequest, original router.ModelSelection, promptText string) (*router.CascadeResult, *provider.ChatResponse) {
 	cheapSel := s.cascade.CheapSelection()
 	if cheapSel.Provider == "" || cheapSel.Model == "" {
-		return nil
+		return nil, nil
 	}
 
 	p, ok := s.providers[cheapSel.Provider]
 	if !ok || !s.cbPool.IsAvailable(cheapSel.Provider) {
-		return nil
+		return nil, nil
 	}
 
 	cheapReq := req
@@ -1355,7 +1384,7 @@ func (s *Server) tryCheapFirst(ctx context.Context, req provider.ChatRequest, or
 			UsedCheapModel: true,
 			Escalated:      true,
 			LatencyAdded:   latencyAdded,
-		}
+		}, nil
 	}
 
 	// Score the cheap response
@@ -1379,13 +1408,18 @@ func (s *Server) tryCheapFirst(ctx context.Context, req provider.ChatRequest, or
 		costSaved = originalCost - cheapCost
 	}
 
-	return &router.CascadeResult{
+	result := &router.CascadeResult{
 		UsedCheapModel:  true,
 		Escalated:       escalated,
 		CheapConfidence: confidence,
 		CostSaved:       costSaved,
 		LatencyAdded:    latencyAdded,
 	}
+	// Return the actual response so caller can reuse it when not escalated
+	if !escalated {
+		return result, resp
+	}
+	return result, nil
 }
 
 func (s *Server) handleEvalStats(w http.ResponseWriter, r *http.Request) {

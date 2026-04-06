@@ -42,7 +42,11 @@ func NewTFIDFClassifier() *TFIDFClassifier {
 func (tc *TFIDFClassifier) Train(docs []TrainingExample) {
 	tc.mu.Lock()
 	defer tc.mu.Unlock()
+	tc.trainLocked(docs)
+}
 
+// trainLocked performs the actual training. Caller must hold tc.mu.Lock().
+func (tc *TFIDFClassifier) trainLocked(docs []TrainingExample) {
 	// Reset state
 	tc.documents = make([]classifiedDoc, 0, len(docs))
 	tc.idfCache = make(map[string]float64)
@@ -111,10 +115,8 @@ func (tc *TFIDFClassifier) AddExample(text, tier string) {
 	}
 	examples = append(examples, TrainingExample{Text: text, Tier: tier})
 
-	// Unlock, retrain via internal (caller holds lock, so call unlocked version)
-	tc.mu.Unlock()
-	tc.Train(examples)
-	tc.mu.Lock() // re-acquire for deferred unlock
+	// Retrain while already holding the lock
+	tc.trainLocked(examples)
 }
 
 // Classify returns the predicted tier and confidence for a prompt using k-NN (k=5).

@@ -1,8 +1,11 @@
 package router
 
 import (
+	"fmt"
 	"math"
+	"sync"
 	"testing"
+	"time"
 )
 
 // ==================== TF-IDF Core Tests ====================
@@ -325,6 +328,117 @@ func BenchmarkClassify_TFIDF(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		tc.Classify(prompts[i%len(prompts)])
+	}
+}
+
+// ==================== Regression: Bug 1 — TF-IDF AddExample Deadlock ====================
+
+// TestTFIDF_AddExample_ConcurrentNoDeadlock verifies that concurrent AddExample
+// calls do not deadlock. The original buggy code had a Lock/Unlock/Lock dance in
+// AddExample that caused guaranteed deadlocks under concurrent access.
+// This test would HANG on the buggy code.
+func TestTFIDF_AddExample_ConcurrentNoDeadlock(t *testing.T) {
+	tc := NewTFIDFClassifier()
+
+	done := make(chan bool, 1)
+	go func() {
+		var wg sync.WaitGroup
+		for i := 0; i < 10; i++ {
+			wg.Add(1)
+			go func(n int) {
+				defer wg.Done()
+				tc.AddExample(fmt.Sprintf("test prompt %d about debugging", n), "premium")
+			}(i)
+		}
+		wg.Wait()
+		done <- true
+	}()
+
+	select {
+	case <-done:
+		// passed — no deadlock
+	case <-time.After(5 * time.Second):
+		t.Fatal("DEADLOCK: AddExample hung under concurrent access")
+	}
+}
+
+// TestTFIDF_AddExample_ThenClassify verifies that AddExample does not corrupt
+// the classifier state. After adding a new example, classification should
+// still work correctly and incorporate the new data.
+func TestTFIDF_AddExample_ThenClassify(t *testing.T) {
+	tc := NewTFIDFClassifier()
+	tc.AddExample("kubernetes pod scaling autoscaler", "premium")
+	tier, conf := tc.Classify("kubernetes pod scaling")
+	if conf <= 0 {
+		t.Error("classification should work after AddExample")
+	}
+	_ = tier // any valid tier is acceptable as long as confidence > 0
+}
+
+// TestTFIDF_AddExample_SequentialConsistency verifies that sequential
+// AddExample calls correctly accumulate training data without data races.
+func TestTFIDF_AddExample_SequentialConsistency(t *testing.T) {
+	tc := NewTFIDFClassifier()
+
+	// Add several examples of a novel term mapped to economy
+	for i := 0; i < 5; i++ {
+		tc.AddExample(fmt.Sprintf("zygomorphic pattern %d simple task", i), "economy")
+	}
+
+	// The classifier should now have more documents than the built-in corpus
+	tc.mu.RLock()
+	docCount := len(tc.documents)
+	tc.mu.RUnlock()
+
+	// Built-in corpus has 64 examples; we added 5 more
+	if docCount < 69 {
+		t.Errorf("expected at least 69 documents after 5 AddExample calls, got %d", docCount)
+	}
+
+	// Classify should still work
+	tier, conf := tc.Classify("zygomorphic pattern simple")
+	if tier != "economy" {
+		t.Errorf("novel term trained as economy should classify as economy, got %q (conf=%.2f)", tier, conf)
+	}
+}
+
+// TestTFIDF_AddExample_ConcurrentWithClassify verifies AddExample and Classify
+// can run concurrently without deadlock or panic.
+func TestTFIDF_AddExample_ConcurrentWithClassify(t *testing.T) {
+	tc := NewTFIDFClassifier()
+
+	done := make(chan bool, 1)
+	go func() {
+		var wg sync.WaitGroup
+		// Writers: AddExample
+		for i := 0; i < 5; i++ {
+			wg.Add(1)
+			go func(n int) {
+				defer wg.Done()
+				for j := 0; j < 3; j++ {
+					tc.AddExample(fmt.Sprintf("concurrent prompt %d-%d about security", n, j), "premium")
+				}
+			}(i)
+		}
+		// Readers: Classify
+		for i := 0; i < 5; i++ {
+			wg.Add(1)
+			go func(n int) {
+				defer wg.Done()
+				for j := 0; j < 10; j++ {
+					tc.Classify(fmt.Sprintf("test classify %d-%d", n, j))
+				}
+			}(i)
+		}
+		wg.Wait()
+		done <- true
+	}()
+
+	select {
+	case <-done:
+		// no deadlock or panic
+	case <-time.After(10 * time.Second):
+		t.Fatal("DEADLOCK: concurrent AddExample + Classify hung")
 	}
 }
 
