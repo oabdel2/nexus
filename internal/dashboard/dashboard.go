@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"sync"
 	"time"
 )
@@ -37,6 +38,7 @@ type RequestEvent struct {
 	LatencyMs       int64     `json:"latency_ms"`
 	Cost            float64   `json:"cost"`
 	CacheHit        bool      `json:"cache_hit"`
+	Provider        string    `json:"provider,omitempty"`
 }
 
 // WorkflowBudget represents a workflow's current budget status.
@@ -49,26 +51,41 @@ type WorkflowBudget struct {
 	TotalCost    float64 `json:"total_cost"`
 }
 
+// ProviderStat holds per-provider aggregate stats for the dashboard.
+type ProviderStat struct {
+	Name         string  `json:"name"`
+	Requests     int64   `json:"requests"`
+	AvgLatencyMs float64 `json:"avg_latency_ms"`
+	TotalLatency int64   `json:"-"`
+}
+
 // AggregateStats holds the dashboard's aggregate counters.
 type AggregateStats struct {
-	TotalRequests  int64   `json:"total_requests"`
-	CacheHits      int64   `json:"cache_hits"`
-	CacheHitRate   float64 `json:"cache_hit_rate"`
-	TotalCost      float64 `json:"total_cost"`
-	TotalSavings   float64 `json:"total_savings"`
-	AvgLatency     float64 `json:"avg_latency"`
-	EconomyCount   int64   `json:"economy_count"`
-	CheapCount     int64   `json:"cheap_count"`
-	MidCount       int64   `json:"mid_count"`
-	PremiumCount   int64   `json:"premium_count"`
+	TotalRequests           int64   `json:"total_requests"`
+	CacheHits               int64   `json:"cache_hits"`
+	CacheHitRate            float64 `json:"cache_hit_rate"`
+	TotalCost               float64 `json:"total_cost"`
+	TotalSavings            float64 `json:"total_savings"`
+	AvgLatency              float64 `json:"avg_latency"`
+	EconomyCount            int64   `json:"economy_count"`
+	CheapCount              int64   `json:"cheap_count"`
+	MidCount                int64   `json:"mid_count"`
+	PremiumCount            int64   `json:"premium_count"`
+	CachedCount             int64   `json:"cached_count"`
+	CascadeAttempts         int64   `json:"cascade_attempts"`
+	CascadeAccepted         int64   `json:"cascade_accepted"`
+	CascadeAcceptRate       float64 `json:"cascade_accept_rate"`
+	CompressionTokensSaved  int64   `json:"compression_tokens_saved"`
 }
 
 // DashboardUpdate is the SSE payload sent to the browser.
 type DashboardUpdate struct {
-	Type      string          `json:"type"` // "request", "stats", "init"
-	Request   *RequestEvent   `json:"request,omitempty"`
-	Stats     *AggregateStats `json:"stats,omitempty"`
-	Workflows []WorkflowBudget `json:"workflows,omitempty"`
+	Type           string           `json:"type"` // "request", "stats", "init"
+	Request        *RequestEvent    `json:"request,omitempty"`
+	Stats          *AggregateStats  `json:"stats,omitempty"`
+	Workflows      []WorkflowBudget `json:"workflows,omitempty"`
+	RecentRequests []RequestEvent   `json:"recent_requests,omitempty"`
+	ProviderStats  []ProviderStat   `json:"provider_stats,omitempty"`
 }
 
 // premiumCostPerToken is used to estimate "what you would have paid" at premium tier.
@@ -90,6 +107,17 @@ type EventBus struct {
 	cheapCount     int64
 	midCount       int64
 	premiumCount   int64
+	cachedCount    int64
+
+	// cascade tracking
+	cascadeAttempts  int64
+	cascadeAccepted  int64
+
+	// compression tracking
+	compressionTokensSaved int64
+
+	// per-provider stats
+	providerStats map[string]*ProviderStat
 
 	// SSE subscribers
 	subMu       sync.Mutex
@@ -101,6 +129,7 @@ func NewEventBus() *EventBus {
 	return &EventBus{
 		recentRequests: make([]RequestEvent, 0, 100),
 		workflows:      make(map[string]*WorkflowBudget),
+		providerStats:  make(map[string]*ProviderStat),
 		subscribers:    make(map[chan []byte]struct{}),
 	}
 }
@@ -153,6 +182,24 @@ func (eb *EventBus) Push(evt RequestEvent) {
 		eb.midCount++
 	case "premium":
 		eb.premiumCount++
+	case "cached":
+		eb.cachedCount++
+	}
+
+	// Per-provider stats
+	provName := evt.Provider
+	if provName == "" {
+		provName = "unknown"
+	}
+	ps, ok := eb.providerStats[provName]
+	if !ok {
+		ps = &ProviderStat{Name: provName}
+		eb.providerStats[provName] = ps
+	}
+	ps.Requests++
+	ps.TotalLatency += evt.LatencyMs
+	if ps.Requests > 0 {
+		ps.AvgLatencyMs = float64(ps.TotalLatency) / float64(ps.Requests)
 	}
 
 	// Update workflow budget
@@ -162,14 +209,16 @@ func (eb *EventBus) Push(evt RequestEvent) {
 
 	stats := eb.getStatsLocked()
 	workflows := eb.getWorkflowsLocked()
+	provStats := eb.getProviderStatsLocked()
 	eb.mu.Unlock()
 
 	// Build SSE message
 	update := DashboardUpdate{
-		Type:      "request",
-		Request:   &evt,
-		Stats:     stats,
-		Workflows: workflows,
+		Type:          "request",
+		Request:       &evt,
+		Stats:         stats,
+		Workflows:     workflows,
+		ProviderStats: provStats,
 	}
 	data, err := json.Marshal(update)
 	if err != nil {
@@ -177,6 +226,23 @@ func (eb *EventBus) Push(evt RequestEvent) {
 	}
 
 	eb.broadcast(data)
+}
+
+// RecordCascade records a cascade attempt result.
+func (eb *EventBus) RecordCascade(accepted bool) {
+	eb.mu.Lock()
+	eb.cascadeAttempts++
+	if accepted {
+		eb.cascadeAccepted++
+	}
+	eb.mu.Unlock()
+}
+
+// RecordCompressionSaved records tokens saved by compression.
+func (eb *EventBus) RecordCompressionSaved(tokens int) {
+	eb.mu.Lock()
+	eb.compressionTokensSaved += int64(tokens)
+	eb.mu.Unlock()
 }
 
 // UpdateWorkflow updates the budget status for a workflow.
@@ -202,17 +268,26 @@ func (eb *EventBus) getStatsLocked() *AggregateStats {
 	if eb.totalRequests > 0 {
 		avgLatency = float64(eb.totalLatency) / float64(eb.totalRequests)
 	}
+	cascadeRate := 0.0
+	if eb.cascadeAttempts > 0 {
+		cascadeRate = float64(eb.cascadeAccepted) / float64(eb.cascadeAttempts)
+	}
 	return &AggregateStats{
-		TotalRequests: eb.totalRequests,
-		CacheHits:     eb.cacheHits,
-		CacheHitRate:  hitRate,
-		TotalCost:     eb.totalCost,
-		TotalSavings:  eb.totalSavings,
-		AvgLatency:    avgLatency,
-		EconomyCount:  eb.economyCount,
-		CheapCount:    eb.cheapCount,
-		MidCount:      eb.midCount,
-		PremiumCount:  eb.premiumCount,
+		TotalRequests:          eb.totalRequests,
+		CacheHits:              eb.cacheHits,
+		CacheHitRate:           hitRate,
+		TotalCost:              eb.totalCost,
+		TotalSavings:           eb.totalSavings,
+		AvgLatency:             avgLatency,
+		EconomyCount:           eb.economyCount,
+		CheapCount:             eb.cheapCount,
+		MidCount:               eb.midCount,
+		PremiumCount:           eb.premiumCount,
+		CachedCount:            eb.cachedCount,
+		CascadeAttempts:        eb.cascadeAttempts,
+		CascadeAccepted:        eb.cascadeAccepted,
+		CascadeAcceptRate:      cascadeRate,
+		CompressionTokensSaved: eb.compressionTokensSaved,
 	}
 }
 
@@ -221,7 +296,32 @@ func (eb *EventBus) getWorkflowsLocked() []WorkflowBudget {
 	for _, w := range eb.workflows {
 		wfs = append(wfs, *w)
 	}
+	// Sort by total cost descending (top workflows)
+	sort.Slice(wfs, func(i, j int) bool {
+		return wfs[i].TotalCost > wfs[j].TotalCost
+	})
 	return wfs
+}
+
+func (eb *EventBus) getProviderStatsLocked() []ProviderStat {
+	stats := make([]ProviderStat, 0, len(eb.providerStats))
+	for _, ps := range eb.providerStats {
+		stats = append(stats, *ps)
+	}
+	sort.Slice(stats, func(i, j int) bool {
+		return stats[i].Requests > stats[j].Requests
+	})
+	return stats
+}
+
+func (eb *EventBus) getRecentRequestsLocked() []RequestEvent {
+	n := len(eb.recentRequests)
+	if n > 50 {
+		n = 50
+	}
+	out := make([]RequestEvent, n)
+	copy(out, eb.recentRequests[len(eb.recentRequests)-n:])
+	return out
 }
 
 func (eb *EventBus) broadcast(data []byte) {
@@ -267,9 +367,11 @@ func (eb *EventBus) ServeSSE(w http.ResponseWriter, r *http.Request) {
 	// Send initial state
 	eb.mu.RLock()
 	initUpdate := DashboardUpdate{
-		Type:      "init",
-		Stats:     eb.getStatsLocked(),
-		Workflows: eb.getWorkflowsLocked(),
+		Type:           "init",
+		Stats:          eb.getStatsLocked(),
+		Workflows:      eb.getWorkflowsLocked(),
+		RecentRequests: eb.getRecentRequestsLocked(),
+		ProviderStats:  eb.getProviderStatsLocked(),
 	}
 	eb.mu.RUnlock()
 
@@ -297,11 +399,15 @@ func (eb *EventBus) ServeStats(w http.ResponseWriter, r *http.Request) {
 	eb.mu.RLock()
 	stats := eb.getStatsLocked()
 	workflows := eb.getWorkflowsLocked()
+	recent := eb.getRecentRequestsLocked()
+	provStats := eb.getProviderStatsLocked()
 	eb.mu.RUnlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"stats":     stats,
-		"workflows": workflows,
+		"stats":           stats,
+		"workflows":       workflows,
+		"recent_requests": recent,
+		"provider_stats":  provStats,
 	})
 }
