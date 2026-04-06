@@ -110,8 +110,15 @@ func (s *Server) handleKeyGenerate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Use context user if available
-	if ctxUser, ok := r.Context().Value(billingUserIDCtx).(string); ok && req.UserID == "" {
-		req.UserID = ctxUser
+	if ctxUser, ok := r.Context().Value(billingUserIDCtx).(string); ok && ctxUser != "" {
+		// Authenticated user: enforce ownership — callers cannot forge
+		// key generation for a different user.
+		if req.UserID == "" {
+			req.UserID = ctxUser
+		} else if req.UserID != ctxUser {
+			http.Error(w, `{"error":"cannot generate keys for another user"}`, http.StatusForbidden)
+			return
+		}
 	}
 
 	if req.UserID == "" || req.SubscriptionID == "" {

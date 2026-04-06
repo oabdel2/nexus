@@ -33,7 +33,14 @@ func (s *Server) billingAuthMiddleware() security.Middleware {
 
 			auth := r.Header.Get("Authorization")
 			if !strings.HasPrefix(auth, "Bearer nxs_") {
-				// No billing key — let the request through for non-billing auth
+				// No billing key — block admin endpoints instead
+				// of letting unauthenticated requests through.
+				if strings.HasPrefix(path, "/api/admin/") || strings.HasPrefix(path, "/api/keys/") {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusUnauthorized)
+					json.NewEncoder(w).Encode(map[string]string{"error": "API key required"})
+					return
+				}
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -51,6 +58,23 @@ func (s *Server) billingAuthMiddleware() security.Middleware {
 				w.WriteHeader(http.StatusUnauthorized)
 				json.NewEncoder(w).Encode(map[string]string{"error": "invalid API key"})
 				return
+			}
+
+			// Check scope for admin endpoints
+			if strings.HasPrefix(path, "/api/admin/") || strings.HasPrefix(path, "/api/keys/") {
+				hasAdmin := false
+				for _, scope := range apiKey.Scopes {
+					if scope == "admin" || scope == "*" {
+						hasAdmin = true
+						break
+					}
+				}
+				if !hasAdmin {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusForbidden)
+					json.NewEncoder(w).Encode(map[string]string{"error": "admin scope required"})
+					return
+				}
 			}
 
 			// Check quota

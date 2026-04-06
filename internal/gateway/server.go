@@ -57,6 +57,7 @@ type Server struct {
 	eventBus         *events.EventBus
 	pluginRegistry   *plugin.Registry
 	requestSem       chan struct{}
+	shadowSem        chan struct{} // limits concurrent shadow eval goroutines
 }
 
 func New(cfg *config.Config, logger *slog.Logger) *Server {
@@ -230,6 +231,7 @@ func New(cfg *config.Config, logger *slog.Logger) *Server {
 		maxConcurrent = 500
 	}
 	s.requestSem = make(chan struct{}, maxConcurrent)
+	s.shadowSem = make(chan struct{}, 50) // limit concurrent shadow evals
 
 	// Wire circuit breaker state changes to events
 	if s.eventBus != nil {
@@ -411,6 +413,9 @@ func (s *Server) Start(ctx context.Context) error {
 		AllowedIPs: s.cfg.Security.IPAllowlist.AllowedIPs,
 		Paths:      s.cfg.Security.IPAllowlist.Paths,
 	}))
+
+	// Admin endpoint protection: defense-in-depth guard for /api/admin/*
+	middlewares = append(middlewares, security.AdminRequired())
 
 	// Rate limiting
 	rateLimiter := security.NewRateLimiter(security.RateLimiterConfig{

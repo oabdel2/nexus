@@ -316,6 +316,22 @@ func Load(path string) (*Config, error) {
 	return cfg, nil
 }
 
+// ExpandSecrets replaces ${ENV_VAR} references in all secret fields
+// with their environment variable values so secrets never need to be
+// stored in config files.
+func (cfg *Config) ExpandSecrets() {
+	for i := range cfg.Providers {
+		cfg.Providers[i].APIKey = os.ExpandEnv(cfg.Providers[i].APIKey)
+	}
+	cfg.Billing.StripeWebhookSecret = os.ExpandEnv(cfg.Billing.StripeWebhookSecret)
+	cfg.Security.OIDC.ClientSecret = os.ExpandEnv(cfg.Security.OIDC.ClientSecret)
+	cfg.Notification.SMTPPass = os.ExpandEnv(cfg.Notification.SMTPPass)
+	cfg.Storage.RedisPassword = os.ExpandEnv(cfg.Storage.RedisPassword)
+	cfg.Storage.QdrantAPIKey = os.ExpandEnv(cfg.Storage.QdrantAPIKey)
+	cfg.Events.WebhookSecret = os.ExpandEnv(cfg.Events.WebhookSecret)
+	cfg.Cache.L2Semantic.APIKey = os.ExpandEnv(cfg.Cache.L2Semantic.APIKey)
+}
+
 func DefaultConfig() *Config {
 	cfg := &Config{}
 	setDefaults(cfg)

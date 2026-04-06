@@ -101,6 +101,8 @@ func (e *RBACEnforcer) RequirePermission(permission string) Middleware {
 			// Get role from context (set by auth middleware)
 			role, _ := r.Context().Value(ContextKeyRole).(string)
 			if role == "" {
+				// Unauthenticated requests get no role; only allow
+				// unprivileged operations so admin endpoints are safe.
 				role = "user"
 			}
 
@@ -114,9 +116,37 @@ func (e *RBACEnforcer) RequirePermission(permission string) Middleware {
 	}
 }
 
+// AdminRequired returns middleware that blocks access to admin endpoints
+// (/api/admin/*, /api/keys/*) unless the request carries an authenticated
+// admin role in its context. This provides a defense-in-depth check that
+// is independent of RBAC being enabled.
+func AdminRequired() Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			perm := PathToPermission(r.URL.Path)
+			if perm != "admin" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			role, _ := r.Context().Value(ContextKeyRole).(string)
+			if role == "admin" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			w.Write([]byte(`{"error":"admin access required"}`))
+		})
+	}
+}
+
 // PathToPermission maps URL paths to required permissions.
 func PathToPermission(path string) string {
 	switch {
+	case strings.HasPrefix(path, "/api/admin/"):
+		return "admin"
+	case strings.HasPrefix(path, "/api/keys/"):
+		return "admin"
 	case strings.HasPrefix(path, "/v1/chat"):
 		return "chat"
 	case strings.HasPrefix(path, "/api/synonyms") && strings.Contains(path, "promote"):

@@ -8,11 +8,12 @@ import (
 
 // RateLimiter provides per-tenant token bucket rate limiting.
 type RateLimiter struct {
-	mu      sync.RWMutex
-	buckets map[string]*tokenBucket
-	rpm     int
-	burst   int
-	enabled bool
+	mu         sync.RWMutex
+	buckets    map[string]*tokenBucket
+	rpm        int
+	burst      int
+	enabled    bool
+	maxBuckets int // cap to prevent memory exhaustion
 }
 
 type tokenBucket struct {
@@ -38,10 +39,11 @@ func NewRateLimiter(cfg RateLimiterConfig) *RateLimiter {
 		cfg.BurstSize = 10
 	}
 	return &RateLimiter{
-		buckets: make(map[string]*tokenBucket),
-		rpm:     cfg.DefaultRPM,
-		burst:   cfg.BurstSize,
-		enabled: cfg.Enabled,
+		buckets:    make(map[string]*tokenBucket),
+		rpm:        cfg.DefaultRPM,
+		burst:      cfg.BurstSize,
+		enabled:    cfg.Enabled,
+		maxBuckets: 100000,
 	}
 }
 
@@ -56,6 +58,10 @@ func (rl *RateLimiter) Allow(tenant string) bool {
 
 	bucket, exists := rl.buckets[tenant]
 	if !exists {
+		// Evict stale buckets when at capacity to prevent memory exhaustion
+		if len(rl.buckets) >= rl.maxBuckets {
+			rl.evictStaleLocked()
+		}
 		bucket = &tokenBucket{
 			tokens:     float64(rl.burst),
 			maxTokens:  float64(rl.burst),
@@ -80,6 +86,26 @@ func (rl *RateLimiter) Allow(tenant string) bool {
 		return true
 	}
 	return false
+}
+
+// evictStaleLocked removes the oldest half of buckets by last refill time.
+// Caller must hold rl.mu (write lock).
+func (rl *RateLimiter) evictStaleLocked() {
+	cutoff := time.Now().Add(-5 * time.Minute)
+	for k, b := range rl.buckets {
+		if b.lastRefill.Before(cutoff) {
+			delete(rl.buckets, k)
+		}
+	}
+	// If still over capacity, remove oldest entries regardless of age
+	if len(rl.buckets) >= rl.maxBuckets {
+		for k := range rl.buckets {
+			delete(rl.buckets, k)
+			if len(rl.buckets) < rl.maxBuckets/2 {
+				break
+			}
+		}
+	}
 }
 
 // Middleware returns HTTP middleware for rate limiting.

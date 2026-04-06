@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -926,6 +927,10 @@ func TestIPAllowlistNonProtectedPath(t *testing.T) {
 }
 
 func TestIPAllowlistXForwardedFor(t *testing.T) {
+	// X-Forwarded-For is client-spoofable and MUST NOT be trusted for
+	// security-critical IP allowlist checks. The allowlist now uses
+	// RemoteAddr exclusively — this test verifies a spoofed XFF header
+	// is ignored and the real RemoteAddr (outside the allowlist) is used.
 	handler := IPAllowlist(IPAllowlistConfig{
 		Enabled:    true,
 		AllowedIPs: []string{"192.168.1.0/24"},
@@ -940,8 +945,8 @@ func TestIPAllowlistXForwardedFor(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("expected 200 for allowed X-Forwarded-For IP, got %d", rec.Code)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("expected 403 when spoofing X-Forwarded-For, got %d", rec.Code)
 	}
 }
 
@@ -1102,6 +1107,137 @@ func TestRequestLoggerStatusCapture(t *testing.T) {
 	}
 	if !strings.Contains(output, "WARN") {
 		t.Errorf("4xx should log at WARN level, got: %s", output)
+	}
+}
+
+// ====================================================================
+// Security Audit Tests — prove each pentest fix works
+// ====================================================================
+
+func TestAdminRequiredBlocksUnauthenticated(t *testing.T) {
+	handler := AdminRequired()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Admin endpoint without role → 403
+	req := httptest.NewRequest("GET", "/api/admin/subscriptions", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("expected 403 for unauthenticated admin request, got %d", rec.Code)
+	}
+
+	// Admin endpoint with admin role → 200
+	req2 := httptest.NewRequest("GET", "/api/admin/subscriptions", nil)
+	ctx2 := context.WithValue(req2.Context(), ContextKeyRole, "admin")
+	rec2 := httptest.NewRecorder()
+	handler.ServeHTTP(rec2, req2.WithContext(ctx2))
+	if rec2.Code != http.StatusOK {
+		t.Errorf("expected 200 for admin role, got %d", rec2.Code)
+	}
+
+	// Non-admin path passes through without role
+	req3 := httptest.NewRequest("GET", "/v1/chat/completions", nil)
+	rec3 := httptest.NewRecorder()
+	handler.ServeHTTP(rec3, req3)
+	if rec3.Code != http.StatusOK {
+		t.Errorf("expected 200 for non-admin path, got %d", rec3.Code)
+	}
+}
+
+func TestPathToPermissionAdminPaths(t *testing.T) {
+	adminTests := []struct {
+		path     string
+		expected string
+	}{
+		{"/api/admin/subscriptions", "admin"},
+		{"/api/admin/keys/user123", "admin"},
+		{"/api/admin/devices/user123", "admin"},
+		{"/api/keys/generate", "admin"},
+		{"/api/keys/revoke", "admin"},
+		{"/v1/chat/completions", "chat"},
+	}
+	for _, tt := range adminTests {
+		got := PathToPermission(tt.path)
+		if got != tt.expected {
+			t.Errorf("PathToPermission(%q) = %q, want %q", tt.path, got, tt.expected)
+		}
+	}
+}
+
+func TestIPAllowlistIgnoresSpoofedXFF(t *testing.T) {
+	handler := IPAllowlist(IPAllowlistConfig{
+		Enabled:    true,
+		AllowedIPs: []string{"10.0.0.0/8"},
+		Paths:      []string{"/api/admin/"},
+	})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// RemoteAddr is NOT in allowed range, but XFF claims to be
+	req := httptest.NewRequest("GET", "/api/admin/config", nil)
+	req.RemoteAddr = "203.0.113.99:12345"
+	req.Header.Set("X-Forwarded-For", "10.0.0.1")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("spoofed X-Forwarded-For should be blocked, got %d", rec.Code)
+	}
+}
+
+func TestExtractTrustedClientIPIgnoresXFF(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "192.168.1.1:54321"
+	req.Header.Set("X-Forwarded-For", "10.0.0.1")
+
+	ip := extractTrustedClientIP(req)
+	if ip != "192.168.1.1" {
+		t.Errorf("extractTrustedClientIP should ignore XFF; got %s, want 192.168.1.1", ip)
+	}
+}
+
+func TestSanitizeLogValue(t *testing.T) {
+	tests := []struct {
+		input    string
+		contains string
+		excludes string
+	}{
+		{"normal text", "normal text", ""},
+		{"line1\nline2", "line1 line2", "\n"},
+		{"line1\r\nline2", "line1  line2", "\r"},
+		{"null\x00byte", "nullbyte", "\x00"},
+	}
+	for _, tt := range tests {
+		got := sanitizeLogValue(tt.input)
+		if !strings.Contains(got, tt.contains) {
+			t.Errorf("sanitizeLogValue(%q) = %q, expected to contain %q", tt.input, got, tt.contains)
+		}
+		if tt.excludes != "" && strings.Contains(got, tt.excludes) {
+			t.Errorf("sanitizeLogValue(%q) = %q, should not contain %q", tt.input, got, tt.excludes)
+		}
+	}
+}
+
+func TestRateLimiterBucketEviction(t *testing.T) {
+	rl := NewRateLimiter(RateLimiterConfig{
+		Enabled:    true,
+		DefaultRPM: 60,
+		BurstSize:  10,
+	})
+	rl.maxBuckets = 100 // low cap for testing
+
+	// Fill up buckets to capacity
+	for i := 0; i < 150; i++ {
+		rl.Allow(fmt.Sprintf("tenant-%d", i))
+	}
+
+	rl.mu.RLock()
+	count := len(rl.buckets)
+	rl.mu.RUnlock()
+
+	if count > 100 {
+		t.Errorf("bucket count %d exceeds max %d after eviction", count, 100)
 	}
 }
 

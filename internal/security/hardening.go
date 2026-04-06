@@ -119,7 +119,7 @@ func IPAllowlist(cfg IPAllowlistConfig) Middleware {
 				return
 			}
 
-			clientIP := extractClientIP(r)
+			clientIP := extractTrustedClientIP(r)
 			ip := net.ParseIP(clientIP)
 			if ip != nil {
 				for _, network := range networks {
@@ -257,6 +257,24 @@ func (rc *responseCapture) Write(b []byte) (int, error) {
 	return rc.ResponseWriter.Write(b)
 }
 
+// sanitizeLogValue strips newlines and control characters from a string
+// to prevent log injection attacks.
+func sanitizeLogValue(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if r == '\n' || r == '\r' {
+			b.WriteRune(' ')
+		} else if r < 0x20 && r != '\t' {
+			// skip non-printable control characters
+			continue
+		} else {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
 // RequestLogger provides structured request/response logging with
 // sanitized authorization headers.
 func RequestLogger(logger *slog.Logger) Middleware {
@@ -273,11 +291,11 @@ func RequestLogger(logger *slog.Logger) Middleware {
 
 			attrs := []any{
 				"method", r.Method,
-				"path", r.URL.Path,
+				"path", sanitizeLogValue(r.URL.Path),
 				"status", rc.status,
 				"latency_ms", latency.Milliseconds(),
 				"client_ip", clientIP,
-				"user_agent", r.UserAgent(),
+				"user_agent", sanitizeLogValue(r.UserAgent()),
 				"request_id", reqID,
 			}
 
@@ -302,11 +320,24 @@ func RequestLogger(logger *slog.Logger) Middleware {
 }
 
 // extractClientIP gets the client IP from X-Forwarded-For or RemoteAddr.
+// NOTE: Used for logging/informational purposes only. For security-critical
+// decisions (IP allowlisting), use extractTrustedClientIP instead.
 func extractClientIP(r *http.Request) string {
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		parts := strings.Split(xff, ",")
 		return strings.TrimSpace(parts[0])
 	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
+// extractTrustedClientIP returns the client IP solely from RemoteAddr,
+// ignoring spoofable headers like X-Forwarded-For. Use this for all
+// security-critical decisions (IP allowlists, rate limiting by IP).
+func extractTrustedClientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr
