@@ -285,7 +285,7 @@ func (c *SemanticCache) getOpenAIEmbedding(ctx context.Context, text string) ([]
 	return result.Data[0].Embedding, nil
 }
 
-// normalizeVector normalizes a vector to unit length for fast cosine computation.
+// normalizeVector normalizes a vector to unit length in-place for fast cosine computation.
 func normalizeVector(v []float64) []float64 {
 	norm := 0.0
 	for _, x := range v {
@@ -295,11 +295,11 @@ func normalizeVector(v []float64) []float64 {
 	if norm == 0 {
 		return v
 	}
-	out := make([]float64, len(v))
-	for i, x := range v {
-		out[i] = x / norm
+	invNorm := 1.0 / norm
+	for i := range v {
+		v[i] *= invNorm
 	}
-	return out
+	return v
 }
 
 // dotProduct computes the dot product of two vectors.
@@ -370,14 +370,18 @@ func (c *SemanticCache) cleanupExpired() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	now := time.Now()
-	i := 0
-	for i < len(c.entries) {
-		if now.Sub(c.entries[i].createdAt) > c.ttl {
-			c.entries = append(c.entries[:i], c.entries[i+1:]...)
-		} else {
-			i++
+	n := 0
+	for i := range c.entries {
+		if now.Sub(c.entries[i].createdAt) <= c.ttl {
+			c.entries[n] = c.entries[i]
+			n++
 		}
 	}
+	// Clear references in the tail to help GC
+	for i := n; i < len(c.entries); i++ {
+		c.entries[i] = semanticEntry{}
+	}
+	c.entries = c.entries[:n]
 }
 
 // lshBucketKey computes a locality-sensitive hash bucket key from an embedding.
@@ -410,15 +414,18 @@ func lshBucketKey(emb []float64) string {
 
 // lshNeighborKeys returns the bucket key and all single-bit-flip neighbors.
 func lshNeighborKeys(key string) map[string]bool {
-	m := map[string]bool{key: true}
-	for i := 0; i < len(key); i++ {
-		b := []byte(key)
-		if b[i] == '1' {
+	m := make(map[string]bool, len(key)+1)
+	m[key] = true
+	b := []byte(key)
+	for i := 0; i < len(b); i++ {
+		orig := b[i]
+		if orig == '1' {
 			b[i] = '0'
 		} else {
 			b[i] = '1'
 		}
 		m[string(b)] = true
+		b[i] = orig
 	}
 	return m
 }

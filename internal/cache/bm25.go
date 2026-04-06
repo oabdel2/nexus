@@ -133,12 +133,8 @@ func (c *BM25Cache) Store(prompt, model string, response []byte) {
 	}
 
 	// Update document frequencies for new terms
-	seen := make(map[string]bool, len(tf))
 	for term := range tf {
-		if !seen[term] {
-			c.df[term]++
-			seen[term] = true
-		}
+		c.df[term]++
 	}
 
 	c.docs = append(c.docs, bm25Doc{
@@ -297,8 +293,8 @@ func (c *BM25Cache) cleanupExpired() {
 	defer c.mu.Unlock()
 	now := time.Now()
 	changed := false
-	i := 0
-	for i < len(c.docs) {
+	n := 0
+	for i := range c.docs {
 		if now.Sub(c.docs[i].createdAt) > c.ttl {
 			c.totalTokenLen -= len(c.docs[i].tokens)
 			for term := range c.docs[i].termFreq {
@@ -307,12 +303,17 @@ func (c *BM25Cache) cleanupExpired() {
 					delete(c.df, term)
 				}
 			}
-			c.docs = append(c.docs[:i], c.docs[i+1:]...)
 			changed = true
 		} else {
-			i++
+			c.docs[n] = c.docs[i]
+			n++
 		}
 	}
+	// Clear references in the tail to help GC
+	for i := n; i < len(c.docs); i++ {
+		c.docs[i] = bm25Doc{}
+	}
+	c.docs = c.docs[:n]
 	if changed {
 		c.rebuildInvertedIndex()
 	}

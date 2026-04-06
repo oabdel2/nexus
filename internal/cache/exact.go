@@ -73,7 +73,10 @@ func (c *ExactCache) Get(key string) ([]byte, bool) {
 	c.lru.Touch(key)
 	c.mu.Unlock()
 
-	return entry.Response, true
+	// Return a copy to prevent data races on shared response bytes
+	resp := make([]byte, len(entry.Response))
+	copy(resp, entry.Response)
+	return resp, true
 }
 
 func (c *ExactCache) Set(key string, response []byte) {

@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"sync"
@@ -184,7 +185,10 @@ func (eb *EventBus) send(hook WebhookConfig, event Event) {
 		log.Printf("[events] webhook %s failed: %v", hook.URL, err)
 		return
 	}
-	defer resp.Body.Close()
+	defer func() {
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}()
 
 	if resp.StatusCode >= 400 {
 		log.Printf("[events] webhook %s returned %d", hook.URL, resp.StatusCode)

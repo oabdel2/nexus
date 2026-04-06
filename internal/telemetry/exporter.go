@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -164,6 +165,8 @@ func (e *SpanExporter) sendBatch(batch []*Span) {
 		slog.Warn("tracing: OTLP export failed", "error", err, "spans", len(batch))
 		return
 	}
+	// Drain body to allow connection reuse
+	io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
 
 	if resp.StatusCode >= 400 {

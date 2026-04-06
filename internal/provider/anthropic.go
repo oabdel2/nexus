@@ -330,7 +330,10 @@ func (p *AnthropicProvider) HealthCheck(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}()
 
 	// Any non-5xx response (including 405 Method Not Allowed) indicates the API is reachable.
 	if resp.StatusCode >= 500 {

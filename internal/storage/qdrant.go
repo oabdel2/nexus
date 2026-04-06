@@ -83,6 +83,7 @@ func (q *QdrantStore) ensureCollection() error {
 	if err != nil {
 		return err
 	}
+	io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
 
 	if resp.StatusCode == http.StatusOK {
@@ -242,6 +243,7 @@ func (q *QdrantStore) Healthy() bool {
 	if err != nil {
 		return false
 	}
+	io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
 	return resp.StatusCode == http.StatusOK
 }
