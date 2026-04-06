@@ -47,8 +47,10 @@ type anthropicContentBlock struct {
 }
 
 type anthropicUsage struct {
-	InputTokens  int `json:"input_tokens"`
-	OutputTokens int `json:"output_tokens"`
+	InputTokens              int `json:"input_tokens"`
+	OutputTokens             int `json:"output_tokens"`
+	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
 }
 
 func NewAnthropic(name, baseURL, apiKey string) *AnthropicProvider {
@@ -131,6 +133,7 @@ func toOpenAIResponse(ar *anthropicResponse) *ChatResponse {
 			PromptTokens:     ar.Usage.InputTokens,
 			CompletionTokens: ar.Usage.OutputTokens,
 			TotalTokens:      total,
+			CachedTokens:     ar.Usage.CacheReadInputTokens,
 		},
 	}
 }
@@ -346,4 +349,6 @@ func (p *AnthropicProvider) setHeaders(req *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-api-key", p.apiKey)
 	req.Header.Set("anthropic-version", p.version)
+	// Enable Anthropic prompt caching to avoid re-processing stable system prompts
+	req.Header.Set("anthropic-beta", "prompt-caching-2024-07-31")
 }

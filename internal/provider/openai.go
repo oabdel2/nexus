@@ -71,12 +71,36 @@ func (p *OpenAIProvider) Send(ctx context.Context, req ChatRequest) (*ChatRespon
 		return nil, fmt.Errorf("provider error (status %d): %s", resp.StatusCode, string(respBody))
 	}
 
+	// Decode into raw map first to extract prompt_tokens_details.cached_tokens
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+
 	var chatResp ChatResponse
-	if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
+	if err := json.Unmarshal(respBody, &chatResp); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 
+	// Extract OpenAI's cached_tokens from prompt_tokens_details
+	chatResp.Usage.CachedTokens = extractCachedTokens(respBody)
+
 	return &chatResp, nil
+}
+
+// extractCachedTokens parses OpenAI's usage.prompt_tokens_details.cached_tokens.
+func extractCachedTokens(body []byte) int {
+	var raw struct {
+		Usage struct {
+			PromptTokensDetails struct {
+				CachedTokens int `json:"cached_tokens"`
+			} `json:"prompt_tokens_details"`
+		} `json:"usage"`
+	}
+	if json.Unmarshal(body, &raw) == nil {
+		return raw.Usage.PromptTokensDetails.CachedTokens
+	}
+	return 0
 }
 
 func (p *OpenAIProvider) SendStream(ctx context.Context, req ChatRequest, w io.Writer) (*Usage, error) {

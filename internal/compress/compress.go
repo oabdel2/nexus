@@ -1,6 +1,7 @@
 package compress
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -14,11 +15,14 @@ type Message struct {
 
 // CompressorConfig controls which compression strategies are applied.
 type CompressorConfig struct {
-	EnableWhitespace   bool
-	EnableCodeStrip    bool
-	EnableHistoryTrunc bool
-	MaxHistoryTurns    int // total messages to keep (system + last N user/assistant)
-	PreserveLastN      int // number of recent turn-pairs to always keep
+	EnableWhitespace    bool
+	EnableCodeStrip     bool
+	EnableHistoryTrunc  bool
+	EnableBoilerplate   bool // remove filler phrases like "Sure, I can help with that"
+	EnableJSONMinify    bool // minify JSON/XML in code blocks
+	EnableDeduplication bool // remove duplicate instructions across messages
+	MaxHistoryTurns     int  // total messages to keep (system + last N user/assistant)
+	PreserveLastN       int  // number of recent turn-pairs to always keep
 }
 
 // CompressionResult captures metrics about a compression operation.
@@ -37,11 +41,14 @@ type Compressor struct {
 // DefaultConfig returns a sensible default configuration.
 func DefaultConfig() CompressorConfig {
 	return CompressorConfig{
-		EnableWhitespace:   true,
-		EnableCodeStrip:    true,
-		EnableHistoryTrunc: true,
-		MaxHistoryTurns:    20,
-		PreserveLastN:      5,
+		EnableWhitespace:    true,
+		EnableCodeStrip:     true,
+		EnableHistoryTrunc:  true,
+		EnableBoilerplate:   true,
+		EnableJSONMinify:    true,
+		EnableDeduplication: true,
+		MaxHistoryTurns:     20,
+		PreserveLastN:       5,
 	}
 }
 
@@ -244,7 +251,152 @@ func HistoryTruncate(messages []Message, preserveLastN int) []Message {
 	return result
 }
 
-// ---- Strategy 4: Combined Compression ----
+// ---- Strategy 4: Boilerplate Removal ----
+
+// boilerplatePrefixes are filler phrases that add no information.
+var boilerplatePrefixes = []string{
+	"sure, i can help with that.",
+	"sure, i'd be happy to help!",
+	"sure, i'd be happy to help.",
+	"of course! let me help you with that.",
+	"of course!",
+	"certainly! let me explain.",
+	"certainly!",
+	"absolutely! here's",
+	"absolutely!",
+	"great question!",
+	"that's a great question!",
+	"good question!",
+	"let me think about this.",
+	"i'd be happy to help you with that.",
+	"i'd be happy to assist you.",
+	"no problem! here's",
+	"no problem!",
+	"here's what i think:",
+	"here is my response:",
+	"i hope this helps!",
+	"let me know if you have any questions!",
+	"let me know if you need anything else!",
+	"feel free to ask if you have any more questions!",
+	"feel free to ask follow-up questions!",
+	"is there anything else you'd like to know?",
+	"hope that helps!",
+}
+
+// BoilerplateRemove strips common filler phrases from assistant messages.
+func BoilerplateRemove(text string) string {
+	lower := strings.ToLower(text)
+	result := text
+	for _, prefix := range boilerplatePrefixes {
+		if strings.HasPrefix(lower, prefix) {
+			result = strings.TrimSpace(result[len(prefix):])
+			lower = strings.ToLower(result)
+		}
+	}
+	// Strip trailing boilerplate
+	for _, suffix := range boilerplatePrefixes {
+		lowerResult := strings.ToLower(result)
+		if strings.HasSuffix(lowerResult, suffix) {
+			result = strings.TrimSpace(result[:len(result)-len(suffix)])
+		}
+	}
+	return result
+}
+
+// ---- Strategy 5: JSON/XML Minification ----
+
+var reJSONBlock = regexp.MustCompile("(?s)```(?:json)\\n(.*?)```")
+
+// JSONMinify detects JSON code blocks and minifies them.
+func JSONMinify(text string) string {
+	return reJSONBlock.ReplaceAllStringFunc(text, func(block string) string {
+		matches := reJSONBlock.FindStringSubmatch(block)
+		if len(matches) < 2 {
+			return block
+		}
+		content := strings.TrimSpace(matches[1])
+		var parsed interface{}
+		if err := json.Unmarshal([]byte(content), &parsed); err != nil {
+			return block
+		}
+		minified, err := json.Marshal(parsed)
+		if err != nil {
+			return block
+		}
+		return "```json\n" + string(minified) + "\n```"
+	})
+}
+
+// ---- Strategy 6: Instruction Deduplication ----
+
+// DeduplicateInstructions removes duplicate sentences across messages.
+// It tracks instruction-like sentences (imperative or "remember to..." patterns)
+// and removes exact duplicates seen in earlier messages.
+func DeduplicateInstructions(messages []Message) []Message {
+	seen := make(map[string]bool)
+	result := make([]Message, len(messages))
+	copy(result, messages)
+
+	for i := range result {
+		if result[i].Role != "system" && result[i].Role != "user" {
+			continue
+		}
+		sentences := splitSentences(result[i].Content)
+		var kept []string
+		for _, s := range sentences {
+			normalized := strings.ToLower(strings.TrimSpace(s))
+			if normalized == "" {
+				kept = append(kept, s)
+				continue
+			}
+			if !isInstructionLike(normalized) {
+				kept = append(kept, s)
+				continue
+			}
+			if seen[normalized] {
+				continue // duplicate instruction — skip
+			}
+			seen[normalized] = true
+			kept = append(kept, s)
+		}
+		result[i].Content = strings.Join(kept, " ")
+	}
+	return result
+}
+
+// splitSentences splits text on sentence boundaries.
+func splitSentences(text string) []string {
+	var sentences []string
+	var current strings.Builder
+	for i, r := range text {
+		current.WriteRune(r)
+		if (r == '.' || r == '!' || r == '?') && i+1 < len(text) && text[i+1] == ' ' {
+			sentences = append(sentences, current.String())
+			current.Reset()
+		}
+	}
+	if current.Len() > 0 {
+		sentences = append(sentences, current.String())
+	}
+	return sentences
+}
+
+// isInstructionLike detects imperative or reminder-style sentences.
+func isInstructionLike(s string) bool {
+	instructionPrefixes := []string{
+		"remember to", "make sure to", "always ", "never ",
+		"please ", "you must ", "you should ", "ensure ",
+		"do not ", "don't ", "be sure to",
+	}
+	for _, p := range instructionPrefixes {
+		if strings.HasPrefix(s, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// ---- Strategy 7: Combined Compression ----
 
 // CompressMessages applies all enabled strategies and returns metrics.
 func (c *Compressor) CompressMessages(messages []Message) ([]Message, CompressionResult) {
@@ -260,7 +412,16 @@ func (c *Compressor) CompressMessages(messages []Message) ([]Message, Compressio
 	compressed := make([]Message, len(messages))
 	copy(compressed, messages)
 
-	// Apply history truncation first (reduces message count)
+	// Apply instruction deduplication first (cross-message, must precede truncation)
+	if c.cfg.EnableDeduplication {
+		before := totalContentLen(compressed)
+		compressed = DeduplicateInstructions(compressed)
+		if totalContentLen(compressed) < before {
+			result.StrategiesUsed = append(result.StrategiesUsed, "deduplication")
+		}
+	}
+
+	// Apply history truncation (reduces message count)
 	if c.cfg.EnableHistoryTrunc && len(compressed) > c.cfg.PreserveLastN+1 {
 		compressed = HistoryTruncate(compressed, c.cfg.PreserveLastN)
 		result.StrategiesUsed = append(result.StrategiesUsed, "history_truncate")
@@ -276,6 +437,26 @@ func (c *Compressor) CompressMessages(messages []Message) ([]Message, Compressio
 				content = newContent
 				if !contains(result.StrategiesUsed, "code_strip") {
 					result.StrategiesUsed = append(result.StrategiesUsed, "code_strip")
+				}
+			}
+		}
+
+		if c.cfg.EnableJSONMinify {
+			newContent := JSONMinify(content)
+			if newContent != content {
+				content = newContent
+				if !contains(result.StrategiesUsed, "json_minify") {
+					result.StrategiesUsed = append(result.StrategiesUsed, "json_minify")
+				}
+			}
+		}
+
+		if c.cfg.EnableBoilerplate && compressed[i].Role == "assistant" {
+			newContent := BoilerplateRemove(content)
+			if newContent != content {
+				content = newContent
+				if !contains(result.StrategiesUsed, "boilerplate") {
+					result.StrategiesUsed = append(result.StrategiesUsed, "boilerplate")
 				}
 			}
 		}
@@ -305,6 +486,14 @@ func (c *Compressor) CompressMessages(messages []Message) ([]Message, Compressio
 	}
 
 	return compressed, result
+}
+
+func totalContentLen(msgs []Message) int {
+	n := 0
+	for _, m := range msgs {
+		n += len(m.Content)
+	}
+	return n
 }
 
 func contains(s []string, v string) bool {

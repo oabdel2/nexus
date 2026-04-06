@@ -30,6 +30,7 @@ type CascadeResult struct {
 	CheapConfidence float64       `json:"cheap_confidence"`
 	CostSaved       float64       `json:"cost_saved"`
 	LatencyAdded    time.Duration `json:"latency_added"`
+	WastedTokens    int           `json:"wasted_tokens"` // tokens consumed by cheap model when escalating
 }
 
 // ShouldCascade returns true if this request should try the cheap model first.

@@ -39,6 +39,11 @@ func (s *Server) runShadowEval(ctx context.Context, req provider.ChatRequest, pr
 		return
 	}
 
+	// Record shadow eval token cost
+	if compResp.Usage.TotalTokens > 0 {
+		s.metrics.RecordShadowTokens(compResp.Usage.TotalTokens)
+	}
+
 	if len(primaryResp.Choices) == 0 || len(compResp.Choices) == 0 {
 		return
 	}

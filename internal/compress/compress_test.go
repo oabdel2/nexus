@@ -271,3 +271,114 @@ func TestEstimateTokens(t *testing.T) {
 		t.Error("expected at least 1 token for 'hello world'")
 	}
 }
+
+// ==================== Boilerplate Removal Tests ====================
+
+func TestBoilerplate_RemovePrefix(t *testing.T) {
+	input := "Sure, I can help with that. Here is the answer."
+	got := BoilerplateRemove(input)
+	if strings.Contains(strings.ToLower(got), "sure, i can help") {
+		t.Errorf("expected boilerplate prefix removed, got %q", got)
+	}
+	if !strings.Contains(got, "Here is the answer.") {
+		t.Errorf("expected content preserved, got %q", got)
+	}
+}
+
+func TestBoilerplate_RemoveSuffix(t *testing.T) {
+	input := "The answer is 42. I hope this helps!"
+	got := BoilerplateRemove(input)
+	if strings.Contains(strings.ToLower(got), "i hope this helps") {
+		t.Errorf("expected boilerplate suffix removed, got %q", got)
+	}
+	if !strings.Contains(got, "The answer is 42.") {
+		t.Errorf("expected content preserved, got %q", got)
+	}
+}
+
+func TestBoilerplate_NoChange(t *testing.T) {
+	input := "The Kubernetes pod is crashing due to OOM."
+	got := BoilerplateRemove(input)
+	if got != input {
+		t.Errorf("non-boilerplate text should be unchanged, got %q", got)
+	}
+}
+
+// ==================== JSON Minification Tests ====================
+
+func TestJSONMinify_ValidJSON(t *testing.T) {
+	input := "```json\n{\n  \"name\": \"test\",\n  \"value\": 42\n}\n```"
+	got := JSONMinify(input)
+	if strings.Contains(got, "  ") {
+		t.Errorf("expected JSON minified, got %q", got)
+	}
+	if !strings.Contains(got, `"name":"test"`) {
+		t.Errorf("expected minified JSON content, got %q", got)
+	}
+}
+
+func TestJSONMinify_InvalidJSON(t *testing.T) {
+	input := "```json\nnot valid json\n```"
+	got := JSONMinify(input)
+	if got != input {
+		t.Errorf("invalid JSON should be unchanged, got %q", got)
+	}
+}
+
+func TestJSONMinify_NoJSONBlocks(t *testing.T) {
+	input := "Regular text without JSON blocks."
+	got := JSONMinify(input)
+	if got != input {
+		t.Errorf("text without JSON blocks should be unchanged")
+	}
+}
+
+// ==================== Instruction Deduplication Tests ====================
+
+func TestDedup_RemovesDuplicateInstructions(t *testing.T) {
+	msgs := []Message{
+		{Role: "system", Content: "Remember to use TypeScript. Always use strict mode."},
+		{Role: "user", Content: "Write a function. Remember to use TypeScript."},
+	}
+	got := DeduplicateInstructions(msgs)
+	// The second "Remember to use TypeScript." should be removed
+	count := strings.Count(strings.ToLower(got[0].Content+got[1].Content), "remember to use typescript")
+	if count > 1 {
+		t.Errorf("expected duplicate instruction removed, found %d occurrences", count)
+	}
+}
+
+func TestDedup_PreservesNonInstructions(t *testing.T) {
+	msgs := []Message{
+		{Role: "user", Content: "Hello world. How are you?"},
+		{Role: "user", Content: "Hello world. What's the weather?"},
+	}
+	got := DeduplicateInstructions(msgs)
+	// Non-instruction sentences should be preserved even if duplicated
+	if !strings.Contains(got[0].Content, "Hello world") {
+		t.Errorf("expected non-instruction preserved: %q", got[0].Content)
+	}
+	if !strings.Contains(got[1].Content, "Hello world") {
+		t.Errorf("expected non-instruction preserved in second message: %q", got[1].Content)
+	}
+}
+
+// ==================== Combined Strategy with New Strategies ====================
+
+func TestCombined_BoilerplateInAssistantMessages(t *testing.T) {
+	msgs := []Message{
+		{Role: "system", Content: "You are a Go expert."},
+		{Role: "user", Content: "What is a goroutine?"},
+		{Role: "assistant", Content: "Sure, I can help with that. A goroutine is a lightweight thread."},
+		{Role: "user", Content: "Tell me more."},
+	}
+	c := New(DefaultConfig())
+	compressed, result := c.CompressMessages(msgs)
+	// Check that boilerplate was removed from assistant message
+	for _, m := range compressed {
+		if m.Role == "assistant" && strings.Contains(strings.ToLower(m.Content), "sure, i can help") {
+			t.Error("expected boilerplate removed from assistant message")
+		}
+	}
+	_ = result
+}

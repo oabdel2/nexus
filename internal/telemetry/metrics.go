@@ -118,6 +118,10 @@ type Metrics struct {
 	// Compression + cascade + eval metrics
 	compressionTokensSaved atomic.Int64
 	cascadeAttempts        sync.Map // result (accepted|escalated)
+	cascadeWastedTokens    atomic.Int64
+	shadowTokensUsed       atomic.Int64
+	retryTokensWasted      atomic.Int64
+	providerCachedTokens   atomic.Int64 // OpenAI/Anthropic prefix-cached tokens
 	evalConfidence         histogramVec
 }
 
@@ -250,6 +254,26 @@ func (m *Metrics) RecordCascadeAttempt(result string) {
 	addToMap(&m.cascadeAttempts, fmt.Sprintf(`result="%s"`, result), 1)
 }
 
+// RecordCascadeWaste records tokens wasted by cascade escalation.
+func (m *Metrics) RecordCascadeWaste(tokens int) {
+	m.cascadeWastedTokens.Add(int64(tokens))
+}
+
+// RecordShadowTokens records tokens used by shadow evaluation.
+func (m *Metrics) RecordShadowTokens(tokens int) {
+	m.shadowTokensUsed.Add(int64(tokens))
+}
+
+// RecordRetryWaste records prompt tokens wasted by retry re-sends.
+func (m *Metrics) RecordRetryWaste(tokens int) {
+	m.retryTokensWasted.Add(int64(tokens))
+}
+
+// RecordProviderCachedTokens records tokens prefix-cached by the provider.
+func (m *Metrics) RecordProviderCachedTokens(tokens int) {
+	m.providerCachedTokens.Add(int64(tokens))
+}
+
 // RecordEvalConfidence records a confidence score observation.
 func (m *Metrics) RecordEvalConfidence(score float64) {
 	m.evalConfidence.observe("", score)
@@ -379,6 +403,10 @@ func (m *Metrics) Handler() http.HandlerFunc {
 		// ---- New counters ----
 		writeSimpleInt(&b, "nexus_compression_tokens_saved_total", "Tokens saved by compression", "counter", m.compressionTokensSaved.Load())
 		writeLabeledInt(&b, "nexus_cascade_attempts_total", "Cascade attempts by result", "counter", &m.cascadeAttempts)
+		writeSimpleInt(&b, "nexus_cascade_wasted_tokens_total", "Tokens wasted by cascade escalation", "counter", m.cascadeWastedTokens.Load())
+		writeSimpleInt(&b, "nexus_shadow_tokens_used_total", "Tokens used by shadow evaluation", "counter", m.shadowTokensUsed.Load())
+		writeSimpleInt(&b, "nexus_retry_tokens_wasted_total", "Prompt tokens wasted by retries", "counter", m.retryTokensWasted.Load())
+		writeSimpleInt(&b, "nexus_provider_cached_tokens_total", "Tokens prefix-cached by providers", "counter", m.providerCachedTokens.Load())
 
 		// ---- Gauges ----
 		writeLabeledInt(&b, "nexus_cache_entries", "Current cache entries per layer", "gauge", &m.cacheEntries)

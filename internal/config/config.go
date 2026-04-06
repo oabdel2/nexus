@@ -33,6 +33,9 @@ type CompressionConfig struct {
 	Whitespace      bool `yaml:"whitespace"`
 	CodeStrip       bool `yaml:"code_strip"`
 	HistoryTruncate bool `yaml:"history_truncate"`
+	Boilerplate     bool `yaml:"boilerplate"`
+	JSONMinify      bool `yaml:"json_minify"`
+	Deduplication   bool `yaml:"deduplication"`
 	MaxHistoryTurns int  `yaml:"max_history_turns"`
 	PreserveLastN   int  `yaml:"preserve_last_n"`
 }
