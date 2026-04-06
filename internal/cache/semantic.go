@@ -30,6 +30,7 @@ type SemanticCache struct {
 	hits       int64
 	misses     int64
 	reranker   *Reranker
+	cancel     context.CancelFunc
 }
 
 type semanticEntry struct {
@@ -42,7 +43,8 @@ type semanticEntry struct {
 }
 
 // NewSemanticCache creates a new embedding-based semantic cache.
-func NewSemanticCache(ttl time.Duration, maxEntries int, threshold float64, backend, model, endpoint, apiKey string, reranker *Reranker) *SemanticCache {
+func NewSemanticCache(ctx context.Context, ttl time.Duration, maxEntries int, threshold float64, backend, model, endpoint, apiKey string, reranker *Reranker) *SemanticCache {
+	ctx, cancel := context.WithCancel(ctx)
 	c := &SemanticCache{
 		ttl:        ttl,
 		maxEntries: maxEntries,
@@ -52,11 +54,12 @@ func NewSemanticCache(ttl time.Duration, maxEntries int, threshold float64, back
 		endpoint:   endpoint,
 		apiKey:     apiKey,
 		reranker:   reranker,
+		cancel:     cancel,
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
 	}
-	go c.cleanup()
+	go c.cleanup(ctx)
 	return c
 }
 
@@ -344,22 +347,36 @@ func (c *SemanticCache) evictOldest() {
 	c.entries = append(c.entries[:oldestIdx], c.entries[oldestIdx+1:]...)
 }
 
-func (c *SemanticCache) cleanup() {
+// Stop cancels the background cleanup goroutine.
+func (c *SemanticCache) Stop() {
+	c.cancel()
+}
+
+func (c *SemanticCache) cleanup(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		c.mu.Lock()
-		now := time.Now()
-		i := 0
-		for i < len(c.entries) {
-			if now.Sub(c.entries[i].createdAt) > c.ttl {
-				c.entries = append(c.entries[:i], c.entries[i+1:]...)
-			} else {
-				i++
-			}
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			c.cleanupExpired()
 		}
-		c.mu.Unlock()
+	}
+}
+
+func (c *SemanticCache) cleanupExpired() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	now := time.Now()
+	i := 0
+	for i < len(c.entries) {
+		if now.Sub(c.entries[i].createdAt) > c.ttl {
+			c.entries = append(c.entries[:i], c.entries[i+1:]...)
+		} else {
+			i++
+		}
 	}
 }
 

@@ -1,6 +1,7 @@
 package benchmarks
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -71,7 +72,7 @@ func BenchmarkClassifyComplexity(b *testing.B) {
 
 func BenchmarkExactCacheSet(b *testing.B) {
 	// Large maxEntries avoids O(n) eviction overhead distorting the benchmark
-	c := cache.NewExactCache(1*time.Hour, b.N+1)
+	c := cache.NewExactCache(context.Background(), 1*time.Hour, b.N+1)
 	data := []byte(`{"id":"resp-1","choices":[{"message":{"content":"ok"}}]}`)
 
 	// Pre-compute keys to isolate Set cost
@@ -87,7 +88,7 @@ func BenchmarkExactCacheSet(b *testing.B) {
 }
 
 func BenchmarkExactCacheGet(b *testing.B) {
-	c := cache.NewExactCache(1*time.Hour, 100000)
+	c := cache.NewExactCache(context.Background(), 1*time.Hour, 100000)
 	data := []byte(`{"id":"resp-1","choices":[{"message":{"content":"ok"}}]}`)
 
 	// Pre-populate
@@ -268,7 +269,7 @@ func TestRoutingAccuracy(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCacheHitRate(t *testing.T) {
-	c := cache.NewExactCache(1*time.Hour, 10000)
+	c := cache.NewExactCache(context.Background(), 1*time.Hour, 10000)
 	data := []byte(`{"choices":[{"message":{"content":"cached response"}}]}`)
 
 	prompts := []string{
@@ -454,7 +455,7 @@ func BenchmarkCacheOperations(b *testing.B) {
 	data := []byte(`{"id":"1","choices":[{"message":{"content":"bench"}}]}`)
 
 	b.Run("SetThenGet", func(b *testing.B) {
-		c := cache.NewExactCache(1*time.Hour, b.N+1)
+		c := cache.NewExactCache(context.Background(), 1*time.Hour, b.N+1)
 		keys := make([]string, b.N)
 		for i := range keys {
 			keys[i] = cache.HashKey(fmt.Sprintf("bench-%d", i), "m")

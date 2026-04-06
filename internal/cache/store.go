@@ -1,6 +1,9 @@
 package cache
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // Store orchestrates a 3-layer cache: L1 (exact), L2a (BM25), L2b (semantic).
 type Store struct {
@@ -14,6 +17,7 @@ type Store struct {
 	shadow     *ShadowMode
 	context    *ContextFingerprint
 	registry   *SynonymRegistry
+	cancel     context.CancelFunc
 }
 
 // StoreConfig holds configuration for all cache layers.
@@ -47,6 +51,8 @@ type StoreConfig struct {
 
 // NewStore creates a Store from a StoreConfig, initializing all enabled layers.
 func NewStore(cfg StoreConfig) *Store {
+	ctx, cancel := context.WithCancel(context.Background())
+
 	// Initialize synonym registry
 	registry := NewSynonymRegistry(RegistryConfig{
 		DataDir:            cfg.SynonymDataDir,
@@ -62,17 +68,18 @@ func NewStore(cfg StoreConfig) *Store {
 		shadow:     NewShadowMode(cfg.ShadowEnabled, cfg.ShadowMaxResults),
 		context:    NewContextFingerprint(3),
 		registry:   registry,
+		cancel:     cancel,
 	}
 
 	if cfg.L1Enabled {
-		s.exact = NewExactCache(cfg.L1TTL, cfg.L1MaxEntries)
+		s.exact = NewExactCache(ctx, cfg.L1TTL, cfg.L1MaxEntries)
 	}
 	if cfg.L2aEnabled {
 		threshold := cfg.L2aThreshold
 		if threshold == 0 {
 			threshold = 15.0
 		}
-		s.bm25 = NewBM25Cache(cfg.L2aTTL, cfg.L2aMaxEntries, threshold)
+		s.bm25 = NewBM25Cache(ctx, cfg.L2aTTL, cfg.L2aMaxEntries, threshold)
 	}
 	if cfg.L2bEnabled {
 		reranker := NewReranker(RerankerConfig{
@@ -85,7 +92,7 @@ func NewStore(cfg StoreConfig) *Store {
 		if threshold == 0 {
 			threshold = 0.70
 		}
-		s.semantic = NewSemanticCache(cfg.L2bTTL, cfg.L2bMaxEntries, threshold, cfg.L2bBackend, cfg.L2bModel, cfg.L2bEndpoint, cfg.L2bAPIKey, reranker)
+		s.semantic = NewSemanticCache(ctx, cfg.L2bTTL, cfg.L2bMaxEntries, threshold, cfg.L2bBackend, cfg.L2bModel, cfg.L2bEndpoint, cfg.L2bAPIKey, reranker)
 	}
 
 	return s
@@ -177,4 +184,9 @@ func (s *Store) Context() *ContextFingerprint {
 // Registry returns the synonym registry.
 func (s *Store) Registry() *SynonymRegistry {
 	return s.registry
+}
+
+// Stop cancels all background cleanup goroutines.
+func (s *Store) Stop() {
+	s.cancel()
 }

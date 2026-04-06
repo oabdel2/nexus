@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"context"
 	"math"
 	"strings"
 	"sync"
@@ -26,6 +27,7 @@ type BM25Cache struct {
 	threshold     float64
 	hits          int64
 	misses        int64
+	cancel        context.CancelFunc
 }
 
 type bm25Doc struct {
@@ -49,15 +51,17 @@ var stopwords = map[string]bool{
 	"shall": true,
 }
 
-func NewBM25Cache(ttl time.Duration, maxEntries int, threshold float64) *BM25Cache {
+func NewBM25Cache(ctx context.Context, ttl time.Duration, maxEntries int, threshold float64) *BM25Cache {
+	ctx, cancel := context.WithCancel(ctx)
 	c := &BM25Cache{
 		df:          make(map[string]int),
 		invertedIdx: make(map[string][]int),
 		ttl:         ttl,
 		maxEntries:  maxEntries,
 		threshold:   threshold,
+		cancel:      cancel,
 	}
-	go c.cleanup()
+	go c.cleanup(ctx)
 	return c
 }
 
@@ -146,7 +150,12 @@ func (c *BM25Cache) Store(prompt, model string, response []byte) {
 		createdAt: time.Now(),
 	})
 	c.totalTokenLen += len(tokens)
-	c.rebuildInvertedIndex()
+
+	// Incrementally update inverted index for the new document
+	newIdx := len(c.docs) - 1
+	for term := range tf {
+		c.invertedIdx[term] = append(c.invertedIdx[term], newIdx)
+	}
 }
 
 func (c *BM25Cache) Lookup(prompt, model string) ([]byte, bool) {
@@ -264,35 +273,48 @@ func (c *BM25Cache) evictOldest() {
 	c.rebuildInvertedIndex()
 }
 
-func (c *BM25Cache) cleanup() {
+// Stop cancels the background cleanup goroutine.
+func (c *BM25Cache) Stop() {
+	c.cancel()
+}
+
+func (c *BM25Cache) cleanup(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		c.mu.Lock()
-		now := time.Now()
-		changed := false
-		i := 0
-		for i < len(c.docs) {
-			if now.Sub(c.docs[i].createdAt) > c.ttl {
-				c.totalTokenLen -= len(c.docs[i].tokens)
-				// Remove DF counts
-				for term := range c.docs[i].termFreq {
-					c.df[term]--
-					if c.df[term] <= 0 {
-						delete(c.df, term)
-					}
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			c.cleanupExpired()
+		}
+	}
+}
+
+func (c *BM25Cache) cleanupExpired() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	now := time.Now()
+	changed := false
+	i := 0
+	for i < len(c.docs) {
+		if now.Sub(c.docs[i].createdAt) > c.ttl {
+			c.totalTokenLen -= len(c.docs[i].tokens)
+			for term := range c.docs[i].termFreq {
+				c.df[term]--
+				if c.df[term] <= 0 {
+					delete(c.df, term)
 				}
-				c.docs = append(c.docs[:i], c.docs[i+1:]...)
-				changed = true
-			} else {
-				i++
 			}
+			c.docs = append(c.docs[:i], c.docs[i+1:]...)
+			changed = true
+		} else {
+			i++
 		}
-		if changed {
-			c.rebuildInvertedIndex()
-		}
-		c.mu.Unlock()
+	}
+	if changed {
+		c.rebuildInvertedIndex()
 	}
 }
 

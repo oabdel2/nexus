@@ -1,10 +1,12 @@
 package cache
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -15,7 +17,7 @@ import (
 
 // Test 1: BM25 matches paraphrased prompts
 func TestBM25Paraphrase(t *testing.T) {
-	c := NewBM25Cache(10*time.Minute, 1000, 0.3)
+	c := NewBM25Cache(context.Background(), 10*time.Minute, 1000, 0.3)
 
 	c.Store("What is a goroutine in Go?", "test-model", []byte(`{"answer":"goroutine"}`))
 
@@ -90,7 +92,7 @@ func TestStoreLayerOrder(t *testing.T) {
 
 // Test 4: BM25 accuracy benchmark
 func TestBM25AccuracyBenchmark(t *testing.T) {
-	c := NewBM25Cache(10*time.Minute, 1000, 2.0)
+	c := NewBM25Cache(context.Background(), 10*time.Minute, 1000, 2.0)
 
 	matchPairs := []struct{ stored, query string }{
 		{"What is a goroutine?", "Explain goroutines"},
@@ -287,7 +289,7 @@ func TestSemanticFilters(t *testing.T) {
 
 // Test 9: BM25 model isolation
 func TestBM25ModelIsolation(t *testing.T) {
-	c := NewBM25Cache(10*time.Minute, 1000, 0.3)
+	c := NewBM25Cache(context.Background(), 10*time.Minute, 1000, 0.3)
 
 	c.Store("What is a goroutine?", "model-a", []byte(`{"model":"a"}`))
 
@@ -2145,8 +2147,8 @@ func TestBM25Cache_LookupPerformanceScaling(t *testing.T) {
 	smallN := 500
 	largeN := 5000
 
-	smallCache := NewBM25Cache(time.Hour, smallN+100, 0.1)
-	largeCache := NewBM25Cache(time.Hour, largeN+100, 0.1)
+	smallCache := NewBM25Cache(context.Background(), time.Hour, smallN+100, 0.1)
+	largeCache := NewBM25Cache(context.Background(), time.Hour, largeN+100, 0.1)
 
 	for i := 0; i < largeN; i++ {
 		prompt := fmt.Sprintf("prompt about topic %d with keywords test data item %d", i, i*7)
@@ -2318,10 +2320,8 @@ func TestSemanticCache_ConcurrentStatsAccess(t *testing.T) {
 			go func() {
 				defer wg.Done()
 				for j := 0; j < 100; j++ {
-					c.mu.Lock()
-					c.hits++
-					c.misses++
-					c.mu.Unlock()
+					atomic.AddInt64(&c.hits, 1)
+					atomic.AddInt64(&c.misses, 1)
 				}
 			}()
 		}
