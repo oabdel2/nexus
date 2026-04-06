@@ -7,13 +7,17 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/nexus-gateway/nexus/internal/billing"
 	"github.com/nexus-gateway/nexus/internal/cache"
+	"github.com/nexus-gateway/nexus/internal/compress"
 	"github.com/nexus-gateway/nexus/internal/config"
 	"github.com/nexus-gateway/nexus/internal/dashboard"
+	"github.com/nexus-gateway/nexus/internal/eval"
 	"github.com/nexus-gateway/nexus/internal/notification"
 	"github.com/nexus-gateway/nexus/internal/provider"
 	"github.com/nexus-gateway/nexus/internal/router"
@@ -42,6 +46,10 @@ type Server struct {
 	notifier      *notification.Notifier
 	eventLog      *notification.EventLog
 	webhookHandler *billing.StripeWebhookHandler
+	compressor       *compress.Compressor
+	confidenceScorer *eval.ConfidenceScorer
+	confidenceMap    *eval.ConfidenceMap
+	cascade          *router.CascadeRouter
 }
 
 func New(cfg *config.Config, logger *slog.Logger) *Server {
@@ -123,6 +131,37 @@ func New(cfg *config.Config, logger *slog.Logger) *Server {
 	// Init router
 	s.router = router.New(cfg.Router, cfg.Providers, logger)
 
+	// Init compressor
+	if cfg.Compression.Enabled {
+		s.compressor = compress.New(compress.CompressorConfig{
+			EnableWhitespace:   cfg.Compression.Whitespace,
+			EnableCodeStrip:    cfg.Compression.CodeStrip,
+			EnableHistoryTrunc: cfg.Compression.HistoryTruncate,
+			MaxHistoryTurns:    cfg.Compression.MaxHistoryTurns,
+			PreserveLastN:      cfg.Compression.PreserveLastN,
+		})
+	}
+
+	// Init eval
+	if cfg.Eval.Enabled {
+		s.confidenceScorer = eval.NewScorer(eval.ScorerConfig{
+			HedgingPenalty:   cfg.Eval.HedgingPenalty,
+			BrevityThreshold: 20,
+			StructureBonus:   0.10,
+		})
+		s.confidenceMap = eval.NewConfidenceMap()
+		// Try loading existing confidence data
+		cmPath := filepath.Join(cfg.Eval.DataDir, "confidence_map.json")
+		if err := s.confidenceMap.Load(cmPath); err != nil {
+			logger.Info("no existing confidence map, starting fresh", "path", cmPath)
+		}
+	}
+
+	// Init cascade router
+	if cfg.Cascade.Enabled {
+		s.cascade = router.NewCascadeRouter(s.router, cfg.Cascade.ConfidenceThreshold, cfg.Cascade.MaxLatencyMs, cfg.Cascade.SampleRate)
+	}
+
 	// Init billing (if enabled)
 	if cfg.Billing.Enabled {
 		s.eventLog = notification.NewEventLog(cfg.Billing.DataDir)
@@ -192,6 +231,10 @@ func (s *Server) Start(ctx context.Context) error {
 
 	// Circuit breaker status
 	mux.HandleFunc("/api/circuit-breakers", s.handleCircuitBreakers)
+
+	// Eval and compression stats endpoints
+	mux.HandleFunc("/api/eval/stats", s.handleEvalStats)
+	mux.HandleFunc("/api/compression/stats", s.handleCompressionStats)
 
 	// Billing endpoints (only registered if billing enabled)
 	if s.cfg.Billing.Enabled {
@@ -343,6 +386,14 @@ func (s *Server) Start(ctx context.Context) error {
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
+	if s.confidenceMap != nil {
+		cmPath := filepath.Join(s.cfg.Eval.DataDir, "confidence_map.json")
+		if err := os.MkdirAll(s.cfg.Eval.DataDir, 0755); err == nil {
+			if err := s.confidenceMap.Save(cmPath); err != nil {
+				s.logger.Error("failed to save confidence map", "error", err)
+			}
+		}
+	}
 	if s.subStore != nil {
 		s.subStore.Stop()
 	}
@@ -392,7 +443,23 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	// Get or create workflow state
 	ws := s.tracker.GetOrCreate(workflowID)
 
-	// Build prompt text for classification
+	// Compress messages before processing
+	if s.cfg.Compression.Enabled && s.compressor != nil {
+		_, compSpan := s.tracer.StartSpan(r.Context(), "compress.messages")
+		compMessages := providerToCompressMessages(req.Messages)
+		compressedMsgs, compResult := s.compressor.CompressMessages(compMessages)
+		req.Messages = compressToProviderMessages(compressedMsgs)
+		tokensSaved := compResult.OriginalTokens - compResult.CompressedTokens
+		if tokensSaved > 0 {
+			s.metrics.RecordCompressionSaved(tokensSaved)
+		}
+		compSpan.SetAttribute("compress.original_tokens", fmt.Sprintf("%d", compResult.OriginalTokens))
+		compSpan.SetAttribute("compress.compressed_tokens", fmt.Sprintf("%d", compResult.CompressedTokens))
+		compSpan.SetAttribute("compress.ratio", fmt.Sprintf("%.2f", compResult.Ratio))
+		s.tracer.EndSpan(compSpan)
+	}
+
+	// Build prompt text for classification (from potentially compressed messages)
 	promptText := extractPromptText(req.Messages)
 	contextLen := len(promptText)
 
@@ -469,6 +536,26 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	routeSpan.SetAttribute("router.provider", selection.Provider)
 	routeSpan.SetAttribute("router.score", fmt.Sprintf("%.4f", selection.Score.FinalScore))
 	s.tracer.EndSpan(routeSpan)
+
+	// Cascade: try cheap model first if router picked expensive tier
+	if s.cfg.Cascade.Enabled && s.cascade != nil && s.cascade.ShouldCascade(selection.Score, selection.Tier) {
+		cascadeResult := s.tryCheapFirst(r.Context(), req, selection, promptText)
+		if cascadeResult != nil && !cascadeResult.Escalated {
+			s.metrics.RecordCascadeAttempt("accepted")
+			s.logger.Info("cascade accepted cheap model",
+				"confidence", cascadeResult.CheapConfidence,
+				"cost_saved", cascadeResult.CostSaved,
+			)
+			// Cheap model was good enough — update selection to cheap
+			selection = s.cascade.CheapSelection()
+		} else if cascadeResult != nil {
+			s.metrics.RecordCascadeAttempt("escalated")
+			s.logger.Info("cascade escalated to original tier",
+				"confidence", cascadeResult.CheapConfidence,
+				"original_tier", selection.Tier,
+			)
+		}
+	}
 
 	// Get the provider with circuit breaker check
 	p, ok := s.providers[selection.Provider]
@@ -621,6 +708,27 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		CacheHit:        false,
 	})
 	s.Dashboard.UpdateWorkflow(workflowID, ws.Budget, ws.BudgetLeft, ws.GetBudgetRatio(), ws.CurrentStep, ws.TotalCost)
+
+	// Score response confidence
+	if s.cfg.Eval.Enabled && s.confidenceScorer != nil && len(resp.Choices) > 0 {
+		_, evalSpan := s.tracer.StartSpan(r.Context(), "eval.score")
+		evalResult := s.confidenceScorer.CombinedScore(
+			resp.Choices[0].Message.Content,
+			resp.Usage.PromptTokens,
+			resp.Usage.CompletionTokens,
+			resp.Choices[0].FinishReason,
+		)
+		if s.confidenceMap != nil {
+			taskType := eval.ClassifyTaskType(promptText)
+			s.confidenceMap.Record(taskType, selection.Tier, evalResult.Score)
+		}
+		s.metrics.RecordEvalConfidence(evalResult.Score)
+		evalSpan.SetAttribute("eval.score", fmt.Sprintf("%.3f", evalResult.Score))
+		evalSpan.SetAttribute("eval.recommendation", evalResult.Recommendation)
+		s.tracer.EndSpan(evalSpan)
+
+		w.Header().Set("X-Nexus-Confidence", fmt.Sprintf("%.3f", evalResult.Score))
+	}
 
 	// Cache the response
 	_, storeSpan := s.tracer.StartSpan(r.Context(), "cache.store")
@@ -865,6 +973,132 @@ func (s *Server) findFallbackProvider(original router.ModelSelection) (provider.
 func (s *Server) handleCircuitBreakers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(s.cbPool.AllStats())
+}
+
+// providerToCompressMessages converts provider.Message slice to compress.Message slice.
+func providerToCompressMessages(msgs []provider.Message) []compress.Message {
+	out := make([]compress.Message, len(msgs))
+	for i, m := range msgs {
+		out[i] = compress.Message{Role: m.Role, Content: m.Content}
+	}
+	return out
+}
+
+// compressToProviderMessages converts compress.Message slice back to provider.Message slice.
+func compressToProviderMessages(msgs []compress.Message) []provider.Message {
+	out := make([]provider.Message, len(msgs))
+	for i, m := range msgs {
+		out[i] = provider.Message{Role: m.Role, Content: m.Content}
+	}
+	return out
+}
+
+// tryCheapFirst sends the request to the cheapest model and scores confidence.
+// Returns nil if cascade is not applicable, otherwise a CascadeResult.
+func (s *Server) tryCheapFirst(ctx context.Context, req provider.ChatRequest, original router.ModelSelection, promptText string) *router.CascadeResult {
+	cheapSel := s.cascade.CheapSelection()
+	if cheapSel.Provider == "" || cheapSel.Model == "" {
+		return nil
+	}
+
+	p, ok := s.providers[cheapSel.Provider]
+	if !ok || !s.cbPool.IsAvailable(cheapSel.Provider) {
+		return nil
+	}
+
+	cheapReq := req
+	cheapReq.Model = cheapSel.Model
+
+	cascadeStart := time.Now()
+	cheapCtx, cancel := context.WithTimeout(ctx, s.cascade.MaxLatency())
+	defer cancel()
+
+	resp, err := p.Send(cheapCtx, cheapReq)
+	latencyAdded := time.Since(cascadeStart)
+
+	if err != nil || len(resp.Choices) == 0 {
+		return &router.CascadeResult{
+			UsedCheapModel: true,
+			Escalated:      true,
+			LatencyAdded:   latencyAdded,
+		}
+	}
+
+	// Score the cheap response
+	var confidence float64
+	if s.confidenceScorer != nil {
+		evalResult := s.confidenceScorer.CombinedScore(
+			resp.Choices[0].Message.Content,
+			resp.Usage.PromptTokens,
+			resp.Usage.CompletionTokens,
+			resp.Choices[0].FinishReason,
+		)
+		confidence = evalResult.Score
+	}
+
+	escalated := confidence < s.cascade.Threshold()
+
+	originalCost := float64(resp.Usage.TotalTokens) / 1000.0 * s.router.GetModelCost(original.Provider, original.Model)
+	cheapCost := float64(resp.Usage.TotalTokens) / 1000.0 * s.router.GetModelCost(cheapSel.Provider, cheapSel.Model)
+	costSaved := 0.0
+	if !escalated {
+		costSaved = originalCost - cheapCost
+	}
+
+	return &router.CascadeResult{
+		UsedCheapModel:  true,
+		Escalated:       escalated,
+		CheapConfidence: confidence,
+		CostSaved:       costSaved,
+		LatencyAdded:    latencyAdded,
+	}
+}
+
+func (s *Server) handleEvalStats(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if s.confidenceMap == nil {
+		json.NewEncoder(w).Encode(map[string]string{"status": "eval not enabled"})
+		return
+	}
+	// Return all known task-type/tier combos
+	type entry struct {
+		TaskType          string  `json:"task_type"`
+		Tier              string  `json:"tier"`
+		AverageConfidence float64 `json:"average_confidence"`
+		SampleCount       int     `json:"sample_count"`
+	}
+	var entries []entry
+	for _, tt := range []string{"coding", "analysis", "creative", "operational", "informational", "general"} {
+		for _, tier := range []string{"economy", "cheap", "mid", "premium"} {
+			r := s.confidenceMap.Lookup(tt, tier)
+			if r.Found {
+				entries = append(entries, entry{
+					TaskType:          tt,
+					Tier:              tier,
+					AverageConfidence: r.AverageConfidence,
+					SampleCount:       r.SampleCount,
+				})
+			}
+		}
+	}
+	json.NewEncoder(w).Encode(map[string]any{
+		"status":  "ok",
+		"entries": entries,
+	})
+}
+
+func (s *Server) handleCompressionStats(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"enabled": s.cfg.Compression.Enabled,
+		"config": map[string]any{
+			"whitespace":       s.cfg.Compression.Whitespace,
+			"code_strip":       s.cfg.Compression.CodeStrip,
+			"history_truncate": s.cfg.Compression.HistoryTruncate,
+			"max_history_turns": s.cfg.Compression.MaxHistoryTurns,
+			"preserve_last_n":  s.cfg.Compression.PreserveLastN,
+		},
+	})
 }
 
 // billingContextKey is used to store billing info in request context.

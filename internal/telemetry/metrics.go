@@ -114,6 +114,11 @@ type Metrics struct {
 	// Gauges
 	cacheEntries   sync.Map // layer
 	activeRequests atomic.Int64
+
+	// Compression + cascade + eval metrics
+	compressionTokensSaved atomic.Int64
+	cascadeAttempts        sync.Map // result (accepted|escalated)
+	evalConfidence         histogramVec
 }
 
 // NewMetrics creates an initialised Metrics collector.
@@ -128,6 +133,9 @@ func NewMetrics() *Metrics {
 		},
 		embeddingDuration: histogramVec{
 			boundaries: []float64{0.01, 0.05, 0.1, 0.25, 0.5, 1.0},
+		},
+		evalConfidence: histogramVec{
+			boundaries: []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0},
 		},
 	}
 }
@@ -231,6 +239,21 @@ func (m *Metrics) IncActiveRequests() { m.activeRequests.Add(1) }
 
 // DecActiveRequests decrements the in-flight request gauge.
 func (m *Metrics) DecActiveRequests() { m.activeRequests.Add(-1) }
+
+// RecordCompressionSaved records tokens saved by compression.
+func (m *Metrics) RecordCompressionSaved(tokensSaved int) {
+	m.compressionTokensSaved.Add(int64(tokensSaved))
+}
+
+// RecordCascadeAttempt records a cascade attempt with the given result (accepted or escalated).
+func (m *Metrics) RecordCascadeAttempt(result string) {
+	addToMap(&m.cascadeAttempts, fmt.Sprintf(`result="%s"`, result), 1)
+}
+
+// RecordEvalConfidence records a confidence score observation.
+func (m *Metrics) RecordEvalConfidence(score float64) {
+	m.evalConfidence.observe("", score)
+}
 
 // ---------------------------------------------------------------------------
 // Prometheus exposition helpers
@@ -351,6 +374,11 @@ func (m *Metrics) Handler() http.HandlerFunc {
 		writeHistogramFamily(&b, "nexus_request_duration_seconds", "Request latency histogram", &m.requestDuration)
 		writeHistogramFamily(&b, "nexus_cache_lookup_duration_seconds", "Cache lookup latency", &m.cacheLookup)
 		writeHistogramFamily(&b, "nexus_embedding_duration_seconds", "Embedding generation latency", &m.embeddingDuration)
+		writeHistogramFamily(&b, "nexus_eval_confidence_score", "Eval confidence score distribution", &m.evalConfidence)
+
+		// ---- New counters ----
+		writeSimpleInt(&b, "nexus_compression_tokens_saved_total", "Tokens saved by compression", "counter", m.compressionTokensSaved.Load())
+		writeLabeledInt(&b, "nexus_cascade_attempts_total", "Cascade attempts by result", "counter", &m.cascadeAttempts)
 
 		// ---- Gauges ----
 		writeLabeledInt(&b, "nexus_cache_entries", "Current cache entries per layer", "gauge", &m.cacheEntries)

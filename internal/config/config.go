@@ -19,6 +19,32 @@ type Config struct {
 	Storage      StorageYAMLConfig  `yaml:"storage"`
 	Billing      BillingConfig      `yaml:"billing"`
 	Notification NotificationConfig `yaml:"notification"`
+	Compression  CompressionConfig  `yaml:"compression"`
+	Cascade      CascadeConfig      `yaml:"cascade"`
+	Eval         EvalConfig         `yaml:"eval"`
+}
+
+type CompressionConfig struct {
+	Enabled         bool `yaml:"enabled"`
+	Whitespace      bool `yaml:"whitespace"`
+	CodeStrip       bool `yaml:"code_strip"`
+	HistoryTruncate bool `yaml:"history_truncate"`
+	MaxHistoryTurns int  `yaml:"max_history_turns"`
+	PreserveLastN   int  `yaml:"preserve_last_n"`
+}
+
+type CascadeConfig struct {
+	Enabled             bool    `yaml:"enabled"`
+	ConfidenceThreshold float64 `yaml:"confidence_threshold"`
+	MaxLatencyMs        int     `yaml:"max_latency_ms"`
+	SampleRate          float64 `yaml:"sample_rate"`
+}
+
+type EvalConfig struct {
+	Enabled        bool    `yaml:"enabled"`
+	DataDir        string  `yaml:"data_dir"`
+	HedgingPenalty float64 `yaml:"hedging_penalty"`
+	SampleRate     float64 `yaml:"sample_rate"`
 }
 
 type BillingConfig struct {
@@ -390,5 +416,32 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.Security.RequestTimeout == "" {
 		cfg.Security.RequestTimeout = "30s"
+	}
+	// Compression defaults
+	if cfg.Compression.MaxHistoryTurns == 0 {
+		cfg.Compression.MaxHistoryTurns = 20
+	}
+	if cfg.Compression.PreserveLastN == 0 {
+		cfg.Compression.PreserveLastN = 5
+	}
+	// Cascade defaults
+	if cfg.Cascade.ConfidenceThreshold == 0 {
+		cfg.Cascade.ConfidenceThreshold = 0.78
+	}
+	if cfg.Cascade.MaxLatencyMs == 0 {
+		cfg.Cascade.MaxLatencyMs = 5000
+	}
+	if cfg.Cascade.SampleRate == 0 {
+		cfg.Cascade.SampleRate = 1.0
+	}
+	// Eval defaults
+	if cfg.Eval.DataDir == "" {
+		cfg.Eval.DataDir = "./data/eval"
+	}
+	if cfg.Eval.HedgingPenalty == 0 {
+		cfg.Eval.HedgingPenalty = 0.15
+	}
+	if cfg.Eval.SampleRate == 0 {
+		cfg.Eval.SampleRate = 1.0
 	}
 }

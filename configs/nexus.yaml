@@ -219,3 +219,23 @@ storage:
   redis_addr: "localhost:6379"
   redis_password: ""
   redis_db: 0
+
+compression:
+  enabled: true
+  whitespace: true
+  code_strip: true
+  history_truncate: true
+  max_history_turns: 20
+  preserve_last_n: 5
+
+cascade:
+  enabled: false
+  confidence_threshold: 0.78
+  max_latency_ms: 5000
+  sample_rate: 1.0
+
+eval:
+  enabled: true
+  data_dir: "./data/eval"
+  hedging_penalty: 0.15
+  sample_rate: 1.0
