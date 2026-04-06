@@ -222,26 +222,26 @@ func (cb *CircuitBreaker) Stats() map[string]any {
 	}
 }
 
-// ProviderPool manages circuit breakers for all providers and handles failover.
-type ProviderPool struct {
+// Pool manages circuit breakers for all providers and handles failover.
+type Pool struct {
 	mu       sync.RWMutex
 	breakers map[string]*CircuitBreaker
 	config   CircuitBreakerConfig
 }
 
-// NewProviderPool creates a pool of circuit-broken providers.
-func NewProviderPool(cfg CircuitBreakerConfig) *ProviderPool {
+// NewPool creates a pool of circuit-broken providers.
+func NewPool(cfg CircuitBreakerConfig) *Pool {
 	if cfg.FailureThreshold <= 0 {
 		cfg = defaultCBConfig()
 	}
-	return &ProviderPool{
+	return &Pool{
 		breakers: make(map[string]*CircuitBreaker),
 		config:   cfg,
 	}
 }
 
 // Register adds a provider's circuit breaker.
-func (pp *ProviderPool) Register(name string) {
+func (pp *Pool) Register(name string) {
 	pp.mu.Lock()
 	defer pp.mu.Unlock()
 	if _, exists := pp.breakers[name]; !exists {
@@ -250,14 +250,14 @@ func (pp *ProviderPool) Register(name string) {
 }
 
 // Get returns the circuit breaker for a provider.
-func (pp *ProviderPool) Get(name string) *CircuitBreaker {
+func (pp *Pool) Get(name string) *CircuitBreaker {
 	pp.mu.RLock()
 	defer pp.mu.RUnlock()
 	return pp.breakers[name]
 }
 
 // IsAvailable checks if a provider's circuit is not open.
-func (pp *ProviderPool) IsAvailable(name string) bool {
+func (pp *Pool) IsAvailable(name string) bool {
 	pp.mu.RLock()
 	cb, ok := pp.breakers[name]
 	pp.mu.RUnlock()
@@ -268,7 +268,7 @@ func (pp *ProviderPool) IsAvailable(name string) bool {
 }
 
 // AllStats returns stats for all circuit breakers.
-func (pp *ProviderPool) AllStats() map[string]any {
+func (pp *Pool) AllStats() map[string]any {
 	pp.mu.RLock()
 	defer pp.mu.RUnlock()
 	result := make(map[string]any)

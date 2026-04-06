@@ -138,9 +138,6 @@ handler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level})
 }
 logger := slog.New(handler)
 
-for i := range cfg.Providers {
-cfg.Providers[i].APIKey = os.ExpandEnv(cfg.Providers[i].APIKey)
-}
 cfg.ExpandSecrets()
 
 srv := gateway.New(cfg, logger)

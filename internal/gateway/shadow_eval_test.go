@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"strconv"
 	"testing"
 )
 
@@ -37,7 +38,7 @@ func TestShouldShadow_ApproximateRate(t *testing.T) {
 	sampled := 0
 	total := 10000
 	for i := 0; i < total; i++ {
-		id := "workflow-" + itoa(i)
+		id := "workflow-" + strconv.Itoa(i)
 		if shouldShadow(id, rate) {
 			sampled++
 		}

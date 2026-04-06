@@ -58,7 +58,6 @@ func NewStore(cfg StoreConfig) *Store {
 		DataDir:            cfg.SynonymDataDir,
 		PromotionThreshold: cfg.SynonymPromoThreshold,
 	})
-	SetSynonymRegistry(registry)
 
 	s := &Store{
 		l1Enabled:  cfg.L1Enabled,
@@ -92,7 +91,7 @@ func NewStore(cfg StoreConfig) *Store {
 		if threshold == 0 {
 			threshold = 0.70
 		}
-		s.semantic = NewSemanticCache(ctx, cfg.L2bTTL, cfg.L2bMaxEntries, threshold, cfg.L2bBackend, cfg.L2bModel, cfg.L2bEndpoint, cfg.L2bAPIKey, reranker)
+		s.semantic = NewSemanticCache(ctx, cfg.L2bTTL, cfg.L2bMaxEntries, threshold, cfg.L2bBackend, cfg.L2bModel, cfg.L2bEndpoint, cfg.L2bAPIKey, reranker, registry)
 	}
 
 	return s

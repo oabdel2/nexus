@@ -29,8 +29,12 @@ type SemanticCache struct {
 	client     *http.Client
 	hits       int64
 	misses     int64
+	embHits    int64 // embedding cache hits
+	embMisses  int64 // embedding cache misses
 	reranker   *Reranker
+	registry   *SynonymRegistry
 	cancel     context.CancelFunc
+	embCache   *embeddingCache // LRU cache for embedding vectors
 }
 
 type semanticEntry struct {
@@ -42,8 +46,58 @@ type semanticEntry struct {
 	bucketKey string // LSH bucket key for fast lookup filtering
 }
 
+// embeddingCache is a simple LRU cache for embedding vectors to avoid
+// redundant API calls for identical or recently-seen prompts.
+type embeddingCache struct {
+	mu      sync.Mutex
+	entries map[string]embCacheEntry
+	order   []string // insertion order for LRU eviction
+	maxSize int
+}
+
+type embCacheEntry struct {
+	embedding []float64
+	createdAt time.Time
+}
+
+func newEmbeddingCache(maxSize int) *embeddingCache {
+	return &embeddingCache{
+		entries: make(map[string]embCacheEntry, maxSize),
+		maxSize: maxSize,
+	}
+}
+
+func (ec *embeddingCache) get(key string) ([]float64, bool) {
+	ec.mu.Lock()
+	defer ec.mu.Unlock()
+	e, ok := ec.entries[key]
+	if !ok {
+		return nil, false
+	}
+	// Expired after 10 minutes
+	if time.Since(e.createdAt) > 10*time.Minute {
+		delete(ec.entries, key)
+		return nil, false
+	}
+	return e.embedding, true
+}
+
+func (ec *embeddingCache) set(key string, emb []float64) {
+	ec.mu.Lock()
+	defer ec.mu.Unlock()
+	if len(ec.entries) >= ec.maxSize {
+		// Evict oldest
+		if len(ec.order) > 0 {
+			delete(ec.entries, ec.order[0])
+			ec.order = ec.order[1:]
+		}
+	}
+	ec.entries[key] = embCacheEntry{embedding: emb, createdAt: time.Now()}
+	ec.order = append(ec.order, key)
+}
+
 // NewSemanticCache creates a new embedding-based semantic cache.
-func NewSemanticCache(ctx context.Context, ttl time.Duration, maxEntries int, threshold float64, backend, model, endpoint, apiKey string, reranker *Reranker) *SemanticCache {
+func NewSemanticCache(ctx context.Context, ttl time.Duration, maxEntries int, threshold float64, backend, model, endpoint, apiKey string, reranker *Reranker, registry *SynonymRegistry) *SemanticCache {
 	ctx, cancel := context.WithCancel(ctx)
 	c := &SemanticCache{
 		ttl:        ttl,
@@ -54,7 +108,9 @@ func NewSemanticCache(ctx context.Context, ttl time.Duration, maxEntries int, th
 		endpoint:   endpoint,
 		apiKey:     apiKey,
 		reranker:   reranker,
+		registry:   registry,
 		cancel:     cancel,
+		embCache:   newEmbeddingCache(maxEntries * 2),
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -64,7 +120,7 @@ func NewSemanticCache(ctx context.Context, ttl time.Duration, maxEntries int, th
 }
 
 func (c *SemanticCache) Store(prompt, model string, response []byte) {
-	expanded := expandSynonyms(prompt)
+	expanded := expandSynonyms(prompt, c.registry)
 	emb, err := c.getEmbedding(expanded)
 	if err != nil {
 		// Graceful fallback: skip storing if embedding fails
@@ -90,7 +146,7 @@ func (c *SemanticCache) Store(prompt, model string, response []byte) {
 }
 
 func (c *SemanticCache) Lookup(prompt, model string) ([]byte, bool) {
-	expanded := expandSynonyms(prompt)
+	expanded := expandSynonyms(prompt, c.registry)
 
 	// Skip expensive embedding API call if cache is empty
 	c.mu.RLock()
@@ -157,15 +213,15 @@ func (c *SemanticCache) Lookup(prompt, model string) ([]byte, bool) {
 
 	if bestIdx < 0 || bestScore < threshold {
 		// Record near-miss for synonym learning
-		if bestIdx >= 0 && bestScore >= 0.55 && defaultRegistry != nil {
-			defaultRegistry.RecordNearMiss(prompt, cachedPrompt, bestScore)
+		if bestIdx >= 0 && bestScore >= 0.55 && c.registry != nil {
+			c.registry.RecordNearMiss(prompt, cachedPrompt, bestScore)
 		}
 		atomic.AddInt64(&c.misses, 1)
 		return nil, false
 	}
 
 	// Apply negation and key noun filters
-	if hasOppositeIntent(prompt, cachedPrompt) || hasDifferentKeyNoun(prompt, cachedPrompt) {
+	if hasOppositeIntent(prompt, cachedPrompt) || hasDifferentKeyNoun(prompt, cachedPrompt, c.registry) {
 		atomic.AddInt64(&c.misses, 1)
 		return nil, false
 	}
@@ -189,19 +245,43 @@ func (c *SemanticCache) Stats() (hits, misses int64, size int) {
 	return atomic.LoadInt64(&c.hits), atomic.LoadInt64(&c.misses), size
 }
 
-// getEmbedding calls the configured embedding backend.
+// EmbeddingCacheStats returns hit/miss counts for the embedding vector cache.
+func (c *SemanticCache) EmbeddingCacheStats() (hits, misses int64) {
+	return atomic.LoadInt64(&c.embHits), atomic.LoadInt64(&c.embMisses)
+}
+
+// getEmbedding calls the configured embedding backend, with LRU caching.
 func (c *SemanticCache) getEmbedding(text string) ([]float64, error) {
+	// Check embedding cache first
+	if emb, ok := c.embCache.get(text); ok {
+		atomic.AddInt64(&c.embHits, 1)
+		// Return a copy so callers can normalize in-place
+		result := make([]float64, len(emb))
+		copy(result, emb)
+		return result, nil
+	}
+	atomic.AddInt64(&c.embMisses, 1)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	var emb []float64
+	var err error
 	switch c.backend {
 	case "ollama":
-		return c.getOllamaEmbedding(ctx, text)
+		emb, err = c.getOllamaEmbedding(ctx, text)
 	case "openai":
-		return c.getOpenAIEmbedding(ctx, text)
+		emb, err = c.getOpenAIEmbedding(ctx, text)
 	default:
 		return nil, fmt.Errorf("unsupported embedding backend: %s", c.backend)
 	}
+	if err != nil {
+		return nil, err
+	}
+
+	// Cache the raw (pre-normalization) embedding
+	c.embCache.set(text, emb)
+	return emb, nil
 }
 
 func (c *SemanticCache) getOllamaEmbedding(ctx context.Context, text string) ([]float64, error) {

@@ -215,12 +215,12 @@ func TestDotProductNormalized(t *testing.T) {
 // Test 8: Semantic filter functions
 func TestSemanticFilters(t *testing.T) {
 	// Test synonym expansion
-	expanded := expandSynonyms("How to set up k8s")
+	expanded := expandSynonyms("How to set up k8s", nil)
 	if !strings.Contains(expanded, "kubernetes") {
 		t.Errorf("expected k8s to expand to kubernetes, got: %s", expanded)
 	}
 
-	expanded = expandSynonyms("explain goroutine")
+	expanded = expandSynonyms("explain goroutine", nil)
 	if !strings.Contains(expanded, "concurrency") {
 		t.Errorf("expected goroutine to expand to concurrency, got: %s", expanded)
 	}
@@ -243,22 +243,22 @@ func TestSemanticFilters(t *testing.T) {
 	}
 
 	// Test key noun detection
-	if !hasDifferentKeyNoun("sort with quicksort", "sort with mergesort") {
+	if !hasDifferentKeyNoun("sort with quicksort", "sort with mergesort", nil) {
 		t.Error("expected quicksort/mergesort to be detected as different key nouns")
 	}
-	if !hasDifferentKeyNoun("deploy to AWS", "deploy to Azure") {
+	if !hasDifferentKeyNoun("deploy to AWS", "deploy to Azure", nil) {
 		t.Error("expected AWS/Azure to be detected as different key nouns")
 	}
-	if !hasDifferentKeyNoun("handle errors in Go", "handle errors in Rust") {
+	if !hasDifferentKeyNoun("handle errors in Go", "handle errors in Rust", nil) {
 		t.Error("expected Go/Rust to be detected as different key nouns")
 	}
-	if hasDifferentKeyNoun("explain goroutines", "how do goroutines work") {
+	if hasDifferentKeyNoun("explain goroutines", "how do goroutines work", nil) {
 		t.Error("should not detect different key nouns in paraphrases")
 	}
-	if !hasDifferentKeyNoun("connect to MySQL", "connect to Redis") {
+	if !hasDifferentKeyNoun("connect to MySQL", "connect to Redis", nil) {
 		t.Error("expected MySQL/Redis to be detected as different key nouns")
 	}
-	if !hasDifferentKeyNoun("test with Jest", "test with Pytest") {
+	if !hasDifferentKeyNoun("test with Jest", "test with Pytest", nil) {
 		t.Error("expected Jest/Pytest to be detected as different key nouns")
 	}
 
@@ -379,7 +379,7 @@ func TestExpandedSynonyms(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		expanded := expandSynonyms(tc.input)
+		expanded := expandSynonyms(tc.input, nil)
 		if !strings.Contains(expanded, tc.contains) {
 			t.Errorf("expandSynonyms(%q) should contain %q, got: %s", tc.input, tc.contains, expanded)
 		}
@@ -602,7 +602,7 @@ func TestExpandedKeyNouns(t *testing.T) {
 	}
 
 	for _, p := range differentPairs {
-		if !hasDifferentKeyNoun(p.a, p.b) {
+		if !hasDifferentKeyNoun(p.a, p.b, nil) {
 			t.Errorf("expected different key nouns: %q vs %q", p.a, p.b)
 		}
 	}
@@ -624,7 +624,7 @@ func TestExpandedKeyNouns(t *testing.T) {
 	}
 
 	for _, p := range samePairs {
-		if hasDifferentKeyNoun(p.a, p.b) {
+		if hasDifferentKeyNoun(p.a, p.b, nil) {
 			t.Errorf("should not detect different key nouns: %q vs %q", p.a, p.b)
 		}
 	}
@@ -1254,7 +1254,7 @@ func TestFalsePositivePrevention(t *testing.T) {
 
 	for _, fp := range falsePositives {
 		isOpposite := hasOppositeIntent(fp.query, fp.cached)
-		isDiffNoun := hasDifferentKeyNoun(fp.query, fp.cached)
+		isDiffNoun := hasDifferentKeyNoun(fp.query, fp.cached, nil)
 
 		if !isOpposite && !isDiffNoun {
 			t.Errorf("FALSE POSITIVE not caught: %q vs %q (%s)", fp.query, fp.cached, fp.reason)
@@ -1303,7 +1303,7 @@ func TestTruePositivePreservation(t *testing.T) {
 		if hasOppositeIntent(tp.query, tp.cached) {
 			t.Errorf("TRUE POSITIVE incorrectly blocked (opposite): %q vs %q", tp.query, tp.cached)
 		}
-		if hasDifferentKeyNoun(tp.query, tp.cached) {
+		if hasDifferentKeyNoun(tp.query, tp.cached, nil) {
 			t.Errorf("TRUE POSITIVE incorrectly blocked (key noun): %q vs %q", tp.query, tp.cached)
 		}
 	}
@@ -1399,7 +1399,7 @@ func TestComprehensiveFilterAccuracy(t *testing.T) {
 
 	for _, tc := range keyNounTests {
 		total++
-		if hasDifferentKeyNoun(tc.a, tc.b) {
+		if hasDifferentKeyNoun(tc.a, tc.b, nil) {
 			correct++
 		} else {
 			t.Logf("MISS key noun: %q vs %q", tc.a, tc.b)
@@ -1432,7 +1432,7 @@ func TestComprehensiveFilterAccuracy(t *testing.T) {
 
 	for _, tc := range validPairs {
 		total++
-		if !hasOppositeIntent(tc.a, tc.b) && !hasDifferentKeyNoun(tc.a, tc.b) {
+		if !hasOppositeIntent(tc.a, tc.b) && !hasDifferentKeyNoun(tc.a, tc.b, nil) {
 			correct++
 		} else {
 			t.Logf("MISS valid pair blocked: %q vs %q", tc.a, tc.b)
@@ -1456,7 +1456,7 @@ func TestEdgeCases(t *testing.T) {
 	if hasOppositeIntent("", "") {
 		t.Error("empty strings should not be opposite")
 	}
-	if hasDifferentKeyNoun("", "") {
+	if hasDifferentKeyNoun("", "", nil) {
 		t.Error("empty strings should not have different key nouns")
 	}
 
@@ -1479,7 +1479,7 @@ func TestEdgeCases(t *testing.T) {
 
 	// Very long prompts
 	longPrompt := strings.Repeat("optimize the performance of the distributed system ", 50)
-	expanded := expandSynonyms(longPrompt)
+	expanded := expandSynonyms(longPrompt, nil)
 	if expanded == "" {
 		t.Error("should handle long prompts")
 	}
@@ -1567,7 +1567,7 @@ func TestSynonymExpansionComprehensive(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		expanded := expandSynonyms(tc.input)
+		expanded := expandSynonyms(tc.input, nil)
 		for _, word := range tc.shouldHave {
 			if !strings.Contains(expanded, word) {
 				t.Errorf("expandSynonyms(%q) should contain %q, got: %s", tc.input, word, expanded)
@@ -2037,12 +2037,8 @@ func TestSynonymRegistryManualPromote(t *testing.T) {
 }
 
 func TestSynonymRegistryExpandFallback(t *testing.T) {
-	// When no global registry is set, expandSynonyms should still work with static map
-	old := defaultRegistry
-	defaultRegistry = nil
-	defer func() { defaultRegistry = old }()
-
-	result := expandSynonyms("set up k8s cluster")
+	// Test static fallback when SemanticCache has nil registry
+	result := expandSynonyms("set up k8s cluster", nil)
 	if !strings.Contains(result, "kubernetes") {
 		t.Error("expected static fallback to expand k8s to kubernetes")
 	}

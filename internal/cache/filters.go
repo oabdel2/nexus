@@ -4,26 +4,13 @@ import (
 	"strings"
 )
 
-// defaultRegistry is the package-level synonym registry for dynamic expansion.
-var defaultRegistry *SynonymRegistry
-
-// SetSynonymRegistry sets the global synonym registry for dynamic expansion.
-func SetSynonymRegistry(r *SynonymRegistry) {
-	defaultRegistry = r
-}
-
-// GetSynonymRegistry returns the global synonym registry.
-func GetSynonymRegistry() *SynonymRegistry {
-	return defaultRegistry
-}
-
 // expandSynonyms appends expanded terms to the text for better embedding matching.
 // This handles abbreviations, jargon, and domain-specific terms.
 // Uses the dynamic registry if available, falling back to a static map.
-func expandSynonyms(text string) string {
+func expandSynonyms(text string, registry *SynonymRegistry) string {
 	// Use dynamic registry if available
-	if defaultRegistry != nil {
-		return defaultRegistry.Expand(text)
+	if registry != nil {
+		return registry.Expand(text)
 	}
 
 	// Fallback: static expansion (original behavior)
@@ -255,10 +242,10 @@ func getKeyNouns() map[string]bool {
 // hasDifferentKeyNoun detects if two prompts refer to different specific technologies,
 // tools, languages, or algorithms. Returns true if they have mutually exclusive key nouns.
 // Uses the dynamic registry if available, falling back to static key nouns.
-func hasDifferentKeyNoun(text1, text2 string) bool {
+func hasDifferentKeyNoun(text1, text2 string, registry *SynonymRegistry) bool {
 	// Use dynamic registry if available
-	if defaultRegistry != nil {
-		return defaultRegistry.HasDifferentKeyNounDynamic(text1, text2)
+	if registry != nil {
+		return registry.HasDifferentKeyNounDynamic(text1, text2)
 	}
 
 	// Fallback: static key nouns (original behavior)

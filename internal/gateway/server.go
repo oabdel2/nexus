@@ -35,7 +35,7 @@ type Server struct {
 	tracker       *workflow.Tracker
 	providers     map[string]provider.Provider
 	health        *provider.HealthChecker
-	cbPool        *provider.ProviderPool
+	cbPool        *provider.Pool
 	metrics       *telemetry.Metrics
 	costTracker   *telemetry.CostTracker
 	tracer        *telemetry.Tracer
@@ -73,7 +73,7 @@ func New(cfg *config.Config, logger *slog.Logger) *Server {
 			ExportURL:   cfg.Tracing.ExportURL,
 			LogSpans:    cfg.Tracing.LogSpans,
 		}),
-		cbPool: provider.NewProviderPool(provider.CircuitBreakerConfig{
+		cbPool: provider.NewPool(provider.CircuitBreakerConfig{
 			FailureThreshold: 5,
 			SuccessThreshold: 2,
 			Timeout:          30 * time.Second,
@@ -142,11 +142,14 @@ func New(cfg *config.Config, logger *slog.Logger) *Server {
 	// Init compressor
 	if cfg.Compression.Enabled {
 		s.compressor = compress.New(compress.CompressorConfig{
-			EnableWhitespace:   cfg.Compression.Whitespace,
-			EnableCodeStrip:    cfg.Compression.CodeStrip,
-			EnableHistoryTrunc: cfg.Compression.HistoryTruncate,
-			MaxHistoryTurns:    cfg.Compression.MaxHistoryTurns,
-			PreserveLastN:      cfg.Compression.PreserveLastN,
+			EnableWhitespace:    cfg.Compression.Whitespace,
+			EnableCodeStrip:     cfg.Compression.CodeStrip,
+			EnableHistoryTrunc:  cfg.Compression.HistoryTruncate,
+			EnableBoilerplate:   cfg.Compression.Boilerplate,
+			EnableJSONMinify:    cfg.Compression.JSONMinify,
+			EnableDeduplication: cfg.Compression.Deduplication,
+			MaxHistoryTurns:     cfg.Compression.MaxHistoryTurns,
+			PreserveLastN:       cfg.Compression.PreserveLastN,
 		})
 	}
 

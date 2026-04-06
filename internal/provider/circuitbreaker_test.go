@@ -227,10 +227,10 @@ func TestCircuitBreakerOnStateChange(t *testing.T) {
 	}
 }
 
-// --- ProviderPool tests ---
+// --- Pool tests ---
 
-func TestProviderPoolRegisterAndGet(t *testing.T) {
-	pool := NewProviderPool(defaultCBConfig())
+func TestPoolRegisterAndGet(t *testing.T) {
+	pool := NewPool(defaultCBConfig())
 	pool.Register("openai")
 	pool.Register("anthropic")
 
@@ -245,8 +245,8 @@ func TestProviderPoolRegisterAndGet(t *testing.T) {
 	}
 }
 
-func TestProviderPoolAvailability(t *testing.T) {
-	pool := NewProviderPool(CircuitBreakerConfig{
+func TestPoolAvailability(t *testing.T) {
+	pool := NewPool(CircuitBreakerConfig{
 		FailureThreshold: 2,
 		Timeout:          100 * time.Millisecond,
 	})
@@ -272,8 +272,8 @@ func TestProviderPoolAvailability(t *testing.T) {
 	}
 }
 
-func TestProviderPoolAllStats(t *testing.T) {
-	pool := NewProviderPool(defaultCBConfig())
+func TestPoolAllStats(t *testing.T) {
+	pool := NewPool(defaultCBConfig())
 	pool.Register("a")
 	pool.Register("b")
 
