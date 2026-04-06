@@ -321,7 +321,7 @@ var sensitivePatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)runtime error:`),                     // runtime errors
 	regexp.MustCompile(`[A-Za-z]:\\[^\s"]+`),                     // Windows file paths
 	regexp.MustCompile(`/[a-z][a-z0-9_-]*/[a-z][a-z0-9_/-]*\.go`), // Go source paths
-	regexp.MustCompile(`(?:^|\s)(?:10|172\.(?:1[6-9]|2\d|3[01])|192\.168)\.\d{1,3}\.\d{1,3}(?:\s|:|$)`), // internal IPs
+	regexp.MustCompile(`(?:^|\s)(?:10\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])|192\.168)\.\d{1,3}\.\d{1,3}(?:\s|:|$)`), // internal IPs
 }
 
 // errorSanitizerWriter intercepts response writes to sanitize error bodies.
