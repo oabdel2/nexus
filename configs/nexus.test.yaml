@@ -154,3 +154,11 @@ eval:
   data_dir: "./data/test/eval"
   hedging_penalty: 0.15
   sample_rate: 1.0
+
+events:
+  enabled: true
+  webhook_urls: []
+  webhook_secret: ""
+
+plugins:
+  enabled: true

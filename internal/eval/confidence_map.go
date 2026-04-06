@@ -167,3 +167,15 @@ func (cm *ConfidenceMap) RecordFromPrompt(prompt, tier string, confidence float6
 	taskType := ClassifyTaskType(prompt)
 	cm.Record(taskType, tier, confidence)
 }
+
+// TaskTypes returns the list of all observed task types.
+func (cm *ConfidenceMap) TaskTypes() []string {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+
+	types := make([]string, 0, len(cm.data))
+	for t := range cm.data {
+		types = append(types, t)
+	}
+	return types
+}

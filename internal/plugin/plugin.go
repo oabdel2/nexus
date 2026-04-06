@@ -257,3 +257,36 @@ func (r *Registry) ListPlugins() map[string][]string {
 	}
 	return result
 }
+
+// List returns all registered plugins with their active status.
+func (r *Registry) List() map[string]interface{} {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	classifiers := make([]map[string]interface{}, 0, len(r.classifiers))
+	for name := range r.classifiers {
+		classifiers = append(classifiers, map[string]interface{}{
+			"name":   name,
+			"active": name == r.activeClassifier,
+		})
+	}
+
+	routers := make([]map[string]interface{}, 0, len(r.routers))
+	for name := range r.routers {
+		routers = append(routers, map[string]interface{}{
+			"name":   name,
+			"active": name == r.activeRouter,
+		})
+	}
+
+	hooks := make([]string, 0, len(r.hooks))
+	for name := range r.hooks {
+		hooks = append(hooks, name)
+	}
+
+	return map[string]interface{}{
+		"classifiers": classifiers,
+		"routers":     routers,
+		"hooks":       hooks,
+	}
+}

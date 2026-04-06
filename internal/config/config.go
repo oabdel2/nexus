@@ -23,6 +23,9 @@ type Config struct {
 	Cascade      CascadeConfig      `yaml:"cascade"`
 	Eval         EvalConfig         `yaml:"eval"`
 	Experiment   ExperimentConfig   `yaml:"experiment"`
+	Adaptive     AdaptiveConfig     `yaml:"adaptive"`
+	Events       EventsConfig       `yaml:"events"`
+	Plugins      PluginsConfig      `yaml:"plugins"`
 }
 
 type CompressionConfig struct {
@@ -53,6 +56,23 @@ type EvalConfig struct {
 type ExperimentConfig struct {
 	Enabled   bool `yaml:"enabled"`
 	AutoStart bool `yaml:"auto_start"`
+}
+
+type AdaptiveConfig struct {
+	Enabled        bool    `yaml:"enabled"`
+	MinSamples     int     `yaml:"min_samples"`
+	HighConfidence float64 `yaml:"high_confidence"`
+	LowConfidence  float64 `yaml:"low_confidence"`
+}
+
+type EventsConfig struct {
+	Enabled       bool     `yaml:"enabled"`
+	WebhookURLs   []string `yaml:"webhook_urls"`
+	WebhookSecret string   `yaml:"webhook_secret"`
+}
+
+type PluginsConfig struct {
+	Enabled bool `yaml:"enabled"`
 }
 
 type BillingConfig struct {
@@ -455,5 +475,15 @@ func setDefaults(cfg *Config) {
 	}
 	if cfg.Eval.ShadowSampleRate == 0 && cfg.Eval.ShadowEnabled {
 		cfg.Eval.ShadowSampleRate = 0.10
+	}
+	// Adaptive defaults
+	if cfg.Adaptive.MinSamples == 0 {
+		cfg.Adaptive.MinSamples = 50
+	}
+	if cfg.Adaptive.HighConfidence == 0 {
+		cfg.Adaptive.HighConfidence = 0.90
+	}
+	if cfg.Adaptive.LowConfidence == 0 {
+		cfg.Adaptive.LowConfidence = 0.50
 	}
 }

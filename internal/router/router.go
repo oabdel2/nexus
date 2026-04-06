@@ -168,3 +168,41 @@ func (r *Router) GetModelCost(provider, model string) float64 {
 func (r *Router) ForceSelectTier(tier string) (provider string, model string) {
 	return r.selectModelWithFallback(tier)
 }
+
+// ForceRoute forces routing to a specific tier instead of computing it from complexity.
+func (r *Router) ForceRoute(tier, prompt, role string, stepRatio, budgetRatio float64, contextLen int) ModelSelection {
+	var score ComplexityScore
+	if r.smartClassifier != nil {
+		score = r.smartClassifier.Classify(prompt, role, stepRatio, budgetRatio, contextLen)
+	} else {
+		score = ClassifyComplexity(prompt, role, stepRatio, budgetRatio, contextLen)
+	}
+
+	w := r.cfg.ComplexityWeights
+	basePrompt := score.PromptScore*0.6 + score.LengthScore*0.2 + score.StructScore*0.2
+	score.FinalScore = basePrompt*w.PromptComplexity +
+		score.ContextScore*w.ContextLength +
+		score.RoleScore*w.AgentRole +
+		score.PositionScore*w.StepPosition +
+		score.BudgetScore*w.BudgetPressure
+
+	provider, model := r.selectModelWithFallback(tier)
+
+	selection := ModelSelection{
+		Provider: provider,
+		Model:    model,
+		Tier:     tier,
+		Score:    score,
+		Reason:   "adaptive override from confidence map",
+	}
+
+	r.logger.Info("forced routing decision",
+		"tier", tier,
+		"model", model,
+		"provider", provider,
+		"final_score", score.FinalScore,
+		"reason", selection.Reason,
+	)
+
+	return selection
+}

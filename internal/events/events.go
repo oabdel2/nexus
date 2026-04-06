@@ -55,6 +55,14 @@ type EventBus struct {
 	client  *http.Client
 	queue   chan Event
 	counter uint64
+
+	// Recent events ring buffer for /api/events/recent
+	recentMu sync.RWMutex
+	recent   []Event
+
+	// Stats counters for /api/events/stats
+	statsMu sync.RWMutex
+	stats   map[EventType]int64
 }
 
 // NewEventBus creates a new event bus with the given webhook configs
@@ -64,7 +72,9 @@ func NewEventBus(hooks []WebhookConfig) *EventBus {
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
-		queue: make(chan Event, 1000),
+		queue:  make(chan Event, 1000),
+		recent: make([]Event, 0, 100),
+		stats:  make(map[EventType]int64),
 	}
 	// Start worker pool for async dispatch
 	for i := 0; i < 3; i++ {
@@ -86,6 +96,19 @@ func (eb *EventBus) Emit(eventType EventType, data map[string]interface{}) {
 		Timestamp: time.Now().UTC(),
 		Data:      data,
 	}
+
+	// Track stats
+	eb.statsMu.Lock()
+	eb.stats[eventType]++
+	eb.statsMu.Unlock()
+
+	// Track recent events (ring buffer, max 100)
+	eb.recentMu.Lock()
+	if len(eb.recent) >= 100 {
+		eb.recent = eb.recent[1:]
+	}
+	eb.recent = append(eb.recent, event)
+	eb.recentMu.Unlock()
 
 	select {
 	case eb.queue <- event:
@@ -166,6 +189,26 @@ func (eb *EventBus) send(hook WebhookConfig, event Event) {
 	if resp.StatusCode >= 400 {
 		log.Printf("[events] webhook %s returned %d", hook.URL, resp.StatusCode)
 	}
+}
+
+// Recent returns the last 100 events.
+func (eb *EventBus) Recent() []Event {
+	eb.recentMu.RLock()
+	defer eb.recentMu.RUnlock()
+	out := make([]Event, len(eb.recent))
+	copy(out, eb.recent)
+	return out
+}
+
+// Stats returns event counts by type.
+func (eb *EventBus) Stats() map[string]int64 {
+	eb.statsMu.RLock()
+	defer eb.statsMu.RUnlock()
+	out := make(map[string]int64, len(eb.stats))
+	for k, v := range eb.stats {
+		out[string(k)] = v
+	}
+	return out
 }
 
 // Close shuts down the event bus

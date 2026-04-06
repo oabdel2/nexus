@@ -18,8 +18,10 @@ import (
 	"github.com/nexus-gateway/nexus/internal/config"
 	"github.com/nexus-gateway/nexus/internal/dashboard"
 	"github.com/nexus-gateway/nexus/internal/eval"
+	"github.com/nexus-gateway/nexus/internal/events"
 	"github.com/nexus-gateway/nexus/internal/experiment"
 	"github.com/nexus-gateway/nexus/internal/notification"
+	"github.com/nexus-gateway/nexus/internal/plugin"
 	"github.com/nexus-gateway/nexus/internal/provider"
 	"github.com/nexus-gateway/nexus/internal/router"
 	"github.com/nexus-gateway/nexus/internal/security"
@@ -51,7 +53,10 @@ type Server struct {
 	confidenceScorer *eval.ConfidenceScorer
 	confidenceMap    *eval.ConfidenceMap
 	cascade          *router.CascadeRouter
+	adaptiveRouter   *router.AdaptiveRouter
 	experimentMgr    *experiment.Manager
+	eventBus         *events.EventBus
+	pluginRegistry   *plugin.Registry
 }
 
 func New(cfg *config.Config, logger *slog.Logger) *Server {
@@ -121,7 +126,7 @@ func New(cfg *config.Config, logger *slog.Logger) *Server {
 		case "openai", "ollama":
 			p = provider.NewOpenAI(pc.Name, pc.BaseURL, pc.APIKey, pc.Headers)
 		case "anthropic":
-			p = provider.NewOpenAI(pc.Name, pc.BaseURL, pc.APIKey, pc.Headers)
+			p = provider.NewAnthropic(pc.Name, pc.BaseURL, pc.APIKey)
 		}
 		if p != nil {
 			s.providers[pc.Name] = p
@@ -164,6 +169,11 @@ func New(cfg *config.Config, logger *slog.Logger) *Server {
 		s.cascade = router.NewCascadeRouter(s.router, cfg.Cascade.ConfidenceThreshold, cfg.Cascade.MaxLatencyMs, cfg.Cascade.SampleRate)
 	}
 
+	// Init adaptive router
+	if cfg.Adaptive.Enabled && s.confidenceMap != nil {
+		s.adaptiveRouter = router.NewAdaptiveRouter(s.router, s.confidenceMap, cfg.Adaptive)
+	}
+
 	// Init experiment manager
 	if cfg.Experiment.Enabled {
 		s.experimentMgr = experiment.NewManager()
@@ -194,6 +204,47 @@ func New(cfg *config.Config, logger *slog.Logger) *Server {
 			s.subStore, s.keyStore, cfg.Billing.StripeWebhookSecret, logger,
 		)
 		s.subStore.StartLifecycleChecker()
+	}
+
+	// Init event bus (if enabled)
+	if cfg.Events.Enabled {
+		var hooks []events.WebhookConfig
+		for _, url := range cfg.Events.WebhookURLs {
+			hooks = append(hooks, events.WebhookConfig{
+				URL:    url,
+				Events: []string{"*"},
+				Secret: cfg.Events.WebhookSecret,
+			})
+		}
+		s.eventBus = events.NewEventBus(hooks)
+	}
+
+	// Init plugin registry (if enabled)
+	if cfg.Plugins.Enabled {
+		s.pluginRegistry = plugin.NewRegistry()
+	}
+
+	// Wire circuit breaker state changes to events
+	if s.eventBus != nil {
+		for name := range s.providers {
+			cb := s.cbPool.Get(name)
+			if cb != nil {
+				providerName := name
+				cb.OnStateChange = func(prov string, from, to provider.CBState) {
+					if to == provider.StateOpen {
+						s.eventBus.Emit(events.ProviderUnhealthy, map[string]interface{}{
+							"provider":       providerName,
+							"previous_state": from.String(),
+						})
+					} else if to == provider.StateClosed && from != provider.StateClosed {
+						s.eventBus.Emit(events.ProviderRecovered, map[string]interface{}{
+							"provider":       providerName,
+							"previous_state": from.String(),
+						})
+					}
+				}
+			}
+		}
 	}
 
 	return s
@@ -252,6 +303,9 @@ func (s *Server) Start(ctx context.Context) error {
 	// Shadow evaluation stats
 	mux.HandleFunc("/api/shadow/stats", s.handleShadowStats)
 
+	// Adaptive routing stats
+	mux.HandleFunc("/api/adaptive/stats", s.handleAdaptiveStats)
+
 	// Experiment endpoints
 	mux.HandleFunc("/api/experiments", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
@@ -273,6 +327,17 @@ func (s *Server) Start(ctx context.Context) error {
 
 	// Request inspector endpoint
 	mux.HandleFunc("/api/inspect", s.handleInspect)
+
+	// Events endpoints
+	if s.eventBus != nil {
+		mux.HandleFunc("/api/events/recent", s.handleEventsRecent)
+		mux.HandleFunc("/api/events/stats", s.handleEventsStats)
+	}
+
+	// Plugins endpoint
+	if s.pluginRegistry != nil {
+		mux.HandleFunc("/api/plugins", s.handlePlugins)
+	}
 
 	// Billing endpoints (only registered if billing enabled)
 	if s.cfg.Billing.Enabled {
@@ -450,6 +515,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	if s.eventLog != nil {
 		s.eventLog.Save()
 	}
+	if s.eventBus != nil {
+		s.eventBus.Close()
+	}
 	return s.httpServer.Shutdown(ctx)
 }
 
@@ -555,6 +623,16 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 			})
 			s.Dashboard.UpdateWorkflow(workflowID, ws.Budget, ws.BudgetLeft, ws.GetBudgetRatio(), ws.CurrentStep, ws.TotalCost)
 
+			// Emit cache hit event
+			if s.eventBus != nil {
+				latencySaved := time.Since(start).Milliseconds()
+				s.eventBus.Emit(events.RequestCached, map[string]interface{}{
+					"source":        source,
+					"latency_saved": latencySaved,
+					"workflow_id":   workflowID,
+				})
+			}
+
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("X-Nexus-Cache", source)
 			w.Header().Set("X-Nexus-Model", "cached")
@@ -571,14 +649,71 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		_ = cacheKey
 	}
 
+	// Plugin PreRoute hook: let plugins modify messages or override tier before routing
+	if s.pluginRegistry != nil {
+		s.pluginRegistry.EmitRequest(r.Context(), &plugin.RequestEvent{
+			WorkflowID: workflowID,
+			Step:       ws.CurrentStep,
+			Tier:       "",
+			Score:      0,
+			APIKey:     r.Header.Get("Authorization"),
+			Team:       team,
+		})
+	}
+
 	// Route the request
 	_, routeSpan := s.tracer.StartSpan(r.Context(), "router.classify")
-	selection := s.router.Route(promptText, agentRole, ws.GetStepRatio(), ws.GetBudgetRatio(), contextLen)
+	var selection router.ModelSelection
+	if s.adaptiveRouter != nil {
+		selection = s.adaptiveRouter.Route(promptText, agentRole, ws.GetStepRatio(), ws.GetBudgetRatio(), contextLen)
+	} else {
+		selection = s.router.Route(promptText, agentRole, ws.GetStepRatio(), ws.GetBudgetRatio(), contextLen)
+	}
+	originalTier := selection.Tier
 	routeSpan.SetAttribute("router.tier", selection.Tier)
 	routeSpan.SetAttribute("router.model", selection.Model)
 	routeSpan.SetAttribute("router.provider", selection.Provider)
 	routeSpan.SetAttribute("router.score", fmt.Sprintf("%.4f", selection.Score.FinalScore))
 	s.tracer.EndSpan(routeSpan)
+
+	// Emit budget events based on current budget ratio
+	budgetRatio := ws.GetBudgetRatio()
+	if s.eventBus != nil {
+		if budgetRatio <= 0 {
+			s.eventBus.Emit(events.BudgetExhausted, map[string]interface{}{
+				"workflow_id": workflowID,
+				"team":        team,
+				"budget":      ws.Budget,
+				"spent":       ws.TotalCost,
+			})
+		} else if budgetRatio < 0.05 {
+			s.eventBus.Emit(events.BudgetCritical, map[string]interface{}{
+				"workflow_id":  workflowID,
+				"team":         team,
+				"budget_ratio": budgetRatio,
+				"budget":       ws.Budget,
+				"spent":        ws.TotalCost,
+			})
+		} else if budgetRatio < 0.15 {
+			s.eventBus.Emit(events.BudgetWarning, map[string]interface{}{
+				"workflow_id":  workflowID,
+				"team":         team,
+				"budget_ratio": budgetRatio,
+				"budget":       ws.Budget,
+				"spent":        ws.TotalCost,
+			})
+		}
+	}
+
+	// Emit tier downgrade event if budget pressure changed the tier
+	if s.eventBus != nil && selection.Tier != originalTier {
+		s.eventBus.Emit(events.TierDowngrade, map[string]interface{}{
+			"workflow_id":   workflowID,
+			"original_tier": originalTier,
+			"new_tier":      selection.Tier,
+			"budget_ratio":  budgetRatio,
+		})
+	}
 
 	// Cascade: try cheap model first if router picked expensive tier
 	if s.cfg.Cascade.Enabled && s.cascade != nil && s.cascade.ShouldCascade(selection.Score, selection.Tier) {
@@ -599,6 +734,15 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 				"confidence", cascadeResult.CheapConfidence,
 				"original_tier", selection.Tier,
 			)
+			// Emit CostAnomaly if cheap model confidence was very low
+			if s.eventBus != nil && cascadeResult.CheapConfidence < 0.3 {
+				s.eventBus.Emit(events.CostAnomaly, map[string]interface{}{
+					"workflow_id":      workflowID,
+					"cheap_confidence": cascadeResult.CheapConfidence,
+					"original_tier":    selection.Tier,
+					"reason":           "cascade escalation with very low cheap model confidence",
+				})
+			}
 		}
 	}
 
@@ -634,7 +778,11 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		streamSpan.SetAttribute("provider.model", selection.Model)
 		streamSpan.SetAttribute("provider.stream", "true")
 
-		usage, err := p.SendStream(r.Context(), req, w)
+		// Tee stream to both client and buffer for caching
+		streamBuf := provider.NewStreamBuffer()
+		teeWriter := &streamTeeWriter{w: w, buf: streamBuf}
+
+		usage, err := p.SendStream(r.Context(), req, teeWriter)
 		latencyMs := time.Since(start).Milliseconds()
 		if err != nil {
 			streamSpan.SetStatus("error")
@@ -644,6 +792,15 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 			s.health.RecordFailure(selection.Provider, err)
 			if cb := s.cbPool.Get(selection.Provider); cb != nil {
 				cb.RecordFailure()
+			}
+			if s.eventBus != nil {
+				s.eventBus.Emit(events.RequestError, map[string]interface{}{
+					"provider":    selection.Provider,
+					"error":       err.Error(),
+					"workflow_id": workflowID,
+					"model":       selection.Model,
+					"stream":      true,
+				})
 			}
 			return
 		}
@@ -686,6 +843,42 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 			Provider:        selection.Provider,
 		})
 		s.Dashboard.UpdateWorkflow(workflowID, ws.Budget, ws.BudgetLeft, ws.GetBudgetRatio(), ws.CurrentStep, ws.TotalCost)
+
+		// Emit stream RequestCompleted event
+		if s.eventBus != nil {
+			s.eventBus.Emit(events.RequestCompleted, map[string]interface{}{
+				"tier":        selection.Tier,
+				"model":       selection.Model,
+				"cost":        cost,
+				"latency_ms":  latencyMs,
+				"cache_hit":   false,
+				"workflow_id": workflowID,
+				"provider":    selection.Provider,
+				"stream":      true,
+			})
+		}
+
+		// Plugin PostResponse hook (streaming)
+		if s.pluginRegistry != nil {
+			s.pluginRegistry.EmitResponse(r.Context(), &plugin.ResponseEvent{
+				WorkflowID: workflowID,
+				Step:       ws.CurrentStep,
+				Model:      selection.Model,
+				Tier:       selection.Tier,
+				LatencyMs:  float64(latencyMs),
+				Cost:       cost,
+				CacheHit:   false,
+				TokensIn:   0,
+				TokensOut:  tokens,
+			})
+		}
+
+		// Cache the assembled streaming response
+		if s.cfg.Cache.Enabled {
+			if cacheData, ok := streamBuf.CacheableJSON(); ok {
+				s.cache.StoreResponse(promptText, selection.Model, cacheData)
+			}
+		}
 		return
 	}
 
@@ -714,6 +907,14 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		s.health.RecordFailure(selection.Provider, err)
 		if cb := s.cbPool.Get(selection.Provider); cb != nil {
 			cb.RecordFailure()
+		}
+		if s.eventBus != nil {
+			s.eventBus.Emit(events.RequestError, map[string]interface{}{
+				"provider":    selection.Provider,
+				"error":       err.Error(),
+				"workflow_id": workflowID,
+				"model":       selection.Model,
+			})
 		}
 		writeNexusError(w, errProviderError(err.Error()), http.StatusBadGateway)
 		return
@@ -839,6 +1040,34 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 			respMap["nexus_explain"] = explanation
 			respBody, _ = json.Marshal(respMap)
 		}
+	}
+
+	// Emit RequestCompleted event (non-streaming)
+	if s.eventBus != nil {
+		s.eventBus.Emit(events.RequestCompleted, map[string]interface{}{
+			"tier":        selection.Tier,
+			"model":       selection.Model,
+			"cost":        cost,
+			"latency_ms":  latencyMs,
+			"cache_hit":   false,
+			"workflow_id": workflowID,
+			"provider":    selection.Provider,
+		})
+	}
+
+	// Plugin PostResponse hook (non-streaming)
+	if s.pluginRegistry != nil {
+		s.pluginRegistry.EmitResponse(r.Context(), &plugin.ResponseEvent{
+			WorkflowID: workflowID,
+			Step:       ws.CurrentStep,
+			Model:      selection.Model,
+			Tier:       selection.Tier,
+			LatencyMs:  float64(latencyMs),
+			Cost:       cost,
+			CacheHit:   false,
+			TokensIn:   resp.Usage.PromptTokens,
+			TokensOut:  resp.Usage.CompletionTokens,
+		})
 	}
 
 	// Return response with Nexus headers
@@ -1192,6 +1421,15 @@ func (s *Server) handleEvalStats(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) handleAdaptiveStats(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if s.adaptiveRouter == nil {
+		json.NewEncoder(w).Encode(map[string]string{"status": "adaptive routing not enabled"})
+		return
+	}
+	json.NewEncoder(w).Encode(s.adaptiveRouter.Stats())
+}
+
 func (s *Server) handleCompressionStats(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
@@ -1541,4 +1779,59 @@ func (s *Server) handleUsage(w http.ResponseWriter, r *http.Request) {
 		"quota_allowed": quota.Allowed,
 		"quota_remaining": quota.Remaining,
 	})
+}
+
+// streamTeeWriter wraps an io.Writer so that each line written is also
+// captured in a StreamBuffer for subsequent caching.
+type streamTeeWriter struct {
+	w   io.Writer
+	buf *provider.StreamBuffer
+}
+
+func (tw *streamTeeWriter) Write(p []byte) (int, error) {
+	// Forward to the real writer first.
+	n, err := tw.w.Write(p)
+
+	// Capture each line for the buffer.
+	for _, line := range strings.Split(string(p), "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			tw.buf.WriteChunk(line)
+		}
+	}
+	return n, err
+}
+
+// Flush delegates to the underlying writer if it supports http.Flusher.
+func (tw *streamTeeWriter) Flush() {
+	if f, ok := tw.w.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (s *Server) handleEventsRecent(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if s.eventBus == nil {
+		json.NewEncoder(w).Encode(map[string]string{"status": "events not enabled"})
+		return
+	}
+	json.NewEncoder(w).Encode(s.eventBus.Recent())
+}
+
+func (s *Server) handleEventsStats(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if s.eventBus == nil {
+		json.NewEncoder(w).Encode(map[string]string{"status": "events not enabled"})
+		return
+	}
+	json.NewEncoder(w).Encode(s.eventBus.Stats())
+}
+
+func (s *Server) handlePlugins(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if s.pluginRegistry == nil {
+		json.NewEncoder(w).Encode(map[string]string{"status": "plugins not enabled"})
+		return
+	}
+	json.NewEncoder(w).Encode(s.pluginRegistry.ListPlugins())
 }
