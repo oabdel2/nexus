@@ -1,110 +1,547 @@
 package main
 
 import (
-	"context"
-	"flag"
-	"fmt"
-	"log/slog"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
+"bufio"
+"context"
+"encoding/json"
+"flag"
+"fmt"
+"io"
+"log/slog"
+"net/http"
+"os"
+"os/signal"
+"strings"
+"syscall"
+"time"
 
-	"github.com/nexus-gateway/nexus/internal/config"
-	"github.com/nexus-gateway/nexus/internal/gateway"
+"github.com/nexus-gateway/nexus/internal/config"
+"github.com/nexus-gateway/nexus/internal/gateway"
+"github.com/nexus-gateway/nexus/internal/router"
+
+"gopkg.in/yaml.v3"
 )
 
 var (
-	version = "0.1.0"
-	banner  = `
- _   _                      
-| \ | | _____  ___   _ ___  
-|  \| |/ _ \ \/ / | | / __| 
-| |\  |  __/>  <| |_| \__ \ 
-|_| \_|\___/_/\_\\__,_|___/ 
-                             
+version   = "0.1.0"
+buildDate = "unknown"
+gitCommit = "unknown"
+banner    = `
+ _   _
+| \ | | _____  ___   _ ___
+|  \| |/ _ \ \/ / | | / __|
+| |\  |  __/>  <| |_| \__ \
+|_| \_|\___/_/\_\\__,_|___/
+
 Agentic-First Inference Optimization Gateway v%s
 `
 )
 
 func main() {
-	configPath := flag.String("config", "configs/nexus.yaml", "path to configuration file")
-	port := flag.Int("port", 0, "override server port")
-	logLevel := flag.String("log-level", "", "log level (debug, info, warn, error)")
-	showVersion := flag.Bool("version", false, "show version")
-	flag.Parse()
+if len(os.Args) < 2 {
+runServe(os.Args[1:])
+return
+}
 
-	if *showVersion {
-		fmt.Printf("nexus v%s\n", version)
-		os.Exit(0)
-	}
+subcmd := os.Args[1]
 
-	fmt.Printf(banner, version)
+if subcmd == "-version" || subcmd == "--version" {
+printVersion()
+return
+}
 
-	// Load config
-	cfg, err := config.Load(*configPath)
-	if err != nil {
-		// Use defaults if config file not found
-		slog.Warn("config file not found, using defaults", "path", *configPath, "error", err)
-		cfg = config.DefaultConfig()
-	}
+switch subcmd {
+case "serve":
+runServe(os.Args[2:])
+case "init":
+runInit(os.Args[2:])
+case "status":
+runStatus(os.Args[2:])
+case "version":
+printVersion()
+case "validate":
+runValidate(os.Args[2:])
+case "inspect":
+runInspect(os.Args[2:])
+case "help", "-h", "--help":
+printUsage()
+default:
+if strings.HasPrefix(subcmd, "-") {
+runServe(os.Args[1:])
+return
+}
+fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", subcmd)
+printUsage()
+os.Exit(1)
+}
+}
 
-	// Apply CLI overrides
-	if *port > 0 {
-		cfg.Server.Port = *port
-	}
+func printUsage() {
+fmt.Print(`Usage: nexus [command] [flags]
 
-	// Setup logger
-	level := slog.LevelInfo
-	logLvl := cfg.Telemetry.LogLevel
-	if *logLevel != "" {
-		logLvl = *logLevel
-	}
-	switch logLvl {
-	case "debug":
-		level = slog.LevelDebug
-	case "warn":
-		level = slog.LevelWarn
-	case "error":
-		level = slog.LevelError
-	}
+Commands:
+  serve       Start the Nexus gateway server (default)
+  init        Interactive configuration wizard
+  status      Show gateway health and stats
+  version     Show version information
+  validate    Validate a configuration file
+  inspect     Analyze routing for a prompt
 
-	var handler slog.Handler
-	if cfg.Telemetry.LogFormat == "json" {
-		handler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level})
-	} else {
-		handler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level})
-	}
-	logger := slog.New(handler)
+Run 'nexus <command> -h' for command-specific help.
+`)
+}
 
-	// Expand env vars in API keys
-	for i := range cfg.Providers {
-		cfg.Providers[i].APIKey = os.ExpandEnv(cfg.Providers[i].APIKey)
-	}
+func printVersion() {
+fmt.Printf("nexus v%s\n", version)
+fmt.Printf("  build:  %s\n", buildDate)
+fmt.Printf("  commit: %s\n", gitCommit)
+}
 
-	// Create and start server
-	srv := gateway.New(cfg, logger)
+func runServe(args []string) {
+fs := flag.NewFlagSet("serve", flag.ExitOnError)
+configPath := fs.String("config", "configs/nexus.yaml", "path to configuration file")
+port := fs.Int("port", 0, "override server port")
+logLevel := fs.String("log-level", "", "log level (debug, info, warn, error)")
+fs.Parse(args)
 
-	// Graceful shutdown
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+fmt.Printf(banner, version)
 
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+cfg, err := config.Load(*configPath)
+if err != nil {
+slog.Warn("config file not found, using defaults", "path", *configPath, "error", err)
+cfg = config.DefaultConfig()
+}
 
-	go func() {
-		<-sigCh
-		logger.Info("shutting down...")
-		shutdownCtx, shutdownCancel := context.WithTimeout(ctx, 10*time.Second)
-		defer shutdownCancel()
-		srv.Shutdown(shutdownCtx)
-		cancel()
-	}()
+if *port > 0 {
+cfg.Server.Port = *port
+}
 
-	if err := srv.Start(ctx); err != nil && err.Error() != "http: Server closed" {
-		logger.Error("server error", "error", err)
-		os.Exit(1)
-	}
+level := slog.LevelInfo
+logLvl := cfg.Telemetry.LogLevel
+if *logLevel != "" {
+logLvl = *logLevel
+}
+switch logLvl {
+case "debug":
+level = slog.LevelDebug
+case "warn":
+level = slog.LevelWarn
+case "error":
+level = slog.LevelError
+}
 
-	logger.Info("nexus gateway stopped")
+var handler slog.Handler
+if cfg.Telemetry.LogFormat == "json" {
+handler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level})
+} else {
+handler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level})
+}
+logger := slog.New(handler)
+
+for i := range cfg.Providers {
+cfg.Providers[i].APIKey = os.ExpandEnv(cfg.Providers[i].APIKey)
+}
+
+srv := gateway.New(cfg, logger)
+
+ctx, cancel := context.WithCancel(context.Background())
+defer cancel()
+
+sigCh := make(chan os.Signal, 1)
+signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+go func() {
+<-sigCh
+logger.Info("shutting down...")
+shutdownCtx, shutdownCancel := context.WithTimeout(ctx, 10*time.Second)
+defer shutdownCancel()
+srv.Shutdown(shutdownCtx)
+cancel()
+}()
+
+if err := srv.Start(ctx); err != nil && err.Error() != "http: Server closed" {
+logger.Error("server error", "error", err)
+os.Exit(1)
+}
+
+logger.Info("nexus gateway stopped")
+}
+
+func runInit(args []string) {
+fs := flag.NewFlagSet("init", flag.ExitOnError)
+outPath := fs.String("output", "configs/nexus.yaml", "output config file path")
+fs.Parse(args)
+
+reader := bufio.NewReader(os.Stdin)
+prompt := func(label, defaultVal string) string {
+fmt.Printf("? %s [%s]: ", label, defaultVal)
+line, _ := reader.ReadString('\n')
+line = strings.TrimSpace(line)
+if line == "" {
+return defaultVal
+}
+return line
+}
+promptBool := func(label string, defaultYes bool) bool {
+hint := "Y/n"
+if !defaultYes {
+hint = "y/N"
+}
+fmt.Printf("? %s [%s]: ", label, hint)
+line, _ := reader.ReadString('\n')
+line = strings.TrimSpace(strings.ToLower(line))
+if line == "" {
+return defaultYes
+}
+return line == "y" || line == "yes"
+}
+
+fmt.Println()
+fmt.Println("\U0001f527 Nexus Configuration Wizard")
+fmt.Println()
+
+portStr := prompt("Server port", "8080")
+port := 8080
+if _, err := fmt.Sscanf(portStr, "%d", &port); err != nil {
+port = 8080
+}
+
+enableOllama := promptBool("Enable Ollama?", true)
+ollamaURL := "http://localhost:11434/v1"
+if enableOllama {
+ollamaURL = prompt("Ollama URL", "http://localhost:11434/v1")
+}
+
+enableOpenAI := promptBool("Enable OpenAI?", false)
+enableCache := promptBool("Enable cache?", true)
+enableCompression := promptBool("Enable prompt compression?", true)
+enableCascade := promptBool("Enable cascade routing?", false)
+
+cfg := config.DefaultConfig()
+cfg.Server.Port = port
+cfg.Cache.Enabled = enableCache
+cfg.Cache.L1Enabled = enableCache
+cfg.Cache.L1.Enabled = enableCache
+cfg.Compression.Enabled = enableCompression
+cfg.Cascade.Enabled = enableCascade
+
+cfg.Providers = nil
+if enableOllama {
+cfg.Providers = append(cfg.Providers, config.ProviderConfig{
+Name:     "ollama",
+Type:     "ollama",
+BaseURL:  ollamaURL,
+Enabled:  true,
+Priority: 1,
+Models: []config.ModelConfig{
+{Name: "llama3.1", Tier: "cheap", CostPer1K: 0.0, MaxTokens: 8192},
+},
+})
+}
+if enableOpenAI {
+cfg.Providers = append(cfg.Providers, config.ProviderConfig{
+Name:     "openai",
+Type:     "openai",
+BaseURL:  "https://api.openai.com/v1",
+APIKey:   "${OPENAI_API_KEY}",
+Enabled:  true,
+Priority: 2,
+Models: []config.ModelConfig{
+{Name: "gpt-4o-mini", Tier: "cheap", CostPer1K: 0.00015, MaxTokens: 16384},
+{Name: "gpt-4o", Tier: "mid", CostPer1K: 0.005, MaxTokens: 16384},
+{Name: "o3", Tier: "premium", CostPer1K: 0.01, MaxTokens: 100000},
+},
+})
+}
+
+data, err := yaml.Marshal(cfg)
+if err != nil {
+fmt.Fprintf(os.Stderr, "Error marshaling config: %v\n", err)
+os.Exit(1)
+}
+
+dir := dirOf(*outPath)
+if dir != "" {
+if err := os.MkdirAll(dir, 0755); err != nil {
+fmt.Fprintf(os.Stderr, "Error creating directory: %v\n", err)
+os.Exit(1)
+}
+}
+
+if err := os.WriteFile(*outPath, data, 0644); err != nil {
+fmt.Fprintf(os.Stderr, "Error writing config: %v\n", err)
+os.Exit(1)
+}
+
+fmt.Println()
+fmt.Printf("\u2705 Config written to %s\n", *outPath)
+fmt.Println("   Start Nexus with: nexus serve")
+}
+
+func dirOf(path string) string {
+for i := len(path) - 1; i >= 0; i-- {
+if path[i] == '/' || path[i] == '\\' {
+return path[:i]
+}
+}
+return ""
+}
+
+func runStatus(args []string) {
+fs := flag.NewFlagSet("status", flag.ExitOnError)
+addr := fs.String("addr", "http://localhost:8080", "gateway address")
+fs.Parse(args)
+
+client := &http.Client{Timeout: 5 * time.Second}
+
+fmt.Println()
+fmt.Println("Nexus Gateway Status")
+fmt.Println("\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501")
+
+info, infoErr := fetchJSON(client, *addr+"/")
+if infoErr != nil {
+fmt.Printf("  Status:     \u274c Unreachable (%v)\n", infoErr)
+os.Exit(1)
+}
+
+ver, _ := info["version"].(string)
+if ver == "" {
+ver = "unknown"
+}
+fmt.Printf("  Status:     \u2705 Running\n")
+fmt.Printf("  Version:    %s\n", ver)
+
+if total, ok := info["requests_total"].(float64); ok {
+fmt.Printf("\n  Requests:   %s total\n", formatNumber(int64(total)))
+}
+
+if cacheMap, ok := info["cache"].(map[string]any); ok {
+hits, _ := cacheMap["hits"].(float64)
+size, _ := cacheMap["size"].(float64)
+misses, _ := cacheMap["misses"].(float64)
+total := hits + misses
+pct := 0.0
+if total > 0 {
+pct = hits / total * 100
+}
+fmt.Printf("  Cache Hits: %s (%.1f%%)\n", formatNumber(int64(hits)), pct)
+fmt.Printf("  Cache Size: %s entries\n", formatNumber(int64(size)))
+}
+
+ready, readyErr := fetchJSON(client, *addr+"/health/ready")
+if readyErr == nil {
+if checks, ok := ready["checks"].(map[string]any); ok {
+if prov, ok := checks["providers"].(map[string]any); ok {
+fmt.Printf("\n  Providers:  %v configured\n", prov["count"])
+}
+}
+}
+
+cbs, cbErr := fetchJSON(client, *addr+"/api/circuit-breakers")
+if cbErr == nil {
+fmt.Println("\n  Circuit Breakers:")
+for name, v := range cbs {
+state := "unknown"
+if m, ok := v.(map[string]any); ok {
+if s, ok := m["state"].(string); ok {
+state = s
+}
+}
+icon := "\u2705"
+if state == "open" {
+icon = "\u274c"
+}
+fmt.Printf("    %-12s %s CB: %s\n", name, icon, state)
+}
+}
+
+fmt.Println()
+}
+
+func fetchJSON(client *http.Client, url string) (map[string]any, error) {
+resp, err := client.Get(url)
+if err != nil {
+return nil, err
+}
+defer resp.Body.Close()
+body, err := io.ReadAll(resp.Body)
+if err != nil {
+return nil, err
+}
+var result map[string]any
+if err := json.Unmarshal(body, &result); err != nil {
+return nil, err
+}
+return result, nil
+}
+
+func formatNumber(n int64) string {
+if n < 1000 {
+return fmt.Sprintf("%d", n)
+}
+if n < 1_000_000 {
+return fmt.Sprintf("%d,%03d", n/1000, n%1000)
+}
+return fmt.Sprintf("%d,%03d,%03d", n/1_000_000, (n%1_000_000)/1000, n%1000)
+}
+
+func runValidate(args []string) {
+fs := flag.NewFlagSet("validate", flag.ExitOnError)
+configPath := fs.String("config", "configs/nexus.yaml", "config file to validate")
+fs.Parse(args)
+
+cfg, err := config.Load(*configPath)
+if err != nil {
+fmt.Printf("\u274c Config invalid: %v\n", err)
+os.Exit(1)
+}
+
+fmt.Println()
+fmt.Printf("\u2705 Config is valid\n")
+
+enabledCount := 0
+for _, p := range cfg.Providers {
+if p.Enabled {
+enabledCount++
+}
+}
+fmt.Printf("  Providers: %d configured, %d enabled\n", len(cfg.Providers), enabledCount)
+
+var layers []string
+if cfg.Cache.L1Enabled || cfg.Cache.L1.Enabled {
+layers = append(layers, "L1")
+}
+if cfg.Cache.L2BM25.Enabled {
+layers = append(layers, "BM25")
+}
+if cfg.Cache.L2Semantic.Enabled {
+layers = append(layers, "Semantic")
+}
+if len(layers) > 0 {
+fmt.Printf("  Cache: %s enabled\n", strings.Join(layers, " + "))
+} else if cfg.Cache.Enabled {
+fmt.Printf("  Cache: enabled (no layers configured)\n")
+} else {
+fmt.Printf("  Cache: disabled\n")
+}
+
+secParts := []string{}
+if cfg.Security.RateLimit.Enabled {
+secParts = append(secParts, "rate limiting ON")
+}
+if cfg.Security.PromptGuard.Enabled {
+secParts = append(secParts, "prompt guard ON")
+}
+if cfg.Security.OIDC.Enabled {
+secParts = append(secParts, "OIDC ON")
+}
+if len(secParts) > 0 {
+fmt.Printf("  Security: %s\n", strings.Join(secParts, ", "))
+}
+
+if !cfg.Security.TLS.Enabled {
+fmt.Printf("  \u26a0 Warning: TLS disabled (OK for development)\n")
+}
+if !cfg.Billing.Enabled {
+fmt.Printf("  \u26a0 Warning: Billing disabled\n")
+}
+if enabledCount == 0 {
+fmt.Printf("  \u26a0 Warning: No providers enabled\n")
+}
+
+fmt.Println()
+}
+
+func runInspect(args []string) {
+fs := flag.NewFlagSet("inspect", flag.ExitOnError)
+configPath := fs.String("config", "configs/nexus.yaml", "config file")
+fs.Parse(args)
+
+remaining := fs.Args()
+if len(remaining) == 0 {
+fmt.Fprintf(os.Stderr, "Usage: nexus inspect <prompt>\n")
+os.Exit(1)
+}
+prompt := strings.Join(remaining, " ")
+
+cfg, err := config.Load(*configPath)
+if err != nil {
+slog.Warn("config not found, using defaults", "error", err)
+cfg = config.DefaultConfig()
+}
+
+logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+r := router.New(cfg.Router, cfg.Providers, logger)
+selection := r.Route(prompt, "", 0.0, 1.0, len(prompt))
+
+fmt.Println()
+fmt.Println("Nexus Routing Analysis")
+fmt.Println("\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501")
+
+displayPrompt := prompt
+if len(displayPrompt) > 60 {
+displayPrompt = displayPrompt[:57] + "..."
+}
+fmt.Printf("  Prompt:      \"%s\"\n", displayPrompt)
+fmt.Println()
+fmt.Printf("  Complexity Score: %.3f\n", selection.Score.FinalScore)
+fmt.Printf("    Keywords:   %.2f", selection.Score.PromptScore)
+
+matched := matchedKeywords(prompt)
+if len(matched) > 0 {
+fmt.Printf(" (%s)", strings.Join(matched, ", "))
+}
+fmt.Println()
+fmt.Printf("    Length:     %.2f\n", selection.Score.LengthScore)
+fmt.Printf("    Structure:  %.2f\n", selection.Score.StructScore)
+fmt.Printf("    Context:    %.2f\n", selection.Score.ContextScore)
+fmt.Printf("    Role:       %.2f\n", selection.Score.RoleScore)
+fmt.Printf("    Position:   %.2f\n", selection.Score.PositionScore)
+fmt.Printf("    Budget:     %.2f\n", selection.Score.BudgetScore)
+fmt.Println()
+fmt.Printf("  Tier Decision: %s\n", selection.Tier)
+fmt.Printf("  Reason:       %s\n", selection.Reason)
+if selection.Provider != "" {
+fmt.Printf("  Provider:     %s -> %s\n", selection.Provider, selection.Model)
+}
+
+if cfg.Cascade.Enabled {
+threshold := cfg.Cascade.ConfidenceThreshold
+wouldCascade := selection.Score.FinalScore < threshold &&
+selection.Tier != "economy" && selection.Tier != "cheap"
+fmt.Println()
+if wouldCascade {
+fmt.Printf("  Would cascade: yes (score < %.2f threshold)\n", threshold)
+fmt.Printf("    -> Try cheap first, escalate if confidence < %.2f\n", threshold)
+} else {
+fmt.Printf("  Would cascade: no\n")
+}
+} else {
+fmt.Println()
+fmt.Printf("  Cascade: disabled\n")
+}
+
+fmt.Println()
+}
+
+func matchedKeywords(prompt string) []string {
+lower := strings.ToLower(prompt)
+high := []string{
+"analyze", "debug", "fix", "refactor", "optimize", "architect",
+"security", "vulnerability", "race condition", "deadlock",
+"concurrent", "distributed", "algorithm", "prove", "derive",
+"implement", "design pattern", "trade-off", "critical",
+"production", "migrate", "performance",
+"memory leak", "scaling", "sharding", "consensus",
+"encryption", "authentication", "zero-day", "exploit",
+"backward compatible", "fault tolerant", "load balancing",
+"thread safe", "mutex", "semaphore",
+}
+var found []string
+for _, kw := range high {
+if strings.Contains(lower, kw) {
+found = append(found, kw)
+}
+}
+return found
 }

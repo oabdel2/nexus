@@ -236,6 +236,9 @@ func (s *Server) Start(ctx context.Context) error {
 	mux.HandleFunc("/api/eval/stats", s.handleEvalStats)
 	mux.HandleFunc("/api/compression/stats", s.handleCompressionStats)
 
+	// Request inspector endpoint
+	mux.HandleFunc("/api/inspect", s.handleInspect)
+
 	// Billing endpoints (only registered if billing enabled)
 	if s.cfg.Billing.Enabled {
 		mux.HandleFunc("/webhooks/stripe", s.handleStripeWebhook)
@@ -417,7 +420,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 
 func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeNexusError(w, errMethodNotAllowed(), http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -427,11 +430,11 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	var req provider.ChatRequest
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "failed to read body", http.StatusBadRequest)
+		writeNexusError(w, errInvalidRequest("Failed to read request body"), http.StatusBadRequest)
 		return
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		writeNexusError(w, errInvalidRequest("Invalid JSON in request body"), http.StatusBadRequest)
 		return
 	}
 
@@ -455,6 +458,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		tokensSaved := compResult.OriginalTokens - compResult.CompressedTokens
 		if tokensSaved > 0 {
 			s.metrics.RecordCompressionSaved(tokensSaved)
+			s.Dashboard.RecordCompressionSaved(tokensSaved)
 		}
 		compSpan.SetAttribute("compress.original_tokens", fmt.Sprintf("%d", compResult.OriginalTokens))
 		compSpan.SetAttribute("compress.compressed_tokens", fmt.Sprintf("%d", compResult.CompressedTokens))
@@ -474,7 +478,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 				"threats", result.Threats,
 				"risk_score", result.RiskScore,
 			)
-			http.Error(w, `{"error":"prompt rejected by security filter"}`, http.StatusBadRequest)
+			writeNexusError(w, errPromptBlocked(), http.StatusBadRequest)
 			return
 		}
 	}
@@ -512,6 +516,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 				LatencyMs:       time.Since(start).Milliseconds(),
 				Cost:            0,
 				CacheHit:        true,
+				Provider:        "cache",
 			})
 			s.Dashboard.UpdateWorkflow(workflowID, ws.Budget, ws.BudgetLeft, ws.GetBudgetRatio(), ws.CurrentStep, ws.TotalCost)
 
@@ -545,6 +550,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		cascadeResult := s.tryCheapFirst(r.Context(), req, selection, promptText)
 		if cascadeResult != nil && !cascadeResult.Escalated {
 			s.metrics.RecordCascadeAttempt("accepted")
+			s.Dashboard.RecordCascade(true)
 			s.logger.Info("cascade accepted cheap model",
 				"confidence", cascadeResult.CheapConfidence,
 				"cost_saved", cascadeResult.CostSaved,
@@ -553,6 +559,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 			selection = s.cascade.CheapSelection()
 		} else if cascadeResult != nil {
 			s.metrics.RecordCascadeAttempt("escalated")
+			s.Dashboard.RecordCascade(false)
 			s.logger.Info("cascade escalated to original tier",
 				"confidence", cascadeResult.CheapConfidence,
 				"original_tier", selection.Tier,
@@ -566,7 +573,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		// Try failover to any available provider with same tier
 		p, selection = s.findFallbackProvider(selection)
 		if p == nil {
-			http.Error(w, `{"error":"all providers unavailable"}`, http.StatusServiceUnavailable)
+			writeNexusError(w, errProviderUnavailable(), http.StatusServiceUnavailable)
 			return
 		}
 		s.logger.Info("circuit breaker failover",
@@ -641,6 +648,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 			LatencyMs:       latencyMs,
 			Cost:            cost,
 			CacheHit:        false,
+			Provider:        selection.Provider,
 		})
 		s.Dashboard.UpdateWorkflow(workflowID, ws.Budget, ws.BudgetLeft, ws.GetBudgetRatio(), ws.CurrentStep, ws.TotalCost)
 		return
@@ -672,7 +680,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		if cb := s.cbPool.Get(selection.Provider); cb != nil {
 			cb.RecordFailure()
 		}
-		http.Error(w, fmt.Sprintf(`{"error":"provider error: %v"}`, err), http.StatusBadGateway)
+		writeNexusError(w, errProviderError(err.Error()), http.StatusBadGateway)
 		return
 	}
 	s.health.RecordSuccess(selection.Provider)
@@ -709,18 +717,21 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		LatencyMs:       latencyMs,
 		Cost:            cost,
 		CacheHit:        false,
+		Provider:        selection.Provider,
 	})
 	s.Dashboard.UpdateWorkflow(workflowID, ws.Budget, ws.BudgetLeft, ws.GetBudgetRatio(), ws.CurrentStep, ws.TotalCost)
 
 	// Score response confidence
+	var evalResult *eval.ConfidenceResult
 	if s.cfg.Eval.Enabled && s.confidenceScorer != nil && len(resp.Choices) > 0 {
 		_, evalSpan := s.tracer.StartSpan(r.Context(), "eval.score")
-		evalResult := s.confidenceScorer.CombinedScore(
+		er := s.confidenceScorer.CombinedScore(
 			resp.Choices[0].Message.Content,
 			resp.Usage.PromptTokens,
 			resp.Usage.CompletionTokens,
 			resp.Choices[0].FinishReason,
 		)
+		evalResult = &er
 		if s.confidenceMap != nil {
 			taskType := eval.ClassifyTaskType(promptText)
 			s.confidenceMap.Record(taskType, selection.Tier, evalResult.Score)
@@ -739,6 +750,33 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	s.cache.StoreResponse(promptText, selection.Model, respBody)
 	storeSpan.SetAttribute("cache.model", selection.Model)
 	s.tracer.EndSpan(storeSpan)
+
+	// X-Nexus-Explain: attach routing explanation to the response
+	if r.Header.Get("X-Nexus-Explain") == "true" {
+		var respMap map[string]any
+		if err := json.Unmarshal(respBody, &respMap); err == nil {
+			explanation := map[string]any{
+				"complexity_score": selection.Score,
+				"tier_decision":   selection.Tier,
+				"reason":          selection.Reason,
+				"provider":        selection.Provider,
+				"model":           selection.Model,
+				"cache_checked":   s.cfg.Cache.Enabled,
+				"cache_result":    "miss",
+			}
+			if evalResult != nil {
+				explanation["confidence"] = map[string]any{
+					"score":          evalResult.Score,
+					"recommendation": evalResult.Recommendation,
+					"signals":        evalResult.Signals,
+				}
+			}
+			explanation["compression"] = s.cfg.Compression.Enabled
+			explanation["cascade_enabled"] = s.cfg.Cascade.Enabled
+			respMap["nexus_explain"] = explanation
+			respBody, _ = json.Marshal(respMap)
+		}
+	}
 
 	// Return response with Nexus headers
 	w.Header().Set("Content-Type", "application/json")
@@ -845,6 +883,7 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 			"/dashboard",
 			"/api/synonyms/stats",
 			"/api/circuit-breakers",
+			"/api/inspect",
 		},
 		"cache": map[string]any{
 			"hits":   hits,
@@ -1101,6 +1140,57 @@ func (s *Server) handleCompressionStats(w http.ResponseWriter, r *http.Request) 
 			"max_history_turns": s.cfg.Compression.MaxHistoryTurns,
 			"preserve_last_n":  s.cfg.Compression.PreserveLastN,
 		},
+	})
+}
+
+// handleInspect accepts a prompt via POST and returns the routing decision
+// that would be made WITHOUT actually sending the request.
+func (s *Server) handleInspect(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Prompt string `json:"prompt"`
+		Role   string `json:"role"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.Prompt == "" {
+		http.Error(w, `{"error":"prompt is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// Route without sending
+	selection := s.router.Route(req.Prompt, req.Role, 0.0, 1.0, len(req.Prompt))
+
+	wouldCascade := false
+	if s.cfg.Cascade.Enabled && s.cascade != nil {
+		wouldCascade = s.cascade.ShouldCascade(selection.Score, selection.Tier)
+	}
+
+	estimatedCost := 0.005 // default estimate
+	modelCost := s.router.GetModelCost(selection.Provider, selection.Model)
+	if modelCost > 0 {
+		// Rough estimate: assume ~500 tokens for a typical request
+		estimatedCost = 500.0 / 1000.0 * modelCost
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"complexity_score": selection.Score,
+		"tier":             selection.Tier,
+		"reason":           selection.Reason,
+		"would_cascade":    wouldCascade,
+		"estimated_model":  selection.Model,
+		"estimated_provider": selection.Provider,
+		"estimated_cost":   estimatedCost,
+		"cache_enabled":    s.cfg.Cache.Enabled,
+		"compression_enabled": s.cfg.Compression.Enabled,
+		"cascade_enabled":  s.cfg.Cascade.Enabled,
 	})
 }
 
