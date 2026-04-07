@@ -1,6 +1,7 @@
 package config
 
 import (
+	"net/http"
 	"os"
 	"time"
 
@@ -338,6 +339,76 @@ func (cfg *Config) ExpandSecrets() {
 func DefaultConfig() *Config {
 	cfg := &Config{}
 	setDefaults(cfg)
+	return cfg
+}
+
+// HasProviderEnvVars returns true if any known provider API key is set in
+// the environment, signalling that AutoConfig should be used.
+func HasProviderEnvVars() bool {
+	return os.Getenv("OPENAI_API_KEY") != "" ||
+		os.Getenv("ANTHROPIC_API_KEY") != ""
+}
+
+// AutoConfig creates a fully working config from just environment variables.
+// No YAML file needed. Detects available providers from env vars and a local
+// Ollama instance.
+func AutoConfig() *Config {
+	cfg := DefaultConfig()
+
+	// Auto-detect providers from env vars
+	if key := os.Getenv("OPENAI_API_KEY"); key != "" {
+		cfg.Providers = append(cfg.Providers, ProviderConfig{
+			Name: "openai", Type: "openai",
+			BaseURL: "https://api.openai.com/v1", APIKey: key, Enabled: true, Priority: 1,
+			Models: []ModelConfig{
+				{Name: "gpt-4o-mini", Tier: "cheap", CostPer1K: 0.00015, MaxTokens: 16384},
+				{Name: "gpt-4o", Tier: "mid", CostPer1K: 0.005, MaxTokens: 16384},
+				{Name: "o3-mini", Tier: "premium", CostPer1K: 0.01, MaxTokens: 100000},
+			},
+		})
+	}
+
+	if key := os.Getenv("ANTHROPIC_API_KEY"); key != "" {
+		cfg.Providers = append(cfg.Providers, ProviderConfig{
+			Name: "anthropic", Type: "anthropic",
+			BaseURL: "https://api.anthropic.com/v1", APIKey: key, Enabled: true, Priority: 2,
+			Models: []ModelConfig{
+				{Name: "claude-haiku-4", Tier: "cheap", CostPer1K: 0.0008, MaxTokens: 8192},
+				{Name: "claude-sonnet-4", Tier: "mid", CostPer1K: 0.003, MaxTokens: 64000},
+				{Name: "claude-opus-4", Tier: "premium", CostPer1K: 0.015, MaxTokens: 200000},
+			},
+		})
+	}
+
+	// Check for local Ollama
+	client := &http.Client{Timeout: 2 * time.Second}
+	if resp, err := client.Get("http://localhost:11434/api/tags"); err == nil {
+		resp.Body.Close()
+		cfg.Providers = append(cfg.Providers, ProviderConfig{
+			Name: "ollama", Type: "ollama",
+			BaseURL: "http://localhost:11434/v1", Enabled: true, Priority: 3,
+			Models: []ModelConfig{
+				{Name: "auto", Tier: "cheap", CostPer1K: 0.0, MaxTokens: 4096},
+			},
+		})
+	}
+
+	// Enable all non-network features by default
+	cfg.Cache.Enabled = true
+	cfg.Cache.L1Enabled = true
+	cfg.Cache.L1.Enabled = true
+	cfg.Cache.L2BM25.Enabled = true
+	cfg.Compression.Enabled = true
+	cfg.Compression.Whitespace = true
+	cfg.Compression.CodeStrip = true
+	cfg.Compression.Boilerplate = true
+	cfg.Security.PromptGuard.Enabled = true
+	cfg.Security.RateLimit.Enabled = true
+	cfg.Security.RateLimit.DefaultRPM = 60
+	cfg.Security.RateLimit.BurstSize = 10
+	cfg.Eval.Enabled = true
+	cfg.Telemetry.LogFormat = "text"
+
 	return cfg
 }
 

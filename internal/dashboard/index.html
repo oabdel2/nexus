@@ -149,6 +149,31 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 </div>
 
 <div class="container">
+  <!-- Onboarding: shown when no requests have been made -->
+  <div id="onboarding" class="panel" style="border-color:rgba(88,166,255,.3);background:linear-gradient(135deg,var(--surface) 0%,rgba(88,166,255,.06) 100%);display:none">
+    <div style="padding:24px">
+      <h2 style="font-size:20px;margin-bottom:8px">👋 Welcome to Nexus</h2>
+      <p style="color:var(--text-dim);margin-bottom:20px">Your gateway is running! Send your first request to start seeing savings.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px">
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px">
+          <h3 style="font-size:14px;margin-bottom:8px;color:var(--blue)">1. Point your code at Nexus</h3>
+          <pre style="background:var(--surface2);border-radius:6px;padding:12px;font-size:12px;overflow-x:auto;white-space:pre-wrap;font-family:'SFMono-Regular',Consolas,monospace;color:var(--text-dim)"># Python (just change base_url)
+client = OpenAI(base_url="http://localhost:8080/v1")</pre>
+        </div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px">
+          <h3 style="font-size:14px;margin-bottom:8px;color:var(--blue)">2. Or use curl</h3>
+          <pre style="background:var(--surface2);border-radius:6px;padding:12px;font-size:12px;overflow-x:auto;white-space:pre-wrap;font-family:'SFMono-Regular',Consolas,monospace;color:var(--text-dim)">curl http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"Hello!"}]}'</pre>
+        </div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px">
+          <h3 style="font-size:14px;margin-bottom:8px;color:var(--green)">3. Watch the savings appear above ↑</h3>
+          <p style="color:var(--text-dim);font-size:12px">Once your first request completes, this card disappears and the dashboard fills with real-time data.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Stats Row: 5 cards -->
   <div class="stats-row">
     <div class="card">
@@ -362,6 +387,8 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
   // Update stats
   function updateStats(s){
     state.stats=s;
+    // Hide onboarding once requests start flowing
+    if(s.total_requests>0){$('onboarding').style.display='none';}
     animVal($('totalReqs'), s.total_requests, fmtNum);
     $('cacheHits').textContent = fmtNum(s.cache_hits);
     updateCacheRing(s.cache_hit_rate);
@@ -522,6 +549,8 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
   // Init
   updateCacheRing(0);
   drawSavingsChart();
+  // Show onboarding card initially
+  $('onboarding').style.display = '';
   connect();
 })();
 

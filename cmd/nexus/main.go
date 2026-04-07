@@ -113,7 +113,39 @@ fs.Parse(args)
 fmt.Printf(banner, version)
 
 cfg, err := config.Load(*configPath)
-if err != nil {
+if err != nil && config.HasProviderEnvVars() {
+	// No config file found but env vars are set — use auto-config
+	cfg = config.AutoConfig()
+	fmt.Println("🔍 No config file — auto-detecting providers...")
+	names := []string{}
+	for _, p := range cfg.Providers {
+		if p.Enabled {
+			models := []string{}
+			for _, m := range p.Models {
+				models = append(models, m.Name)
+			}
+			names = append(names, fmt.Sprintf("%s (%s)", p.Name, strings.Join(models, ", ")))
+		}
+	}
+	fmt.Printf("✅ Found %d provider(s): %s\n", len(names), strings.Join(names, "; "))
+	if cfg.Cache.Enabled {
+		var layers []string
+		if cfg.Cache.L1Enabled || cfg.Cache.L1.Enabled {
+			layers = append(layers, "L1")
+		}
+		if cfg.Cache.L2BM25.Enabled {
+			layers = append(layers, "BM25")
+		}
+		fmt.Printf("✅ Cache: %s enabled\n", strings.Join(layers, " + "))
+	}
+	if cfg.Compression.Enabled {
+		fmt.Println("✅ Compression: enabled (whitespace + code + boilerplate)")
+	}
+	fmt.Printf("✅ Dashboard: http://localhost:%d/dashboard\n", cfg.Server.Port)
+	fmt.Println()
+	fmt.Printf("Nexus is ready! Send requests to http://localhost:%d/v1/chat/completions\n", cfg.Server.Port)
+	fmt.Println()
+} else if err != nil {
 slog.Warn("config file not found, using defaults", "path", *configPath, "error", err)
 cfg = config.DefaultConfig()
 }
@@ -401,8 +433,12 @@ configPath := fs.String("config", "configs/nexus.yaml", "config file to validate
 fs.Parse(args)
 
 cfg, err := config.Load(*configPath)
-if err != nil {
-fmt.Printf("\u274c Config invalid: %v\n", err)
+if err != nil && config.HasProviderEnvVars() {
+	fmt.Println()
+	fmt.Println("🔍 No config file — validating auto-detected config from environment...")
+	cfg = config.AutoConfig()
+} else if err != nil {
+fmt.Printf("❌ Config invalid: %v\n", err)
 os.Exit(1)
 }
 

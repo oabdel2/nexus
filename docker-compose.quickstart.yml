@@ -1,0 +1,13 @@
+# Quickstart: just Nexus with env-var auto-detection.
+# Usage: OPENAI_API_KEY=sk-... docker compose -f docker-compose.quickstart.yml up
+services:
+  nexus:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    command: ["serve"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health/live"]
+      interval: 30s

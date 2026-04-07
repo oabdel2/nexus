@@ -94,9 +94,30 @@ Nexus is the **first production implementation** of concepts from the [CASTER re
               └───────────────┘
 ```
 
-## Quick Start
+## Quick Start (60 seconds)
 
-### 60-Second Start (Ollama, no API keys)
+### Option 1: Docker (recommended)
+
+```bash
+docker run -p 8080:8080 -e OPENAI_API_KEY=sk-... ghcr.io/oabdel2/nexus
+```
+
+### Option 2: Binary (zero-config)
+
+```bash
+export OPENAI_API_KEY=sk-...
+nexus serve
+```
+
+Nexus auto-detects providers from environment variables — no config file needed.
+
+### Option 3: With config file
+
+```bash
+nexus serve -config nexus.yaml
+```
+
+### Option 4: Ollama (no API keys)
 
 ```bash
 # 1. Install Ollama (https://ollama.com) then pull a model
@@ -108,19 +129,22 @@ go build -o nexus ./cmd/nexus/
 
 # 3. Run with the minimal config
 ./nexus serve -config configs/nexus.minimal.yaml
-
-# 4. Send a request
-curl -s http://localhost:8080/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"model":"auto","messages":[{"role":"user","content":"Hello!"}]}'
 ```
 
-Open the live dashboard at **http://localhost:8080/dashboard**.
+### Send a request
+
+```bash
+curl http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"Hello!"}]}'
+```
+
+Open **http://localhost:8080/dashboard** to see your savings in real time.
 
 ### Prerequisites
 
 - Go 1.23 or later
-- At least one LLM provider: a local [Ollama](https://ollama.com) instance (no API key needed), or an API key for OpenAI / Anthropic / GitHub Copilot
+- At least one LLM provider: an API key for OpenAI / Anthropic, or a local [Ollama](https://ollama.com) instance (no API key needed)
 
 ### Build & Run
 
@@ -132,11 +156,11 @@ cd nexus
 # Build
 go build -o nexus ./cmd/nexus/
 
-# Run with minimal config (Ollama only, no API keys)
-./nexus serve -config configs/nexus.minimal.yaml
+# Run with zero-config (auto-detects from env vars)
+export OPENAI_API_KEY=sk-...
+./nexus serve
 
-# Or run with full config and provider API keys
-export GITHUB_COPILOT_TOKEN=$(gh auth token)
+# Or run with an explicit config file
 ./nexus serve -config configs/nexus.yaml
 ```
 
