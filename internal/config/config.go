@@ -27,6 +27,7 @@ type Config struct {
 	Adaptive     AdaptiveConfig     `yaml:"adaptive"`
 	Events       EventsConfig       `yaml:"events"`
 	Plugins      PluginsConfig      `yaml:"plugins"`
+	MCP          MCPConfig          `yaml:"mcp"`
 }
 
 type CompressionConfig struct {
@@ -42,10 +43,21 @@ type CompressionConfig struct {
 }
 
 type CascadeConfig struct {
-	Enabled             bool    `yaml:"enabled"`
+	Enabled             *bool   `yaml:"enabled"`
 	ConfidenceThreshold float64 `yaml:"confidence_threshold"`
 	MaxLatencyMs        int     `yaml:"max_latency_ms"`
 	SampleRate          float64 `yaml:"sample_rate"`
+}
+
+// BoolPtr returns a pointer to the given bool value.
+func BoolPtr(b bool) *bool { return &b }
+
+// IsEnabled returns true if cascade is enabled (defaults to true when not set).
+func (c CascadeConfig) IsEnabled() bool {
+	if c.Enabled == nil {
+		return true
+	}
+	return *c.Enabled
 }
 
 type EvalConfig struct {
@@ -76,6 +88,10 @@ type EventsConfig struct {
 }
 
 type PluginsConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+type MCPConfig struct {
 	Enabled bool `yaml:"enabled"`
 }
 

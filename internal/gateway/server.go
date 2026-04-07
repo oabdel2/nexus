@@ -19,6 +19,7 @@ import (
 	"github.com/nexus-gateway/nexus/internal/eval"
 	"github.com/nexus-gateway/nexus/internal/events"
 	"github.com/nexus-gateway/nexus/internal/experiment"
+	"github.com/nexus-gateway/nexus/internal/mcp"
 	"github.com/nexus-gateway/nexus/internal/notification"
 	"github.com/nexus-gateway/nexus/internal/plugin"
 	"github.com/nexus-gateway/nexus/internal/provider"
@@ -56,6 +57,7 @@ type Server struct {
 	experimentMgr    *experiment.Manager
 	eventBus         *events.EventBus
 	pluginRegistry   *plugin.Registry
+	mcpServer        *mcp.Server
 	requestSem       chan struct{}
 	shadowSem        chan struct{} // limits concurrent shadow eval goroutines
 	warmupDone       bool         // true after startup warmup completes
@@ -170,7 +172,7 @@ func New(cfg *config.Config, logger *slog.Logger) *Server {
 	}
 
 	// Init cascade router
-	if cfg.Cascade.Enabled {
+	if cfg.Cascade.IsEnabled() {
 		s.cascade = router.NewCascadeRouter(s.router, cfg.Cascade.ConfidenceThreshold, cfg.Cascade.MaxLatencyMs, cfg.Cascade.SampleRate)
 	}
 
@@ -258,6 +260,12 @@ func New(cfg *config.Config, logger *slog.Logger) *Server {
 				}
 			}
 		}
+	}
+
+	// MCP server initialization
+	if cfg.MCP.Enabled {
+		s.mcpServer = mcp.NewServer(logger)
+		s.registerMCPTools()
 	}
 
 	return s
@@ -351,6 +359,11 @@ func (s *Server) Start(ctx context.Context) error {
 	// Plugins endpoint
 	if s.pluginRegistry != nil {
 		mux.HandleFunc("/api/plugins", s.handlePlugins)
+	}
+
+	// MCP endpoint
+	if s.mcpServer != nil {
+		mux.HandleFunc("/mcp", s.mcpServer.HandleHTTP)
 	}
 
 	// Billing endpoints (only registered if billing enabled)

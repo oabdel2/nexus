@@ -232,7 +232,7 @@ compression:
   preserve_last_n: 5
 
 cascade:
-  enabled: false
+  enabled: true
   confidence_threshold: 0.78
   max_latency_ms: 5000
   sample_rate: 1.0

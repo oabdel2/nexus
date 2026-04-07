@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus — Security</title>
+<meta name="description" content="How Nexus delivers enterprise-grade security with a single dependency, compiled Go binary, and 15+ security middleware layers.">
+<style>
+:root {
+ --bg: #0a0a0b;
+ --card: #111113;
+ --border: #1e1e22;
+ --text: #e4e4e7;
+ --text-secondary: #a1a1aa;
+ --text-dim: #71717a;
+ --blue: #3b82f6;
+ --purple: #8b5cf6;
+ --pink: #ec4899;
+ --green: #22c55e;
+ --red: #ef4444;
+ --orange: #f59e0b;
+ --gradient: linear-gradient(135deg, var(--blue), var(--purple), var(--pink));
+ --gradient-h: linear-gradient(90deg, var(--blue), var(--purple), var(--pink));
+ --radius: 12px;
+ --radius-sm: 8px;
+ --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+ --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
+ --nav-height: 64px;
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body {
+ font-family: var(--font);
+ background: var(--bg);
+ color: var(--text);
+ line-height: 1.6;
+ overflow-x: hidden;
+ -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; cursor: pointer; border: none; background: none; }
+.container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+
+.gradient-text {
+ background: var(--gradient-h);
+ -webkit-background-clip: text;
+ -webkit-text-fill-color: transparent;
+ background-clip: text;
+}
+
+/* Nav */
+.nav {
+ position: fixed; top: 0; left: 0; right: 0; height: var(--nav-height);
+ z-index: 100; transition: all .3s;
+ border-bottom: 1px solid transparent;
+}
+.nav.scrolled {
+ background: rgba(10,10,11,.85); backdrop-filter: blur(20px);
+ border-bottom-color: var(--border);
+}
+.nav .container { display: flex; align-items: center; justify-content: space-between; height: 100%; }
+.nav-logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; }
+.nav-logo-icon {
+ width: 32px; height: 32px; border-radius: 8px; background: var(--gradient);
+ display: flex; align-items: center; justify-content: center;
+ font-weight: 800; font-size: 16px; color: #fff;
+}
+.nav-links { display: flex; align-items: center; gap: 32px; list-style: none; }
+.nav-links a { font-size: 14px; color: var(--text-secondary); transition: color .2s; font-weight: 500; }
+.nav-links a:hover { color: #fff; }
+.nav-links a.active { color: #fff; }
+.nav-cta { padding: 8px 20px; border-radius: 8px; background: var(--gradient); color: #fff !important; font-weight: 600; transition: opacity .2s; }
+.nav-cta:hover { opacity: .9; }
+.mobile-toggle { display: none; flex-direction: column; gap: 5px; padding: 4px; }
+.mobile-toggle span { display: block; width: 20px; height: 2px; background: var(--text); border-radius: 2px; }
+@media (max-width: 768px) {
+ .nav-links { display: none; }
+ .mobile-toggle { display: flex; }
+}
+
+.mobile-menu {
+ display: none; position: fixed;
+ top: var(--nav-height); left: 0; right: 0; bottom: 0;
+ background: rgba(10,10,11,.96); backdrop-filter: blur(16px); z-index: 99; padding: 40px 24px;
+}
+.mobile-menu.open { display: flex; flex-direction: column; gap: 24px; }
+.mobile-menu a { font-size: 18px; color: var(--text-secondary); font-weight: 500; }
+.mobile-menu a:hover { color: #fff; }
+
+/* Hero */
+.hero {
+ padding: 140px 0 80px;
+ text-align: center;
+}
+.hero-badge {
+ display: inline-flex; align-items: center; gap: 8px;
+ padding: 6px 16px; border-radius: 999px;
+ background: rgba(34,197,94,.1); border: 1px solid rgba(34,197,94,.2);
+ font-size: 13px; color: var(--green); font-weight: 500;
+ margin-bottom: 24px;
+}
+.hero h1 { font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 800; line-height: 1.15; margin-bottom: 16px; }
+.hero p { font-size: 18px; color: var(--text-secondary); max-width: 700px; margin: 0 auto 40px; line-height: 1.7; }
+
+/* Section */
+.section { padding: 80px 0; }
+.section-title {
+ font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 700;
+ margin-bottom: 16px;
+}
+.section-sub { color: var(--text-secondary); font-size: 16px; max-width: 600px; margin-bottom: 48px; line-height: 1.7; }
+
+/* Cards */
+.card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; }
+.card {
+ background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+ padding: 32px; transition: border-color .3s;
+}
+.card:hover { border-color: var(--text-dim); }
+.card-icon {
+ width: 48px; height: 48px; border-radius: 12px;
+ display: flex; align-items: center; justify-content: center;
+ font-size: 24px; margin-bottom: 20px;
+}
+.card h3 { font-size: 18px; font-weight: 600; margin-bottom: 12px; }
+.card p { color: var(--text-secondary); font-size: 14px; line-height: 1.7; }
+.card ul { list-style: none; margin-top: 12px; }
+.card ul li {
+ padding: 6px 0; font-size: 14px; color: var(--text-secondary);
+ display: flex; align-items: flex-start; gap: 8px;
+}
+.card ul li::before { content: '✓'; color: var(--green); font-weight: 700; flex-shrink: 0; }
+
+/* Comparison Table */
+.comparison-table {
+ width: 100%; border-collapse: collapse; margin: 32px 0;
+ background: var(--card); border-radius: var(--radius); overflow: hidden;
+ border: 1px solid var(--border);
+}
+.comparison-table th, .comparison-table td {
+ padding: 16px 24px; text-align: left; font-size: 14px;
+ border-bottom: 1px solid var(--border);
+}
+.comparison-table th {
+ background: rgba(59,130,246,.05); color: var(--text); font-weight: 600;
+}
+.comparison-table td { color: var(--text-secondary); }
+.comparison-table tr:last-child td { border-bottom: none; }
+.val-good { color: var(--green) !important; font-weight: 600; }
+.val-warn { color: var(--orange) !important; font-weight: 600; }
+.val-bad { color: var(--red) !important; font-weight: 600; }
+
+/* Middleware chain */
+.middleware-chain {
+ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px;
+}
+.middleware-chip {
+ padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 500;
+ background: rgba(59,130,246,.08); border: 1px solid rgba(59,130,246,.15);
+ color: var(--blue);
+}
+
+/* Stats grid */
+.stats-grid {
+ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+ gap: 24px; margin: 40px 0;
+}
+.stat-card {
+ background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+ padding: 28px; text-align: center;
+}
+.stat-number {
+ font-size: 2.5rem; font-weight: 800; line-height: 1;
+ margin-bottom: 8px;
+}
+.stat-label { font-size: 14px; color: var(--text-secondary); }
+
+/* Fade animation */
+.fade-in { opacity: 0; transform: translateY(20px); transition: opacity .6s, transform .6s; }
+.fade-in.visible { opacity: 1; transform: translateY(0); }
+
+/* Footer */
+.footer {
+ padding: 48px 0; border-top: 1px solid var(--border);
+ text-align: center; color: var(--text-dim); font-size: 14px;
+}
+
+@media (max-width: 768px) {
+ .comparison-table { font-size: 12px; }
+ .comparison-table th, .comparison-table td { padding: 10px 12px; }
+ .stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<nav class="nav" id="nav">
+  <div class="container">
+    <a href="index.html" class="nav-logo">
+      <div class="nav-logo-icon">N</div>
+      Nexus
+    </a>
+    <ul class="nav-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="how-it-works.html">How It Works</a></li>
+      <li><a href="docs.html">Docs</a></li>
+      <li><a href="playground.html">Playground</a></li>
+      <li><a href="pricing.html">Pricing</a></li>
+      <li><a href="security.html" class="active">Security</a></li>
+      <li><a href="https://github.com" target="_blank" rel="noopener">GitHub</a></li>
+      <li><a href="signup.html" class="nav-cta">Get Started Free</a></li>
+    </ul>
+    <button class="mobile-toggle" onclick="toggleMobile()">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</nav>
+<div class="mobile-menu" id="mobile-menu">
+  <a href="index.html" onclick="closeMobile()">Home</a>
+  <a href="how-it-works.html" onclick="closeMobile()">How It Works</a>
+  <a href="docs.html" onclick="closeMobile()">Docs</a>
+  <a href="playground.html" onclick="closeMobile()">Playground</a>
+  <a href="pricing.html" onclick="closeMobile()">Pricing</a>
+  <a href="security.html" onclick="closeMobile()">Security</a>
+  <a href="https://github.com" target="_blank" rel="noopener">GitHub</a>
+  <a href="signup.html" class="nav-cta" style="text-align:center;display:block;margin-top:16px;" onclick="closeMobile()">Get Started Free</a>
+</div>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-badge">🛡️ Security-First Architecture</div>
+    <h1>One Dependency.<br><span class="gradient-text">Zero Attack Surface.</span></h1>
+    <p>While other AI gateways ship hundreds of transitive dependencies and suffer supply chain breaches, Nexus compiles to a single Go binary with one dependency. Your AI infrastructure deserves better than <code>pip install</code>.</p>
+  </div>
+</section>
+
+<!-- Stats -->
+<section class="section">
+  <div class="container">
+    <div class="stats-grid fade-in">
+      <div class="stat-card">
+        <div class="stat-number gradient-text">1</div>
+        <div class="stat-label">External Dependency</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number gradient-text">15+</div>
+        <div class="stat-label">Security Middleware Layers</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number gradient-text">103+</div>
+        <div class="stat-label">Vulnerabilities Found &amp; Fixed</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number gradient-text">0</div>
+        <div class="stat-label">Runtime Dependencies</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Supply Chain Security -->
+<section class="section" id="supply-chain">
+  <div class="container">
+    <h2 class="section-title fade-in">🔗 Supply Chain Security</h2>
+    <p class="section-sub fade-in">The best vulnerability is the one that can't exist. Nexus eliminates entire categories of supply chain attacks by design.</p>
+
+    <div class="card-grid fade-in">
+      <div class="card">
+        <div class="card-icon" style="background: rgba(34,197,94,.1);">📦</div>
+        <h3>Single Dependency</h3>
+        <p>Nexus depends only on <code>gopkg.in/yaml.v3</code> beyond Go's standard library. That's it. No transitive dependency trees, no hidden attack vectors.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background: rgba(59,130,246,.1);">⚙️</div>
+        <h3>Compiled Binary</h3>
+        <p>Go compiles to a static binary. No runtime dependency resolution, no dynamic imports, no <code>pip install</code> or <code>npm install</code> at deploy time.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon" style="background: rgba(139,92,246,.1);">🔒</div>
+        <h3>No Supply Chain Attack Vector</h3>
+        <p>With no package manager running in production, there's no mechanism for dependency confusion, typosquatting, or malicious package injection.</p>
+      </div>
+    </div>
+
+    <h3 style="margin-top: 48px; margin-bottom: 8px; font-weight: 600;" class="fade-in">Dependency Comparison</h3>
+    <div class="fade-in" style="overflow-x: auto;">
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>Nexus</th>
+            <th>LiteLLM</th>
+            <th>Portkey</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Language</td>
+            <td class="val-good">Go (compiled)</td>
+            <td class="val-warn">Python (interpreted)</td>
+            <td class="val-warn">TypeScript (interpreted)</td>
+          </tr>
+          <tr>
+            <td>Direct Dependencies</td>
+            <td class="val-good">1</td>
+            <td class="val-bad">50+</td>
+            <td class="val-bad">80+</td>
+          </tr>
+          <tr>
+            <td>Transitive Dependencies</td>
+            <td class="val-good">0</td>
+            <td class="val-bad">200+</td>
+            <td class="val-bad">300+</td>
+          </tr>
+          <tr>
+            <td>Runtime Package Manager</td>
+            <td class="val-good">None</td>
+            <td class="val-bad">pip</td>
+            <td class="val-bad">npm</td>
+          </tr>
+          <tr>
+            <td>Supply Chain Breach History</td>
+            <td class="val-good">None</td>
+            <td class="val-bad">March 2026</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Deploy Artifact</td>
+            <td class="val-good">Static binary</td>
+            <td>Container + venv</td>
+            <td>Container + node_modules</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- Runtime Security -->
+<section class="section" id="runtime">
+  <div class="container">
+    <h2 class="section-title fade-in">🛡️ Runtime Security</h2>
+    <p class="section-sub fade-in">Every request passes through 15+ security middleware layers before reaching your AI providers. Defense in depth, not defense by hope.</p>
+
+    <div class="fade-in">
+      <h3 style="margin-bottom: 16px; font-weight: 600;">Security Middleware Chain</h3>
+      <div class="middleware-chain">
+        <span class="middleware-chip">Panic Recovery</span>
+        <span class="middleware-chip">Body Size Limit</span>
+        <span class="middleware-chip">Request Timeout</span>
+        <span class="middleware-chip">Security Headers</span>
+        <span class="middleware-chip">Request ID</span>
+        <span class="middleware-chip">Request Logger</span>
+        <span class="middleware-chip">CORS</span>
+        <span class="middleware-chip">IP Allowlist</span>
+        <span class="middleware-chip">Rate Limiting</span>
+        <span class="middleware-chip">OIDC SSO</span>
+        <span class="middleware-chip">Input Validation</span>
+        <span class="middleware-chip">Prompt Injection Guard</span>
+        <span class="middleware-chip">TLS/mTLS</span>
+        <span class="middleware-chip">RBAC</span>
+        <span class="middleware-chip">Audit Logging</span>
+      </div>
+    </div>
+
+    <div class="card-grid fade-in" style="margin-top: 40px;">
+      <div class="card">
+        <h3>Prompt Injection Guard</h3>
+        <p>16 attack patterns detected and blocked in real time, including jailbreak attempts, system prompt extraction, and role-play exploits.</p>
+      </div>
+      <div class="card">
+        <h3>RBAC &amp; OIDC SSO</h3>
+        <p>Role-based access control with wildcard permissions. Integrate with any OIDC-compliant identity provider for single sign-on.</p>
+      </div>
+      <div class="card">
+        <h3>Rate Limiting &amp; IP Allowlisting</h3>
+        <p>Configurable per-key and per-IP rate limits with sliding window counters. IP allowlisting for trusted networks.</p>
+      </div>
+      <div class="card">
+        <h3>mTLS Support</h3>
+        <p>Mutual TLS for service-to-service authentication. Both client and server certificates verified for zero-trust networking.</p>
+      </div>
+      <div class="card">
+        <h3>Error Sanitization</h3>
+        <p>No stack traces, internal paths, or sensitive data ever leak to clients. All errors are sanitized and categorized before returning.</p>
+      </div>
+      <div class="card">
+        <h3>Audit Logging</h3>
+        <p>Every request, routing decision, and security event is logged with structured data for compliance and forensics.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Data Security -->
+<section class="section" id="data">
+  <div class="container">
+    <h2 class="section-title fade-in">🔐 Data Security</h2>
+    <p class="section-sub fade-in">Your prompts, responses, and API keys stay where they belong — in your infrastructure, under your control.</p>
+
+    <div class="card-grid fade-in">
+      <div class="card">
+        <h3>Self-Hosted</h3>
+        <p>Nexus runs entirely in your infrastructure. Your data never passes through third-party proxy servers or analytics pipelines.</p>
+        <ul>
+          <li>Deploy on-premises, in your VPC, or air-gapped</li>
+          <li>No external data sharing or aggregation</li>
+          <li>Full control over data residency</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>No Telemetry</h3>
+        <p>Zero telemetry phoning home. No usage analytics, no crash reporters, no beacons. The binary does exactly what you configure and nothing more.</p>
+        <ul>
+          <li>No outbound connections except to your configured providers</li>
+          <li>No hidden analytics endpoints</li>
+          <li>Verifiable — source code is auditable under BSL 1.1</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Cryptographic Protections</h3>
+        <p>API keys are hashed with SHA-256 and compared in constant time to prevent timing attacks. Webhooks verified with HMAC signatures.</p>
+        <ul>
+          <li>SHA-256 key hashing with constant-time comparison</li>
+          <li>Webhook HMAC verification (Stripe, custom)</li>
+          <li>TLS 1.2+ for all provider connections</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Compliance -->
+<section class="section" id="compliance">
+  <div class="container">
+    <h2 class="section-title fade-in">📋 Compliance Ready</h2>
+    <p class="section-sub fade-in">Built with regulatory compliance in mind from day one, not bolted on as an afterthought.</p>
+
+    <div class="card-grid fade-in">
+      <div class="card">
+        <h3>SOC 2 Compatible</h3>
+        <p>Architecture designed for SOC 2 compliance with comprehensive audit logging, access controls, and data protection controls.</p>
+      </div>
+      <div class="card">
+        <h3>EU AI Act Compliance</h3>
+        <p>Intelligent routing can direct sensitive data to local models, keeping regulated workloads within jurisdictional boundaries.</p>
+      </div>
+      <div class="card">
+        <h3>GDPR Friendly</h3>
+        <p>No external data sharing, full data residency control, and configurable data retention policies. Your data governance, your rules.</p>
+      </div>
+      <div class="card">
+        <h3>Auditable Source Code</h3>
+        <p>Licensed under BSL 1.1 — full source code access for security audits, penetration testing, and compliance verification.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Audit Trail -->
+<section class="section" id="audit">
+  <div class="container">
+    <h2 class="section-title fade-in">🔍 Audit Trail</h2>
+    <p class="section-sub fade-in">Security isn't a feature, it's a process. Nexus undergoes continuous security review across all packages.</p>
+
+    <div class="stats-grid fade-in">
+      <div class="stat-card">
+        <div class="stat-number" style="color: var(--green);">11</div>
+        <div class="stat-label">Independent Security Audits</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" style="color: var(--green);">103+</div>
+        <div class="stat-label">Vulnerabilities Found &amp; Fixed</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" style="color: var(--green);">19</div>
+        <div class="stat-label">Packages Race-Detector Clean</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" style="color: var(--green);">0</div>
+        <div class="stat-label">Known Open Vulnerabilities</div>
+      </div>
+    </div>
+
+    <div class="card fade-in" style="margin-top: 24px;">
+      <h3>Public Audit Reports</h3>
+      <p style="margin-top: 8px;">All security audit reports are available in <code>docs/audit/</code> for transparency. Each audit covers a different aspect of the system — from cryptographic implementations to concurrency safety to prompt injection resistance.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer class="footer">
+  <div class="container">
+    <p>&copy; 2025 Nexus Gateway. Built with security as a first principle, not an afterthought.</p>
+  </div>
+</footer>
+
+<script>
+// Nav scroll
+window.addEventListener('scroll', () => {
+  document.getElementById('nav').classList.toggle('scrolled', window.scrollY > 20);
+});
+
+// Mobile menu
+function toggleMobile() {
+  document.getElementById('mobile-menu').classList.toggle('open');
+}
+function closeMobile() {
+  document.getElementById('mobile-menu').classList.remove('open');
+}
+
+// Fade-in on scroll
+const obs = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: 0.1 });
+document.querySelectorAll('.fade-in').forEach(el => obs.observe(el));
+</script>
+</body>
+</html>

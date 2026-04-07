@@ -211,7 +211,7 @@ func (s *Server) handleInspect(w http.ResponseWriter, r *http.Request) {
 	selection := s.router.Route(req.Prompt, req.Role, 0.0, 1.0, len(req.Prompt))
 
 	wouldCascade := false
-	if s.cfg.Cascade.Enabled && s.cascade != nil {
+	if s.cfg.Cascade.IsEnabled() && s.cascade != nil {
 		wouldCascade = s.cascade.ShouldCascade(selection.Score, selection.Tier)
 	}
 
@@ -233,7 +233,7 @@ func (s *Server) handleInspect(w http.ResponseWriter, r *http.Request) {
 		"estimated_cost":     estimatedCost,
 		"cache_enabled":      s.cfg.Cache.Enabled,
 		"compression_enabled": s.cfg.Compression.Enabled,
-		"cascade_enabled":    s.cfg.Cascade.Enabled,
+		"cascade_enabled":    s.cfg.Cascade.IsEnabled(),
 	})
 }
 

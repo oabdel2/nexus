@@ -170,7 +170,7 @@ func newTestServer(t *testing.T, opts ...testOption) (http.Handler, *mockProvide
 	cfg.Security.IPAllowlist.Enabled = false
 	cfg.Security.RequestLogging = false
 	cfg.Compression.Enabled = false
-	cfg.Cascade.Enabled = false
+	cfg.Cascade.Enabled = config.BoolPtr(false)
 	cfg.Eval.Enabled = false
 	cfg.Billing.Enabled = false
 	cfg.Tracing.Enabled = false
@@ -2280,7 +2280,7 @@ func newTestServerWithBilling(t *testing.T, opts ...testOption) (http.Handler, *
 	cfg.Security.AuditLog = false
 	cfg.Security.PanicRecovery = false
 	cfg.Compression.Enabled = false
-	cfg.Cascade.Enabled = false
+	cfg.Cascade.Enabled = config.BoolPtr(false)
 	cfg.Eval.Enabled = false
 	cfg.Billing.Enabled = true
 	cfg.Billing.DataDir = t.TempDir()

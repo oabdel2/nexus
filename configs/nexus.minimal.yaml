@@ -20,6 +20,10 @@ cache:
   enabled: true
   l1_enabled: true
 
+cascade:
+  enabled: true
+  confidence_threshold: 0.78
+
 telemetry:
   log_level: info
   log_format: text

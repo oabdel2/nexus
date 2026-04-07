@@ -259,7 +259,7 @@ cfg.Cache.Enabled = enableCache
 cfg.Cache.L1Enabled = enableCache
 cfg.Cache.L1.Enabled = enableCache
 cfg.Compression.Enabled = enableCompression
-cfg.Cascade.Enabled = enableCascade
+cfg.Cascade.Enabled = config.BoolPtr(enableCascade)
 
 cfg.Providers = nil
 if enableOllama {
@@ -551,7 +551,7 @@ if selection.Provider != "" {
 fmt.Printf("  Provider:     %s -> %s\n", selection.Provider, selection.Model)
 }
 
-if cfg.Cascade.Enabled {
+if cfg.Cascade.IsEnabled() {
 threshold := cfg.Cascade.ConfidenceThreshold
 wouldCascade := selection.Score.FinalScore < threshold &&
 selection.Tier != "economy" && selection.Tier != "cheap"
@@ -770,7 +770,7 @@ fmt.Printf("  Compression ......... \u274c disabled\n")
 }
 
 // Cascade routing
-if cfg.Cascade.Enabled {
+if cfg.Cascade.IsEnabled() {
 fmt.Printf("  Cascade routing ..... \u2705 enabled (threshold=%.2f)\n", cfg.Cascade.ConfidenceThreshold)
 } else {
 fmt.Printf("  Cascade routing ..... \u274c disabled\n")
