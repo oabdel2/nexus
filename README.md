@@ -13,7 +13,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.23+-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![License: BSL 1.1](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](LICENSE)
 [![CI](https://github.com/oabdel2/nexus/actions/workflows/ci.yml/badge.svg)](https://github.com/oabdel2/nexus/actions)
-[![Tests](https://img.shields.io/badge/tests-900%2B%20tests-brightgreen)](tests/)
+[![Tests](https://img.shields.io/badge/tests-923%20passing-brightgreen)](docs/evidence/verified-metrics.md)
 [![Version](https://img.shields.io/badge/version-0.1.0-orange)](https://github.com/oabdel2/nexus/releases)
 [![Zero Deps](https://img.shields.io/badge/deps-only%20yaml.v3-purple)](go.mod)
 
@@ -37,7 +37,7 @@ Nexus is the **first production implementation** of concepts from the [CASTER re
 - ✅ **L3 Semantic** — BGE-M3 embedding similarity with adaptive thresholds
 - Enhancement features: reranker verification, synonym learning, feedback loop, shadow mode
 
-### Security (15+ Security Middleware)
+### Security (17 Security Middleware)
 - ✅ **Panic Recovery** → **Body Size Limit** → **Request Timeout** → **Security Headers**
 - ✅ **Request ID** → **Request Logger** → **CORS** → **IP Allowlist**
 - ✅ **Rate Limiting** → **OIDC SSO** → **Input Validation** → **Prompt Injection Guard** (16 patterns)
