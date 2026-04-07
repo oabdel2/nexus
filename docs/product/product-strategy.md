@@ -20,7 +20,7 @@
 
 ## 1. Executive Summary
 
-Nexus is an **open-source, agentic-first inference optimization gateway** — a single Go binary with zero dependencies that sits between AI-powered applications and LLM providers. It automatically routes each request to the cheapest model capable of handling the task, caches semantically similar queries across a 7-layer cache, and fails over transparently when providers go down.
+Nexus is an **open-source, agentic-first inference optimization gateway** — a single Go binary with zero dependencies that sits between AI-powered applications and LLM providers. It automatically routes each request to the cheapest model capable of handling the task, caches semantically similar queries across a 3-layer semantic cache, and fails over transparently when providers go down.
 
 ### Why Now
 
@@ -35,7 +35,7 @@ Nexus is an **open-source, agentic-first inference optimization gateway** — a 
 ### Nexus Positioning Statement
 
 > **For engineering teams building AI-powered products** who need to control LLM costs without sacrificing quality,  
-> **Nexus is an open-source inference gateway** that delivers 40–85% cost savings through intelligent routing, 7-layer semantic caching, and automatic failover —  
+> **Nexus is an open-source inference gateway** that delivers up to 50% cost savings through intelligent routing, 3-layer semantic caching, and automatic failover —  
 > **Unlike** LiteLLM (Python, memory leaks at scale, supply chain breach), Portkey (SaaS lock-in, $49/mo+ per-log pricing), or OpenRouter (SaaS-only, no self-hosting),  
 > **Nexus** is a single Go binary you own and run — zero dependencies, zero vendor lock-in, production-grade from day one.
 
@@ -85,7 +85,7 @@ Nexus is an **open-source, agentic-first inference optimization gateway** — a 
 | **Funding** | Bootstrapped / Open-source | $18M (Series A, Feb 2026) | $1.6M seed (2023) | $500K (YC-backed) | $9M–$23M (seed rounds) | $40M (Seed + Series A) | $7.3M seed (2025) |
 | **Est. Valuation** | — | $60M–$100M+ | Private | Early stage | Private | ~$500M (talks at $1.3B) | Early stage |
 | **Intelligent Routing** | ✅ Complexity scoring + cascade | ✅ Rule-based | ✅ Basic fallback | ❌ | ✅ Model router (core feature) | ✅ Cost/speed routing | ✅ Experiment-based |
-| **Semantic Cache** | ✅ 7-layer with synonym learning | ✅ Simple | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Semantic Cache** | ✅ 3-layer with synonym learning | ✅ Simple | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **Circuit Breaker** | ✅ Auto-failover | ✅ Fallback chains | ✅ Basic retry | ❌ | ✅ | ✅ Provider rotation | ❌ |
 | **Budget Controls** | ✅ Per-workflow/team | ✅ Per-org | ✅ Per-key | ✅ Alerts | ❌ | ✅ Credits | ❌ |
 | **Security** | ✅ TLS/mTLS, OIDC, RBAC, prompt guard | ✅ SOC2, RBAC | ✅ JWT, SSO (enterprise) | ✅ SOC2, HIPAA (team+) | ❌ Limited | ✅ SSO (enterprise) | ❌ Limited |
@@ -115,7 +115,7 @@ Nexus is an **open-source, agentic-first inference optimization gateway** — a 
 
 **Weaknesses Nexus Can Exploit:**
 - **Per-log pricing creates cost anxiety at scale.** At 10M logs/month, Portkey costs ~$900/mo just for observability — before any model costs. Nexus includes logging for free.
-- **No advanced caching.** Only simple semantic caching. No 7-layer cache, no synonym learning, no compression.
+- **No advanced caching.** Only simple semantic caching. No 3-layer semantic cache, no synonym learning, no compression.
 - **Python/Node stack.** Cannot match Go's single-binary deployment simplicity, memory efficiency, or concurrency performance.
 - **SaaS-first mindset.** Self-hosted is enterprise-only, custom pricing. Nexus is self-hosted from day one.
 - **No built-in billing.** Teams building AI-as-a-service must bolt on a separate billing layer.
@@ -175,7 +175,7 @@ Nexus is an **open-source, agentic-first inference optimization gateway** — a 
 - **Early stage funding ($500K) limits R&D velocity.** Nexus's feature set is already broader.
 
 **Competitive Messaging:**
-> "Helicone tells you how much you spent. Nexus makes sure you spend 40–85% less in the first place."
+> "Helicone tells you how much you spent. Nexus makes sure you spend up to 50% less in the first place."
 
 ---
 
@@ -198,7 +198,7 @@ Nexus is an **open-source, agentic-first inference optimization gateway** — a 
 - **No open source.** Proprietary SaaS; no self-hosting option.
 - **No budget controls per team/workflow.** Enterprise spend governance is limited.
 - **Opaque pricing.** No public pricing page — friction for developer adoption.
-- **No prompt compression.** Routing alone can save 30–50%; routing + caching + compression (Nexus) saves 40–85%.
+- **No prompt compression.** Routing alone can save 30–50%; routing + caching + compression (Nexus) saves up to 50%.
 
 **Competitive Messaging:**
 > "Martian picks the right model. Nexus picks the right model, caches the answer, compresses the prompt, and controls the budget — all in one binary you own."
@@ -230,7 +230,7 @@ Nexus is an **open-source, agentic-first inference optimization gateway** — a 
 - **Vendor risk.** All traffic flows through OpenRouter's infrastructure — single point of failure for your entire AI stack.
 
 **Competitive Messaging:**
-> "OpenRouter takes 5% of every dollar you spend on AI. Nexus saves you 40–85% and you keep 100%."
+> "OpenRouter takes 5% of every dollar you spend on AI. Nexus saves you up to 50% and you keep 100%."
 
 ---
 
@@ -297,7 +297,7 @@ Nexus is an **open-source, agentic-first inference optimization gateway** — a 
 | Advantage | Why It Matters | Competitor Gap |
 |-----------|---------------|----------------|
 | **Single Go binary, zero deps** | `curl -O && ./nexus` — no Docker, no Python, no Postgres, no NPM | LiteLLM needs Python+Docker; TensorZero needs Postgres; Portkey is SaaS |
-| **7-layer semantic cache with synonym learning** | Cache hit rates of 60–70% in production; 40–70% cost savings from caching alone | No competitor has multi-layer semantic cache |
+| **3-layer semantic cache with synonym learning** | Cache hit rates of 60–70% in production; up to 50% cost savings from caching alone | No competitor has multi-layer semantic cache |
 | **Cascade routing (coming)** | Try cheap model first → escalate only if quality threshold not met | Martian routes but doesn't cascade; others don't route intelligently |
 | **Prompt compression (coming)** | Reduce tokens 30–50% before they hit the LLM | No competitor offers this |
 | **Built-in subscription billing** | Stripe integration, API keys, device tracking — ship an AI product without building billing | Zero competitors include this |
@@ -313,7 +313,7 @@ Nexus is an **open-source, agentic-first inference optimization gateway** — a 
 ```
 ┌─────────────────────────────────────────────────────┐
 │  TIER 1 — PRIMARY VALUE                             │
-│  💰 Cost Savings (40–85%)                           │
+│  💰 Cost Savings (up to 50%)                           │
 │  Cascade routing + semantic caching + compression   │
 │  "Cut your LLM bill by half on day one."            │
 ├─────────────────────────────────────────────────────┤
@@ -333,7 +333,7 @@ Nexus is an **open-source, agentic-first inference optimization gateway** — a 
 
 | Persona | Pain Point | Nexus Solution | Proof Point |
 |---------|-----------|----------------|-------------|
-| **CTO / VP Engineering** | "Our LLM costs are growing 30%+ MoM and I can't forecast the budget" | Workflow-aware budget controls with per-team caps; cascade routing slashes costs 40–85% | Industry data: enterprises overspend 50–90% on LLMs (LeanLM). Semantic caching alone delivers 20–70% savings (GPT Semantic Cache, arxiv 2411.05276) |
+| **CTO / VP Engineering** | "Our LLM costs are growing 30%+ MoM and I can't forecast the budget" | Workflow-aware budget controls with per-team caps; cascade routing slashes costs up to 50% | Industry data: enterprises overspend 50–90% on LLMs (LeanLM). Semantic caching alone delivers 20–70% savings (GPT Semantic Cache, arxiv 2411.05276) |
 | **ML / AI Lead** | "We're locked into GPT-4 for everything, even tasks a cheaper model could handle" | Complexity scoring automatically routes simple tasks to cheap models; eval pipeline proves no quality loss | Research shows 60–80% of LLM spend comes from 20–30% of use cases. Cascade try-cheap-first reduces cost without quality regression |
 | **DevOps / Platform Engineer** | "LiteLLM crashes every 6 hours with OOM. Our AI gateway is our weakest link" | Single Go binary; zero memory leaks; sub-millisecond overhead; no Python GIL | LiteLLM documented OOM at >20K calls/day (GitHub #12685). Go handles 3000+ RPS vs LiteLLM's 300 RPS ceiling |
 | **Security / Compliance Lead** | "Our AI traffic goes through third-party SaaS — we can't pass our SOC2 audit" | Self-hosted; TLS/mTLS; OIDC SSO; RBAC; prompt injection guard; no data leaves your infra | LiteLLM supply chain attack (March 2026) stole credentials from all deployments. Nexus: compiled binary, no PyPI/npm |
@@ -343,10 +343,10 @@ Nexus is an **open-source, agentic-first inference optimization gateway** — a 
 ### 4.3 Elevator Pitches (by Audience)
 
 **For CTOs (30 seconds):**
-> "Nexus is an open-source gateway that sits between your apps and LLM providers. It automatically routes each request to the cheapest model that can handle it, caches similar queries, and fails over when providers go down. Teams using similar technology report 40–85% cost reduction. It's a single Go binary — deploy it in 5 minutes, no vendor lock-in."
+> "Nexus is an open-source gateway that sits between your apps and LLM providers. It automatically routes each request to the cheapest model that can handle it, caches similar queries, and fails over when providers go down. Teams using similar technology report up to 50% cost reduction. It's a single Go binary — deploy it in 5 minutes, no vendor lock-in."
 
 **For Developers (15 seconds):**
-> "Drop-in LLM proxy. One binary, zero deps. Automatic routing to cheapest model, 7-layer semantic cache, circuit breaker failover. Open source. `docker run nexus` and your LLM bill drops by half."
+> "Drop-in LLM proxy. One binary, zero deps. Automatic routing to cheapest model, 3-layer semantic cache, circuit breaker failover. Open source. `docker run nexus` and your LLM bill drops by half."
 
 **For Security Teams (20 seconds):**
 > "Self-hosted Go binary — no Python, no PyPI supply chain risk, no SaaS data leakage. TLS/mTLS, OIDC SSO, RBAC, prompt injection detection built in. Your AI traffic never leaves your infrastructure."
@@ -628,7 +628,7 @@ Priority: ICP 1 (volume) → ICP 2 (expansion) → ICP 4 (multiplier) → ICP 3 
 
 ### 7.1 One-Pager (Executive Summary for CTO)
 
-**Title:** "Nexus — Cut Your LLM Costs 40–85% Without Changing Your Code"
+**Title:** "Nexus — Cut Your LLM Costs Up to 50% Without Changing Your Code"
 
 **Structure (single page):**
 
@@ -648,13 +648,13 @@ Priority: ICP 1 (volume) → ICP 2 (expansion) → ICP 4 (multiplier) → ICP 3 
 │  THE SOLUTION                                           │
 │  Single Go binary. Zero dependencies. 5-min deploy.     │
 │  • Intelligent Routing — cheapest model per task        │
-│  • 7-Layer Semantic Cache — 40-70% fewer API calls      │
+│  • 3-Layer Semantic Cache — up to 50% fewer API calls      │
 │  • Circuit Breaker — auto-failover across providers     │
 │  • Budget Controls — per-team, per-workflow limits      │
 │  • Full Security — TLS/mTLS, OIDC, RBAC, prompt guard  │
 │                                                         │
 │  BY THE NUMBERS                                         │
-│  40-85% cost reduction | <1ms overhead | 5-min deploy   │
+│  Up to 50% cost reduction | <1ms overhead | 5-min deploy   │
 │                                                         │
 │  COMING SOON                                            │
 │  Cascade routing | Eval pipeline | Prompt compression   │
@@ -683,7 +683,7 @@ Priority: ICP 1 (volume) → ICP 2 (expansion) → ICP 4 (multiplier) → ICP 3 
    - Overhead: <1ms per request (vs LiteLLM's 5–15ms Python overhead)
    - Concurrency: Go goroutines handle 3000+ RPS (vs LiteLLM ceiling of ~300 RPS)
    - Memory: Stable footprint — no GIL, no garbage collector pauses, no memory leaks
-   - Cache: 7-layer semantic cache with synonym learning → 60–70% hit rates in production
+   - Cache: 3-layer semantic cache with synonym learning → 60–70% hit rates in production
 
 3. **Security Architecture**
    - Transport: TLS 1.3 / mTLS for service-to-service
@@ -804,7 +804,7 @@ Annual ROI = (Monthly Savings × 12) / (Nexus Annual Cost) × 100%
 #### Cost & Value
 
 **Q: "We're already using LiteLLM and it's free. Why switch?"**
-> LiteLLM's open-source tier is free, but the hidden costs are real: memory leaks require container restarts every 6–8 hours at scale. It breaks at ~300 RPS. And in March 2026, a supply chain attack on LiteLLM's PyPI packages stole credentials from every affected deployment. Nexus is a compiled Go binary — no Python runtime, no PyPI dependencies, no memory leaks. Plus, Nexus includes semantic caching and intelligent routing that LiteLLM doesn't offer, saving you 40–85% on LLM costs.
+> LiteLLM's open-source tier is free, but the hidden costs are real: memory leaks require container restarts every 6–8 hours at scale. It breaks at ~300 RPS. And in March 2026, a supply chain attack on LiteLLM's PyPI packages stole credentials from every affected deployment. Nexus is a compiled Go binary — no Python runtime, no PyPI dependencies, no memory leaks. Plus, Nexus includes semantic caching and intelligent routing that LiteLLM doesn't offer, saving you up to 50% on LLM costs.
 
 **Q: "We can build this in-house."**
 > You absolutely can — and many teams start that way. But building production-grade semantic caching, complexity-based routing, circuit breakers, OIDC SSO, RBAC, and a subscription billing system takes 6–12 months of senior engineering time (~$300K–$600K). Nexus is open source, deploys in 5 minutes, and costs $0–$99/mo. Even our Enterprise tier costs less than one month of engineering salary.
@@ -818,7 +818,7 @@ Annual ROI = (Monthly Savings × 12) / (Nexus Annual Cost) × 100%
 > First: Nexus is designed for high availability. Run multiple instances behind a load balancer. Second: if Nexus is somehow unavailable, configure your clients to fall back directly to provider APIs. Unlike SaaS gateways, you control the infrastructure and the fallback behavior.
 
 **Q: "Does the semantic cache return stale or incorrect results?"**
-> The 7-layer cache uses embedding similarity with configurable thresholds. You control the similarity threshold — set it tight (0.98) for high-precision use cases, or looser (0.90) for conversational applications. Cache entries have TTLs, and the synonym learning layer improves accuracy over time. The eval pipeline (coming soon) will let you prove cache quality with automated testing.
+> The 3-layer semantic cache uses embedding similarity with configurable thresholds. You control the similarity threshold — set it tight (0.98) for high-precision use cases, or looser (0.90) for conversational applications. Cache entries have TTLs, and the synonym learning layer improves accuracy over time. The eval pipeline (coming soon) will let you prove cache quality with automated testing.
 
 **Q: "Can Nexus handle our scale? We do 50M+ requests/month."**
 > Nexus is written in Go, which handles concurrency natively via goroutines. A single instance handles 3000+ RPS. At 50M req/month (~19 RPS average, ~200 RPS peak), a single Nexus instance is more than sufficient. For higher loads, scale horizontally — Nexus is stateless (cache is shared via your chosen backend).
@@ -872,7 +872,7 @@ Annual ROI = (Monthly Savings × 12) / (Nexus Annual Cost) × 100%
 | 45% of orgs spend >$100K/mo on AI | CloudZero | 2025 |
 | Cost optimization yields 30–60% savings | FutureAGI / AICosts.ai | 2025 |
 | Semantic cache hit rates 61–69% | GPT Semantic Cache (arxiv 2411.05276) | 2024 |
-| Cache delivers 40–70% cost reduction | ByAITeam / Costbase.ai | 2025 |
+| Cache delivers up to 50% cost reduction | ByAITeam / Costbase.ai | 2025 |
 | LiteLLM OOM at >20K calls/day | GitHub Issue #12685 | 2025 |
 | LiteLLM breaks at 300 RPS | Dev.to (Deb McKinney) | 2025 |
 | LiteLLM supply chain breach | Trend Micro / Palo Alto Unit 42 | March 2026 |

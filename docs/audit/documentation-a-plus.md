@@ -188,7 +188,7 @@ Every documentation file was read in full. Every claim was cross-referenced agai
 **File**: `site/docs.html` (Caching section)  
 **What's wrong**: Documents 7 cache layers including L3 Cluster, L4 Stale-While-Revalidate, L5 Predictive Prefetch, L6 Compressed  
 **Actual**: `config.go` only has `L1CacheConfig`, `L2BM25Config`, `L2SemanticConfig`, `FeedbackConfig`, `ShadowConfig`, `SynonymConfig`. L3-L6 are aspirational.  
-**Note**: README describes "7 Layers" of caching — this counts L1, L2 BM25, L2 Semantic, Reranker, Synonym Learning, Feedback Loop, Shadow Mode. The docs page uses a different layer numbering.  
+**Note**: README now correctly describes "3-Layer Cache with Semantic Learning" — L1 exact, L2 BM25, L3 semantic are the core cache layers, with reranker, synonym learning, feedback loop, and shadow mode as enhancement features.  
 **Fix**: Updated to match actual implemented layers.  
 **Status**: ✅ Fixed
 

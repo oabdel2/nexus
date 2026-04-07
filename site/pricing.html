@@ -297,7 +297,7 @@ section { padding: 0 0 100px; }
         <ul class="pricing-features">
           <li>50,000 requests/month</li>
           <li>Full cascade routing</li>
-          <li>7-layer cache (all layers)</li>
+          <li>3-layer semantic cache (all layers)</li>
           <li>Prompt compression (4 strategies)</li>
           <li>Cost savings dashboard</li>
           <li>Confidence scoring (6 signals)</li>
@@ -425,7 +425,7 @@ section { padding: 0 0 100px; }
     <div class="faq-grid">
       <div class="faq-item fade-in">
         <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">What counts as a request?</div>
-        <div class="faq-a"><p>A request is any API call to the Nexus gateway &mdash; including chat completions, embeddings, and any proxied call. Cached responses that are served from Nexus&rsquo;s 7-layer cache still count as requests, but they don&rsquo;t incur any upstream model cost.</p></div>
+        <div class="faq-a"><p>A request is any API call to the Nexus gateway &mdash; including chat completions, embeddings, and any proxied call. Cached responses that are served from Nexus&rsquo;s 3-layer semantic cache still count as requests, but they don&rsquo;t incur any upstream model cost.</p></div>
       </div>
       <div class="faq-item fade-in">
         <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">Can I self-host Nexus?</div>
@@ -437,7 +437,7 @@ section { padding: 0 0 100px; }
       </div>
       <div class="faq-item fade-in">
         <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">How does cascade routing work?</div>
-        <div class="faq-a"><p>Cascade routing tries the cheapest suitable model first. If the confidence score (measured by 6 heuristics including hedging, completeness, and structure) falls below the 0.78 threshold, the request is automatically escalated to the next tier. This saves 40-70% on routable traffic.</p></div>
+        <div class="faq-a"><p>Cascade routing tries the cheapest suitable model first. If the confidence score (measured by 6 heuristics including hedging, completeness, and structure) falls below the 0.78 threshold, the request is automatically escalated to the next tier. This saves up to 50% on routable traffic.</p></div>
       </div>
       <div class="faq-item fade-in">
         <div class="faq-q" onclick="this.parentElement.classList.toggle('open')">What is shadow evaluation?</div>
@@ -470,7 +470,7 @@ section { padding: 0 0 100px; }
 <!-- CTA -->
 <div class="cta-section">
   <div class="container">
-    <h2 class="fade-in">Ready to <span class="gradient-text">Save 40-70%</span>?</h2>
+    <h2 class="fade-in">Ready to <span class="gradient-text">Save Up to 50%</span>?</h2>
     <p class="fade-in">Start with the free tier. No credit card required. Deploy in 60 seconds.</p>
     <div class="cta-btns fade-in">
       <a href="signup.html" class="btn-primary">Start Free &rarr;</a>

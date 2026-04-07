@@ -37,13 +37,13 @@ selection. The project has completed its core engineering phase (14 commits, 66 
 | Layer                  | Status | Details                                          |
 | ---------------------- | ------ | ------------------------------------------------ |
 | Core Gateway           | ✅ Done | Complexity-based routing, 4-tier model selection |
-| Semantic Cache         | ✅ Done | 7-layer cache with synonym learning              |
+| Semantic Cache         | ✅ Done | 3-layer semantic cache with synonym learning              |
 | Resilience             | ✅ Done | Circuit breaker, failover, retry                 |
 | Infrastructure         | ✅ Done | Docker Compose (Qdrant/Redis/Ollama/Prom/Graf)   |
 | Kubernetes             | ✅ Done | Helm chart with 14 templates                     |
 | CI/CD                  | ✅ Done | gosec, govulncheck, Trivy, multi-arch builds     |
 | Billing                | ✅ Done | Subscriptions, API keys, device tracking, Stripe |
-| Security               | ✅ Done | 12 middleware layers, OWASP API Top 10            |
+| Security               | ✅ Done | 15+ security middleware, OWASP API Top 10            |
 | Observability          | ✅ Done | W3C tracing, Prometheus metrics, Grafana          |
 | Website                | ✅ Done | Landing, docs, how-it-works, playground           |
 | Performance            | ✅ Done | Model warmup, connection pooling, streaming       |
@@ -517,7 +517,7 @@ PARALLEL TRACKS:
 | R15 | **Competitive** | Major cloud provider (AWS, GCP, Azure) launches competing gateway service | Possible (2) | Critical (4) | **8** | Open-source is the moat — no vendor lock-in; multi-cloud support; focus on developer experience; community and ecosystem as competitive advantage | Core | Open |
 | R16 | **Competitive** | Open-source fork gains more traction than original project | Unlikely (1) | High (3) | **3** | BSL prevents commercial forks; maintain innovation velocity; be the canonical source; strong community relationships | Core | Open |
 | R17 | **Technical** | Model provider API changes break routing/caching logic | Likely (3) | Medium (2) | **6** | Abstract provider APIs behind interfaces; integration test suite per provider; version-pin API clients; monitor provider changelogs | Core | Open |
-| R18 | **Security** | API key compromise or authentication bypass | Unlikely (1) | Critical (4) | **4** | 12 middleware layers already implemented; rate limiting; key rotation support; audit logging; penetration testing in Phase 0 | Core | Open |
+| R18 | **Security** | API key compromise or authentication bypass | Unlikely (1) | Critical (4) | **4** | 15+ security middleware already implemented; rate limiting; key rotation support; audit logging; penetration testing in Phase 0 | Core | Open |
 | R19 | **Operational** | Data loss in Qdrant/Redis (cache or billing data) | Unlikely (1) | High (3) | **3** | Redis persistence (AOF); Qdrant snapshots; backup strategy in Phase 5; billing data in separate durable store | Core | Open |
 | R20 | **Business** | Pricing model is wrong — too expensive or too cheap | Likely (3) | Medium (2) | **6** | Start with simple tiers; instrument everything; A/B test pricing; talk to every early customer about willingness to pay; adjust quarterly | Core | Open |
 
@@ -958,7 +958,7 @@ Week 1: Monday                    Week 2: Friday
 
 | Competitor | Open Source | Caching | Routing | Compression | Eval | Pricing |
 |------------|-----------|---------|---------|-------------|------|---------|
-| **Nexus** | BSL → Apache | 7-layer semantic | 4-tier complexity | ✅ (planned) | ✅ (planned) | Free + $29/mo |
+| **Nexus** | BSL → Apache | 3-layer semantic | 4-tier complexity | ✅ (planned) | ✅ (planned) | Free + $29/mo |
 | OpenRouter | No | No | Manual | No | No | Usage-based |
 | LiteLLM | Yes (MIT) | Basic | Load-balance | No | No | Self-host / hosted |
 | Portkey | No | Basic | Fallback | No | Basic | $49/mo+ |

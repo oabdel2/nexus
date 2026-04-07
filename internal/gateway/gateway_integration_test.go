@@ -15,8 +15,10 @@ import (
 	"time"
 
 	"github.com/nexus-gateway/nexus/internal/config"
+	"github.com/nexus-gateway/nexus/internal/dashboard"
 	"github.com/nexus-gateway/nexus/internal/provider"
 	"github.com/nexus-gateway/nexus/internal/security"
+	"github.com/nexus-gateway/nexus/internal/workflow"
 )
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -209,10 +211,21 @@ func buildTestHandler(s *Server) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/v1/chat/completions", s.handleChat)
+
+	// Feedback endpoint
+	feedbackHandler := workflow.NewFeedbackHandler(s.tracker, s.logger)
+	mux.Handle("/v1/feedback", feedbackHandler)
+
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/health/live", s.handleLiveness)
 	mux.HandleFunc("/health/ready", s.handleReadiness)
 	mux.HandleFunc("/metrics", s.metrics.Handler())
+
+	// Dashboard
+	mux.Handle("/dashboard", dashboard.Handler())
+	mux.HandleFunc("/dashboard/events", s.Dashboard.ServeSSE)
+	mux.HandleFunc("/dashboard/api/stats", s.Dashboard.ServeStats)
+
 	mux.HandleFunc("/", s.handleInfo)
 	mux.HandleFunc("/api/circuit-breakers", s.handleCircuitBreakers)
 	mux.HandleFunc("/api/compression/stats", s.handleCompressionStats)
@@ -254,6 +267,11 @@ func buildTestHandler(s *Server) http.Handler {
 	// Plugins endpoint
 	if s.pluginRegistry != nil {
 		mux.HandleFunc("/api/plugins", s.handlePlugins)
+	}
+
+	// MCP endpoint
+	if s.mcpServer != nil {
+		mux.HandleFunc("/mcp", s.mcpServer.HandleHTTP)
 	}
 
 	// Build middleware chain exactly as Start() does

@@ -8,7 +8,7 @@
 
 ## Evaluation Summary
 
-Nexus is a genuinely impressive solo-developer project: an agentic-first inference gateway with adaptive model routing, 7-layer caching, 12-layer security middleware, and zero external dependencies beyond `gopkg.in/yaml.v3`. All 20 packages build cleanly, all tests pass (including `-race`), and the CLI (`version`, `validate`, `doctor`, `inspect`) works flawlessly out of the box. The architecture is well-factored with clear separation of concerns. I would **adopt this with reservations** — the code quality is high but production readiness requires addressing the gateway test coverage gap (7.3%) and hardening a few security edges.
+Nexus is a genuinely impressive solo-developer project: an agentic-first inference gateway with adaptive model routing, 3-layer semantic caching, 15+ security middleware, and zero external dependencies beyond `gopkg.in/yaml.v3`. All 20 packages build cleanly, all tests pass (including `-race`), and the CLI (`version`, `validate`, `doctor`, `inspect`) works flawlessly out of the box. The architecture is well-factored with clear separation of concerns. I would **adopt this with reservations** — the code quality is high but production readiness requires addressing the gateway test coverage gap (7.3%) and hardening a few security edges.
 
 ---
 
@@ -20,7 +20,7 @@ Nexus is a genuinely impressive solo-developer project: an agentic-first inferen
 | **Architecture** | A | Clean 18-package structure under `internal/`, no import cycles, sensible dependency flow |
 | **Code Quality** | A- | Consistent naming, proper error handling, functions are focused; minor style inconsistencies in server.go field alignment |
 | **Test Quality** | B+ | 35 test files, 94.8% router coverage, 97.7% auth coverage; but gateway at 7.3% and storage at 32.7% |
-| **Security** | A- | 12-layer middleware chain, prompt injection guard (16 patterns), rate limiting, TLS/mTLS, RBAC; admin endpoints protected; secrets via env vars |
+| **Security** | A- | 15+ middleware chain, prompt injection guard (16 patterns), rate limiting, TLS/mTLS, RBAC; admin endpoints protected; secrets via env vars |
 | **Documentation** | A | Excellent README with 60-second quickstart, CONTRIBUTING.md, SDK docs for 4 languages, config comments, Helm chart |
 | **Dependencies** | A+ | Only `gopkg.in/yaml.v3` — exceptional supply chain discipline |
 | **Performance** | A- | Admission control semaphore, circuit breakers with exponential backoff, shadow eval concurrency limits, token bucket rate limiter |
@@ -37,7 +37,7 @@ Nexus is a genuinely impressive solo-developer project: an agentic-first inferen
 
 3. **The `inspect` command** — Being able to dry-run `nexus inspect "debug this race condition"` and see the complexity breakdown (keywords: 0.67, role: 0.50, tier decision: cheap) gives operators and developers immediate transparency into routing decisions. Excellent for debugging and tuning.
 
-4. **Security middleware depth** — The 12-layer chain (panic recovery → body size limit → request timeout → security headers → request ID → request logger → CORS → IP allowlist → admin guard → rate limiting → OIDC → input validation → prompt guard → audit log → error sanitizer) with defense-in-depth is enterprise-grade. The `ErrorSanitizer` catching stack traces and internal IPs in 5xx responses is a particularly thoughtful touch.
+4. **Security middleware depth** — The 15+ layer chain (panic recovery → body size limit → request timeout → security headers → request ID → request logger → CORS → IP allowlist → admin guard → rate limiting → OIDC → input validation → prompt guard → audit log → error sanitizer) with defense-in-depth is enterprise-grade. The `ErrorSanitizer` catching stack traces and internal IPs in 5xx responses is a particularly thoughtful touch.
 
 5. **Test quality in core packages** — Router tests (94.8% coverage) are thorough with property-based tests, edge cases, and fallback logic. The compress package (94.9%) includes a property-based test verifying output is never longer than input across 100 diverse inputs. Circuit breaker tests include concurrency stress tests with 10,000 operations.
 

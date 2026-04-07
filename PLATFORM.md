@@ -20,7 +20,7 @@ Works immediately with:
 - Custom apps using the OpenAI API format
 
 What you get at Tier 0:
-- Automatic complexity-based routing (saves 40-70%)
+- Automatic complexity-based routing (saves up to 50%)
 - Per-request cost tracking
 - Prometheus metrics
 - Dashboard visibility

@@ -74,9 +74,9 @@
 | Eval scoring | 25µs | 2.5% |
 | Experiment assignment | 0.2µs | 0.02% |
 | Cache lookup (L1 exact) | <1µs | <0.1% |
-| **Total overhead** | **~306µs** | **30.6%** |
+| **Total overhead** | **sub-millisecond** | **~30%** |
 
-**Verdict:** Total gateway overhead is **~306µs** — well within the 1ms target. The remaining 694µs of budget provides ample margin for network I/O, serialization, and middleware processing. LLM inference (100ms–10s) dominates total request latency by 300–30,000x.
+**Verdict:** Total gateway overhead is **sub-millisecond** — well within the 1ms target. Exact measurements depend on configuration and hardware. The remaining budget provides ample margin for network I/O, serialization, and middleware processing. LLM inference (100ms–10s) dominates total request latency by 300–30,000x.
 
 ---
 

@@ -26,11 +26,11 @@
 
 ### Core Value Proposition (1 Sentence)
 
-> **Nexus automatically routes every LLM request to the cheapest model that can handle it, cutting inference costs 40-70% with zero code changes and under 3 microseconds of overhead.**
+> **Nexus automatically routes every LLM request to the cheapest model that can handle it, cutting inference costs up to 50% with zero code changes and under 3 microseconds of overhead.**
 
 ### Elevator Pitch (30 Seconds)
 
-> "Every company using LLMs is overspending — they send simple summarization tasks to GPT-4 when GPT-3.5 would produce identical results. Nexus is an open-source inference gateway that scores each request's complexity in real-time and routes it to the optimal model tier. It tracks multi-step workflows so step 5 of your AI pipeline knows what happened in step 1, and it automatically downgrades tiers when budgets run thin. Drop it in front of your existing OpenAI calls — one Docker command, zero code changes, 40-70% cost savings. We're like a smart load balancer, but for LLM economics."
+> "Every company using LLMs is overspending — they send simple summarization tasks to GPT-4 when GPT-3.5 would produce identical results. Nexus is an open-source inference gateway that scores each request's complexity in real-time and routes it to the optimal model tier. It tracks multi-step workflows so step 5 of your AI pipeline knows what happened in step 1, and it automatically downgrades tiers when budgets run thin. Drop it in front of your existing OpenAI calls — one Docker command, zero code changes, up to 50% cost savings. We're like a smart load balancer, but for LLM economics."
 
 ### Key Differentiators vs Competitors
 
@@ -65,7 +65,7 @@
 
 #### Startup CTOs (Series A–C, 10-200 engineers)
 - **Pain:** "Our LLM bill is growing faster than revenue. I need cost control without slowing the team."
-- **Hook:** "Nexus cut inference costs 40-70% at [case study company] without touching a line of application code."
+- **Hook:** "Nexus cut inference costs up to 50% at [case study company] without touching a line of application code."
 - **Proof point:** Workflow-aware routing + per-team budgets = FinOps from day one.
 - **CTA:** Book a 15-minute architecture review — we'll estimate your savings.
 - **Tone:** Strategic, ROI-focused, peer-level.
@@ -105,7 +105,7 @@
 - [ ] **README rewrite** — Structure:
   1. Hero banner (animated GIF showing routing in action in the web dashboard)
   2. One-sentence value prop
-  3. Key metrics: `<3μs latency | 40-70% cost savings | 1 Docker command`
+  3. Key metrics: `<3μs latency | up to 50% cost savings | 1 Docker command`
   4. Quick start (3 lines of code)
   5. Architecture diagram
   6. Feature comparison table (vs competitors)
@@ -221,7 +221,7 @@ Outline:
 
 - [ ] Domain: `nexusgateway.dev` or `nexus.ai` (or available alternative)
 - [ ] Simple landing page (use Framer, Carrd, or a static site):
-  - Hero: "Cut your LLM costs 40-70%. Zero code changes."
+  - Hero: "Cut your LLM costs up to 50%. Zero code changes."
   - 3-second demo GIF
   - Feature bullets (4 items)
   - Email capture: "Get early access + launch discount"
@@ -267,7 +267,7 @@ Source from these communities — look for people actively complaining about LLM
 - [ ] Draft replies to anticipated questions (pricing, vs competitors, self-hosted vs cloud).
 
 **Listing assets:**
-- [ ] **Tagline** (60 chars max): "Cut LLM costs 40-70% with intelligent model routing"
+- [ ] **Tagline** (60 chars max): "Cut LLM costs up to 50% with intelligent model routing"
 - [ ] **Description** (260 chars): See Section 10 below.
 - [ ] **Gallery images** (5):
   1. Hero — Architecture diagram with cost savings stats
@@ -338,7 +338,7 @@ See [Section 9](#9-show-hn-post-draft) for the full draft.
 1/ Today we're open-sourcing Nexus — an AI inference gateway that routes
 every LLM request to the cheapest model that can handle it.
 
-<3μs routing overhead. 40-70% cost savings. Zero code changes.
+<3μs routing overhead. Up to 50% cost savings. Zero code changes.
 
 Here's how it works 🧵👇
 
@@ -1042,7 +1042,7 @@ I chose Go for the single-binary deployment story and because the hot path
 complexity scorer uses token count heuristics, keyword analysis, and
 structural patterns — no ML model in the critical path.
 
-Beta users are seeing 40-70% cost reductions depending on their workload
+Beta users are seeing up to 50% cost reductions depending on their workload
 mix. The sweet spot is apps with diverse prompt complexity (chatbots,
 content pipelines, RAG systems).
 
@@ -1072,7 +1072,7 @@ what other routing signals people would want beyond complexity
 
 ### Tagline (60 characters max)
 
-**"Cut LLM costs 40-70% with intelligent model routing"**
+**"Cut LLM costs up to 50% with intelligent model routing"**
 
 ### Description (260 characters max)
 
@@ -1087,7 +1087,7 @@ what other routing signals people would want beyond complexity
 
 ### Gallery Images (descriptions for designer)
 
-1. **Hero image:** Split screen — left: "Before Nexus" (all requests → GPT-4, big dollar signs), right: "After Nexus" (requests fanning out to different model tiers, smaller dollar signs). Large "40-70% savings" callout.
+1. **Hero image:** Split screen — left: "Before Nexus" (all requests → GPT-4, big dollar signs), right: "After Nexus" (requests fanning out to different model tiers, smaller dollar signs). Large "up to 50% savings" callout.
 2. **Dashboard screenshot:** Nexus web dashboard showing real-time routing decisions, cost savings counter, and tier distribution chart.
 3. **Architecture diagram:** Clean diagram showing app → Nexus → complexity scoring → model tier selection → providers (OpenAI, Anthropic, local).
 4. **Quick start terminal:** Dark terminal screenshot showing `docker run -p 8080:8080 nexusai/nexus` and the output, with a browser showing the dashboard.
@@ -1120,7 +1120,7 @@ what other routing signals people would want beyond complexity
 >
 > Point your OpenAI client at localhost:8080 and watch your costs drop in the built-in dashboard.
 >
-> Beta users are seeing **40-70% cost reductions**. The sweet spot is apps with diverse prompt complexity: chatbots, content pipelines, RAG systems, multi-agent workflows.
+> Beta users are seeing **up to 50% cost reductions**. The sweet spot is apps with diverse prompt complexity: chatbots, content pipelines, RAG systems, multi-agent workflows.
 >
 > I'd love your feedback:
 > - What LLM providers should we support next?
@@ -1178,7 +1178,7 @@ what other routing signals people would want beyond complexity
 
 > **Nexus** — The cost-intelligent LLM gateway.
 >
-> **Problem:** Companies waste 40-70% of LLM inference spend by routing simple tasks to expensive models.
+> **Problem:** Companies waste up to 50% of LLM inference spend by routing simple tasks to expensive models.
 >
 > **Solution:** Open-source gateway that scores prompt complexity and routes to the cheapest capable model in <3μs.
 >

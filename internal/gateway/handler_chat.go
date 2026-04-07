@@ -11,7 +11,6 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Admission control: limit concurrent requests
 	select {
 	case s.requestSem <- struct{}{}:
 		defer func() { <-s.requestSem }()
@@ -21,7 +20,6 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := &chatContext{start: time.Now(), httpReq: r}
-
 	if err := s.parseRequest(ctx, r); err != nil {
 		writeNexusError(w, errInvalidRequest(err.Error()), http.StatusBadRequest)
 		return
@@ -33,7 +31,6 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		writeNexusError(w, errPromptBlocked(), http.StatusBadRequest)
 		return
 	}
-
 	if s.checkCache(ctx, w) {
 		return
 	}
@@ -45,7 +42,6 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 	if p == nil {
 		return
 	}
-
 	if ctx.req.Stream {
 		s.handleStreaming(ctx, w, p)
 	} else {
