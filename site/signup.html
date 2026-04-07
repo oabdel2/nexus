@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexus &mdash; Start Free</title>
+<meta name="description" content="Sign up for Nexus and get your API key in seconds. No credit card required. Route AI requests to the cheapest model automatically.">
+<style>
+:root {
+  --bg: #0a0a0b;
+  --card: #111113;
+  --border: #1e1e22;
+  --text: #e4e4e7;
+  --text-secondary: #a1a1aa;
+  --text-dim: #71717a;
+  --blue: #3b82f6;
+  --purple: #8b5cf6;
+  --pink: #ec4899;
+  --green: #22c55e;
+  --red: #ef4444;
+  --gradient: linear-gradient(135deg, var(--blue), var(--purple), var(--pink));
+  --gradient-h: linear-gradient(90deg, var(--blue), var(--purple), var(--pink));
+  --radius: 12px;
+  --radius-sm: 8px;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+  --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  --nav-height: 64px;
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; cursor: pointer; border: none; background: none; }
+.container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+
+.gradient-text {
+  background: var(--gradient-h);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.fade-in {
+  opacity: 0; transform: translateY(24px);
+  transition: opacity .6s ease, transform .6s ease;
+}
+.fade-in.visible { opacity: 1; transform: translateY(0); }
+
+/* NAV */
+.nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  height: var(--nav-height); display: flex; align-items: center;
+  background: rgba(10,10,11,.8); backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px); box-shadow: 0 1px 0 var(--border);
+}
+.nav .container { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+.nav-logo { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 700; letter-spacing: -.02em; }
+.nav-logo-icon {
+  width: 32px; height: 32px; border-radius: 8px; background: var(--gradient);
+  display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; color: #fff;
+}
+.nav-links { display: flex; align-items: center; gap: 32px; list-style: none; }
+.nav-links a { font-size: 14px; color: var(--text-secondary); transition: color .2s; font-weight: 500; }
+.nav-links a:hover { color: #fff; }
+.nav-links a.active { color: #fff; }
+.nav-cta {
+  padding: 8px 20px; border-radius: 8px; background: var(--gradient);
+  color: #fff !important; font-weight: 600; font-size: 14px;
+  transition: opacity .2s, transform .15s;
+}
+.nav-cta:hover { opacity: .9; transform: translateY(-1px); }
+.mobile-toggle { display: none; flex-direction: column; gap: 5px; padding: 4px; }
+.mobile-toggle span { display: block; width: 22px; height: 2px; background: var(--text); border-radius: 2px; transition: transform .3s, opacity .3s; }
+.mobile-menu {
+  display: none; position: fixed; top: var(--nav-height); left: 0; right: 0; bottom: 0;
+  background: rgba(10,10,11,.96); backdrop-filter: blur(16px); z-index: 99; padding: 40px 24px;
+}
+.mobile-menu.open { display: flex; flex-direction: column; gap: 24px; }
+.mobile-menu a { font-size: 18px; color: var(--text-secondary); font-weight: 500; }
+.mobile-menu a:hover { color: #fff; }
+
+@media (max-width: 768px) {
+  .nav-links { display: none; }
+  .mobile-toggle { display: flex; }
+}
+
+/* HERO */
+.signup-hero {
+  padding: 140px 0 60px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.signup-hero::before {
+  content: '';
+  position: absolute;
+  top: -200px; left: 50%;
+  transform: translateX(-50%);
+  width: 800px; height: 600px;
+  background: radial-gradient(ellipse, rgba(139,92,246,.12) 0%, rgba(59,130,246,.06) 40%, transparent 70%);
+  pointer-events: none;
+}
+.signup-hero h1 {
+  font-size: clamp(36px, 5vw, 56px);
+  font-weight: 800;
+  letter-spacing: -.03em;
+  line-height: 1.1;
+  margin-bottom: 16px;
+}
+.signup-hero .subtitle {
+  font-size: clamp(16px, 2vw, 19px);
+  color: var(--text-secondary);
+  max-width: 560px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+/* STEPS */
+.steps { padding: 0 0 100px; }
+.step {
+  max-width: 720px;
+  margin: 0 auto 48px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 36px 32px;
+  transition: border-color .25s;
+}
+.step:hover { border-color: rgba(139,92,246,.2); }
+.step-header {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 24px;
+}
+.step-number {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--gradient);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 14px; color: #fff;
+  flex-shrink: 0;
+}
+.step-title {
+  font-size: 18px; font-weight: 700; letter-spacing: -.01em;
+}
+
+/* PLAN CARDS */
+.plan-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.plan-card {
+  position: relative;
+  padding: 24px 20px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  cursor: pointer;
+  transition: border-color .2s, box-shadow .2s, transform .15s;
+  text-align: center;
+}
+.plan-card:hover { transform: translateY(-2px); }
+.plan-card.selected {
+  border-color: var(--purple);
+  box-shadow: 0 0 24px rgba(139,92,246,.12);
+}
+.plan-card.popular { position: relative; }
+.plan-card.popular::before {
+  content: 'Popular';
+  position: absolute;
+  top: -11px; left: 50%; transform: translateX(-50%);
+  padding: 2px 12px; border-radius: 20px;
+  background: var(--gradient); color: #fff;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+}
+.plan-name { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.plan-price { font-size: 28px; font-weight: 800; letter-spacing: -.02em; margin-bottom: 4px; }
+.plan-price span { font-size: 14px; font-weight: 500; color: var(--text-dim); }
+.plan-quota { font-size: 13px; color: var(--text-dim); }
+.plan-radio {
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 2px solid var(--border); margin: 12px auto 0;
+  display: flex; align-items: center; justify-content: center;
+  transition: border-color .2s;
+}
+.plan-card.selected .plan-radio { border-color: var(--purple); }
+.plan-card.selected .plan-radio::after {
+  content: '';
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--purple);
+}
+
+@media (max-width: 560px) {
+  .plan-grid { grid-template-columns: 1fr; }
+}
+
+/* API KEY DISPLAY */
+.key-area { margin-top: 8px; }
+.key-display {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.key-display code {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--green);
+  word-break: break-all;
+  line-height: 1.5;
+}
+.btn-copy {
+  padding: 8px 18px;
+  border-radius: var(--radius-sm);
+  background: var(--gradient);
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  transition: opacity .2s, transform .15s;
+  white-space: nowrap;
+}
+.btn-copy:hover { opacity: .9; transform: translateY(-1px); }
+.btn-copy.copied { background: var(--green); }
+.key-warning {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  background: rgba(234,179,8,.06);
+  border: 1px solid rgba(234,179,8,.15);
+  font-size: 13px;
+  color: #eab308;
+  line-height: 1.5;
+}
+.key-warning svg { flex-shrink: 0; margin-top: 2px; }
+.demo-note {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align: center;
+  font-style: italic;
+}
+.btn-generate {
+  padding: 12px 28px;
+  border-radius: var(--radius-sm);
+  background: var(--gradient);
+  color: #fff;
+  font-weight: 600;
+  font-size: 15px;
+  transition: opacity .2s, transform .15s;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.btn-generate:hover { opacity: .9; transform: translateY(-2px); }
+
+/* CODE EXAMPLES */
+.code-tabs {
+  display: flex; gap: 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0;
+}
+.code-tab {
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+  border-bottom: 2px solid transparent;
+  transition: color .2s, border-color .2s;
+  cursor: pointer;
+  background: none;
+}
+.code-tab:hover { color: var(--text-secondary); }
+.code-tab.active {
+  color: #fff;
+  border-bottom-color: var(--purple);
+}
+.code-panel {
+  display: none;
+  background: #0d0d10;
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  padding: 20px;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-x: auto;
+  white-space: pre;
+  color: var(--text-secondary);
+}
+.code-panel.active { display: block; }
+.code-panel .kw { color: var(--purple); }
+.code-panel .str { color: var(--green); }
+.code-panel .fn { color: var(--blue); }
+.code-panel .cm { color: var(--text-dim); }
+
+/* WHAT HAPPENS NEXT */
+.next-list {
+  display: grid; gap: 16px;
+}
+.next-item {
+  display: flex; align-items: flex-start; gap: 12px;
+  font-size: 15px; line-height: 1.6;
+}
+.next-icon {
+  width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  font-size: 16px;
+}
+
+/* FOOTER */
+.footer {
+  padding: 80px 0 40px; border-top: 1px solid var(--border);
+}
+.footer-top {
+  display: grid; grid-template-columns: 2fr 1fr 1fr 1.5fr; gap: 48px; margin-bottom: 48px;
+}
+.footer-brand .nav-logo { margin-bottom: 12px; }
+.footer-tagline {
+  font-size: 14px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  max-width: 280px;
+}
+.footer-col h4 {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text);
+  margin-bottom: 16px;
+}
+.footer-col a {
+  display: block;
+  font-size: 14px;
+  color: var(--text-dim);
+  padding: 4px 0;
+  transition: color .2s;
+}
+.footer-col a:hover { color: var(--text); }
+.newsletter-form {
+  display: flex; gap: 8px; margin-top: 8px;
+}
+.newsletter-form input {
+  flex: 1; padding: 10px 14px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--bg);
+  color: var(--text); font-size: 14px; font-family: var(--font); outline: none;
+}
+.newsletter-form input:focus { border-color: var(--blue); }
+.newsletter-form button {
+  padding: 10px 18px; border-radius: var(--radius-sm);
+  background: var(--gradient); color: #fff; font-weight: 600;
+  font-size: 14px; transition: opacity .2s; white-space: nowrap;
+}
+.newsletter-form button:hover { opacity: .9; }
+.footer-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 32px;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.footer-bottom p {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.footer-heart { color: var(--pink); }
+
+@media (max-width: 768px) {
+  .footer-top { grid-template-columns: 1fr 1fr; gap: 32px; }
+}
+@media (max-width: 480px) {
+  .footer-top { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<nav class="nav" id="nav">
+  <div class="container">
+    <a href="index.html" class="nav-logo"><div class="nav-logo-icon">N</div> Nexus</a>
+    <ul class="nav-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="how-it-works.html">How It Works</a></li>
+      <li><a href="docs.html">Docs</a></li>
+      <li><a href="playground.html">Playground</a></li>
+      <li><a href="pricing.html">Pricing</a></li>
+      <li><a href="https://github.com" target="_blank" rel="noopener">GitHub</a></li>
+      <li><a href="signup.html" class="nav-cta active">Get Started Free</a></li>
+    </ul>
+    <button class="mobile-toggle" id="mobile-toggle" aria-label="Menu"><span></span><span></span><span></span></button>
+  </div>
+</nav>
+<div class="mobile-menu" id="mobile-menu">
+  <a href="index.html" onclick="closeMobile()">Home</a>
+  <a href="how-it-works.html" onclick="closeMobile()">How It Works</a>
+  <a href="docs.html" onclick="closeMobile()">Docs</a>
+  <a href="playground.html" onclick="closeMobile()">Playground</a>
+  <a href="pricing.html" onclick="closeMobile()">Pricing</a>
+  <a href="https://github.com" target="_blank" rel="noopener">GitHub</a>
+  <a href="signup.html" class="nav-cta" style="text-align:center;display:block;margin-top:16px;" onclick="closeMobile()">Get Started Free</a>
+</div>
+
+<!-- HERO -->
+<section class="signup-hero">
+  <div class="container fade-in">
+    <h1><span class="gradient-text">Start Free</span></h1>
+    <p class="subtitle">Get your API key in seconds. No credit card required.<br>Just change your base_url and start saving.</p>
+  </div>
+</section>
+
+<!-- STEPS -->
+<section class="steps">
+  <div class="container">
+
+    <!-- STEP 1: Choose Plan -->
+    <div class="step fade-in">
+      <div class="step-header">
+        <div class="step-number">1</div>
+        <div class="step-title">Choose Your Plan</div>
+      </div>
+      <div class="plan-grid" id="plan-grid">
+        <div class="plan-card selected" data-plan="free" onclick="selectPlan(this)">
+          <div class="plan-name">Free</div>
+          <div class="plan-price">$0</div>
+          <div class="plan-quota">1,000 requests / month</div>
+          <div class="plan-radio"></div>
+        </div>
+        <div class="plan-card popular" data-plan="starter" onclick="selectPlan(this)">
+          <div class="plan-name">Starter</div>
+          <div class="plan-price">$29<span>/mo</span></div>
+          <div class="plan-quota">50,000 requests / month</div>
+          <div class="plan-radio"></div>
+        </div>
+        <div class="plan-card" data-plan="team" onclick="selectPlan(this)">
+          <div class="plan-name">Team</div>
+          <div class="plan-price">$99<span>/mo</span></div>
+          <div class="plan-quota">500,000 requests / month</div>
+          <div class="plan-radio"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2: Get API Key -->
+    <div class="step fade-in" id="step-key">
+      <div class="step-header">
+        <div class="step-number">2</div>
+        <div class="step-title">Get Your API Key</div>
+      </div>
+      <div class="key-area" id="key-area">
+        <div style="text-align:center;">
+          <button class="btn-generate" id="btn-generate" onclick="generateKey()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+            Generate API Key
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 3: Start Using Nexus -->
+    <div class="step fade-in" id="step-code" style="display:none;">
+      <div class="step-header">
+        <div class="step-number">3</div>
+        <div class="step-title">Start Using Nexus</div>
+      </div>
+      <div class="code-tabs">
+        <button class="code-tab active" onclick="switchTab('python', this)">Python</button>
+        <button class="code-tab" onclick="switchTab('node', this)">Node.js</button>
+        <button class="code-tab" onclick="switchTab('go', this)">Go</button>
+        <button class="code-tab" onclick="switchTab('curl', this)">curl</button>
+      </div>
+      <div class="code-panel active" id="panel-python"><span class="kw">from</span> openai <span class="kw">import</span> OpenAI
+
+client = <span class="fn">OpenAI</span>(
+    base_url=<span class="str">"https://api.nexus-gateway.dev/v1"</span>,
+    api_key=<span class="str">"<span class="api-key-slot">YOUR_KEY</span>"</span>
+)
+
+response = client.chat.completions.<span class="fn">create</span>(
+    model=<span class="str">"auto"</span>,  <span class="cm"># Nexus picks the best model</span>
+    messages=[{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: <span class="str">"Hello!"</span>}]
+)
+<span class="fn">print</span>(response.choices[0].message.content)</div>
+      <div class="code-panel" id="panel-node"><span class="kw">import</span> OpenAI <span class="kw">from</span> <span class="str">"openai"</span>;
+
+<span class="kw">const</span> client = <span class="kw">new</span> <span class="fn">OpenAI</span>({
+  baseURL: <span class="str">"https://api.nexus-gateway.dev/v1"</span>,
+  apiKey: <span class="str">"<span class="api-key-slot">YOUR_KEY</span>"</span>,
+});
+
+<span class="kw">const</span> response = <span class="kw">await</span> client.chat.completions.<span class="fn">create</span>({
+  model: <span class="str">"auto"</span>,  <span class="cm">// Nexus picks the best model</span>
+  messages: [{ role: <span class="str">"user"</span>, content: <span class="str">"Hello!"</span> }],
+});
+console.<span class="fn">log</span>(response.choices[0].message.content);</div>
+      <div class="code-panel" id="panel-go"><span class="kw">package</span> main
+
+<span class="kw">import</span> (
+    <span class="str">"context"</span>
+    <span class="str">"fmt"</span>
+    openai <span class="str">"github.com/sashabaranov/go-openai"</span>
+)
+
+<span class="kw">func</span> <span class="fn">main</span>() {
+    cfg := openai.<span class="fn">DefaultConfig</span>(<span class="str">"<span class="api-key-slot">YOUR_KEY</span>"</span>)
+    cfg.BaseURL = <span class="str">"https://api.nexus-gateway.dev/v1"</span>
+    client := openai.<span class="fn">NewClientWithConfig</span>(cfg)
+
+    resp, _ := client.<span class="fn">CreateChatCompletion</span>(
+        context.<span class="fn">Background</span>(),
+        openai.ChatCompletionRequest{
+            Model:    <span class="str">"auto"</span>,
+            Messages: []openai.ChatCompletionMessage{
+                {Role: <span class="str">"user"</span>, Content: <span class="str">"Hello!"</span>},
+            },
+        },
+    )
+    fmt.<span class="fn">Println</span>(resp.Choices[0].Message.Content)
+}</div>
+      <div class="code-panel" id="panel-curl"><span class="fn">curl</span> https://api.nexus-gateway.dev/v1/chat/completions \
+  -H <span class="str">"Authorization: Bearer <span class="api-key-slot">YOUR_KEY</span>"</span> \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{
+  "model": "auto",
+  "messages": [{"role": "user", "content": "Hello!"}]
+}'</span></div>
+    </div>
+
+    <!-- WHAT HAPPENS NEXT -->
+    <div class="step fade-in">
+      <div class="step-header">
+        <div class="step-number" style="background: var(--green);">&#10003;</div>
+        <div class="step-title">What Happens Next</div>
+      </div>
+      <div class="next-list">
+        <div class="next-item">
+          <div class="next-icon">&#9989;</div>
+          <div><strong>Smart routing</strong> &mdash; Nexus automatically routes to the cheapest model that can handle your request.</div>
+        </div>
+        <div class="next-item">
+          <div class="next-icon">&#9989;</div>
+          <div><strong>7-layer cache</strong> &mdash; Duplicate and similar calls are served from cache, saving time and money.</div>
+        </div>
+        <div class="next-item">
+          <div class="next-icon">&#9989;</div>
+          <div><strong>Live dashboard</strong> &mdash; See your savings, request volume, and model distribution at <a href="docs.html" style="color: var(--blue); text-decoration: underline;">/dashboard</a>.</div>
+        </div>
+        <div class="next-item">
+          <div class="next-icon">&#9989;</div>
+          <div><strong>Zero code changes</strong> &mdash; Just change your <code style="font-family:var(--mono);color:var(--purple);font-size:14px;">base_url</code> and you're done. Works with any OpenAI-compatible SDK.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <a href="index.html" class="nav-logo">
+          <div class="nav-logo-icon">N</div>
+          Nexus
+        </a>
+        <p class="footer-tagline">The AI gateway that learns which model to use &mdash; and proves it.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Product</h4>
+        <a href="index.html#features">Features</a>
+        <a href="pricing.html">Pricing</a>
+        <a href="docs.html">Documentation</a>
+        <a href="signup.html">Get Started</a>
+      </div>
+      <div class="footer-col">
+        <h4>Community</h4>
+        <a href="https://github.com" target="_blank" rel="noopener">GitHub</a>
+        <a href="#">Blog</a>
+        <a href="#">Twitter</a>
+        <a href="#">Discord</a>
+      </div>
+      <div class="footer-col">
+        <h4>Stay Updated</h4>
+        <p style="font-size:14px;color:var(--text-dim);margin-bottom:12px;">Get notified about new features and releases.</p>
+        <form class="newsletter-form" onsubmit="event.preventDefault(); this.querySelector('button').textContent='Subscribed!'; this.querySelector('input').value='';">
+          <input type="email" placeholder="you@company.com" required>
+          <button type="submit">Subscribe</button>
+        </form>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>Built with <span class="footer-heart">&hearts;</span> for the AI community</p>
+      <p>&copy; 2025 Nexus. All rights reserved.</p>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function() {
+  'use strict';
+
+  /* Intersection Observer fade-in */
+  var observer = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+  document.querySelectorAll('.fade-in').forEach(function(el) {
+    observer.observe(el);
+  });
+
+  /* Mobile menu */
+  var toggle = document.getElementById('mobile-toggle');
+  var menu = document.getElementById('mobile-menu');
+  toggle.addEventListener('click', function() {
+    menu.classList.toggle('open');
+    var open = menu.classList.contains('open');
+    toggle.children[0].style.transform = open ? 'rotate(45deg) translate(5px, 5px)' : '';
+    toggle.children[1].style.opacity = open ? '0' : '1';
+    toggle.children[2].style.transform = open ? 'rotate(-45deg) translate(5px, -5px)' : '';
+    document.body.style.overflow = open ? 'hidden' : '';
+  });
+
+  window.closeMobile = function() {
+    menu.classList.remove('open');
+    toggle.children[0].style.transform = '';
+    toggle.children[1].style.opacity = '1';
+    toggle.children[2].style.transform = '';
+    document.body.style.overflow = '';
+  };
+})();
+
+/* Plan selection */
+function selectPlan(card) {
+  document.querySelectorAll('.plan-card').forEach(function(c) {
+    c.classList.remove('selected');
+  });
+  card.classList.add('selected');
+}
+
+/* Generate demo API key */
+var generatedKey = '';
+
+function generateKey() {
+  var hex = '';
+  var chars = '0123456789abcdef';
+  for (var i = 0; i < 32; i++) {
+    hex += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  generatedKey = 'nxs_live_demo_' + hex;
+
+  var keyArea = document.getElementById('key-area');
+  keyArea.innerHTML =
+    '<div style="margin-bottom:8px;font-size:14px;color:var(--text-secondary);">Your Nexus API Key:</div>' +
+    '<div class="key-display">' +
+      '<code id="key-text">' + generatedKey + '</code>' +
+      '<button class="btn-copy" id="btn-copy" onclick="copyKey()">Copy</button>' +
+    '</div>' +
+    '<div class="key-warning">' +
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>' +
+      '<span>Save this key &mdash; you won\'t see it again.</span>' +
+    '</div>' +
+    '<p class="demo-note">Demo key &mdash; connect Stripe for production keys</p>';
+
+  /* Show step 3 and fill in the key */
+  var stepCode = document.getElementById('step-code');
+  stepCode.style.display = '';
+  document.querySelectorAll('.api-key-slot').forEach(function(el) {
+    el.textContent = generatedKey;
+  });
+
+  /* Scroll to the key */
+  document.getElementById('step-key').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+/* Copy to clipboard */
+function copyKey() {
+  var btn = document.getElementById('btn-copy');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(generatedKey).then(function() {
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(function() { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    });
+  } else {
+    /* Fallback */
+    var ta = document.createElement('textarea');
+    ta.value = generatedKey;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(function() { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  }
+}
+
+/* Tab switcher */
+function switchTab(lang, tabEl) {
+  document.querySelectorAll('.code-tab').forEach(function(t) { t.classList.remove('active'); });
+  document.querySelectorAll('.code-panel').forEach(function(p) { p.classList.remove('active'); });
+  tabEl.classList.add('active');
+  document.getElementById('panel-' + lang).classList.add('active');
+}
+</script>
+</body>
+</html>
