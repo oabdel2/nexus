@@ -150,7 +150,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 
 <div class="container">
   <!-- Onboarding: shown when no requests have been made -->
-  <div id="onboarding" class="panel" style="border-color:rgba(88,166,255,.3);background:linear-gradient(135deg,var(--surface) 0%,rgba(88,166,255,.06) 100%);display:none">
+  <div id="onboarding" class="panel" style="border-color:rgba(88,166,255,.3);background:linear-gradient(135deg,var(--surface) 0%,rgba(88,166,255,.06) 100%)">
     <div style="padding:24px">
       <h2 style="font-size:20px;margin-bottom:8px">👋 Welcome to Nexus</h2>
       <p style="color:var(--text-dim);margin-bottom:20px">Your gateway is running! Send your first request to start seeing savings.</p>
@@ -549,8 +549,6 @@ client = OpenAI(base_url="http://localhost:8080/v1")</pre>
   // Init
   updateCacheRing(0);
   drawSavingsChart();
-  // Show onboarding card initially
-  $('onboarding').style.display = '';
   connect();
 })();
 

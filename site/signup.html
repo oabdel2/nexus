@@ -469,7 +469,7 @@ button { font-family: inherit; cursor: pointer; border: none; background: none; 
     </div>
 
     <!-- STEP 3: Start Using Nexus -->
-    <div class="step fade-in" id="step-code" style="display:none;">
+    <div class="step fade-in" id="step-code" style="opacity:0.45; pointer-events:none;">
       <div class="step-header">
         <div class="step-number">3</div>
         <div class="step-title">Start Using Nexus</div>
@@ -680,7 +680,8 @@ function generateKey() {
 
   /* Show step 3 and fill in the key */
   var stepCode = document.getElementById('step-code');
-  stepCode.style.display = '';
+  stepCode.style.opacity = '1';
+  stepCode.style.pointerEvents = 'auto';
   document.querySelectorAll('.api-key-slot').forEach(function(el) {
     el.textContent = generatedKey;
   });
