@@ -176,9 +176,11 @@ footer a { color: var(--text-secondary); }
   <ul class="nav-links">
    <li><a href="../docs.html">Docs</a></li>
    <li><a href="../how-it-works.html">How It Works</a></li>
+   <li><a href="../playground.html">Playground</a></li>
    <li><a href="../pricing.html">Pricing</a></li>
+   <li><a href="../security.html">Security</a></li>
    <li><a href="https://github.com/oabdel2/nexus" target="_blank">GitHub</a></li>
-   <li><a href="../signup.html" class="nav-cta">Get Started</a></li>
+   <li><a href="../signup.html" class="nav-cta">Get Started Free</a></li>
   </ul>
  </div>
 </nav>
@@ -197,7 +199,7 @@ footer a { color: var(--text-secondary); }
 
 <h2>The Problem: Every Request Gets the Expensive Model</h2>
 
-<p>Enterprise AI spending is projected to reach <strong>$407 billion by 2027</strong>, and a massive chunk of that spend goes directly to LLM API calls. Teams spin up ambitious agentic workflows — code generation, customer support, data analysis — and every single request gets routed to the most powerful (and most expensive) model available. A "Hello, world" message costs the same per-token as a complex debugging session. Multiply that across millions of daily requests and you have a cost structure that doesn't scale.</p>
+<p>Our AI API bills hit <strong>$12K/month</strong> and were climbing fast. When we audited the logs, the pattern was obvious: every single request &mdash; from "What's 2+2?" to complex debugging sessions &mdash; was hitting GPT-4o. Enterprise AI spending is projected to reach $407 billion by 2027, and a massive chunk of that goes directly to LLM API calls. Teams spin up ambitious agentic workflows and every request gets routed to the most expensive model available. A trivial message costs the same per-token as a complex reasoning task. Multiply that across millions of daily requests and you have a cost structure that doesn't scale.</p>
 
 <p>The pain is real: engineering teams report that <strong>60–80% of their LLM requests are routine</strong> — simple lookups, formatting tasks, short Q&amp;A — that could be handled perfectly well by a smaller, cheaper model. But nobody has time to manually classify every request and route it to the right tier. So the default behavior wins: everything goes to GPT-4o, the bill climbs, and finance starts asking hard questions.</p>
 
