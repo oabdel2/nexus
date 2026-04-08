@@ -8,7 +8,7 @@
 |_| \_|\___/_/\_\\__,_|___/ 
 ```
 
-**Agentic-first inference optimization gateway with adaptive model routing**
+**Cut your LLM inference costs up to 50% — one line change, zero quality loss. Nexus routes every AI request to the cheapest model that delivers.**
 
 [![Go Version](https://img.shields.io/badge/Go-1.23+-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![License: BSL 1.1](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](LICENSE)
