@@ -1,17 +1,15 @@
 ## What does this PR do?
 
-## Type of Change
-- [ ] Bug fix
-- [ ] New feature
-- [ ] Breaking change
-- [ ] Documentation update
+Briefly describe the change and link any related issues (e.g., Fixes #123).
 
-## Testing
-- [ ] Unit tests pass (`go test ./...`)
-- [ ] Benchmarks pass (`go test ./benchmarks/... -bench=.`)
-- [ ] Manual testing performed
+## How was it tested?
+
+Describe the tests you ran. Include relevant `go test` output or `curl` commands.
 
 ## Checklist
-- [ ] Code follows project style guidelines
-- [ ] Self-review performed
-- [ ] Documentation updated (if applicable)
+
+- [ ] `go build ./...` passes
+- [ ] `go test -race ./...` passes
+- [ ] `go vet ./...` passes
+- [ ] No external dependencies added
+- [ ] Tests added for new functionality
