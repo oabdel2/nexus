@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -411,6 +412,7 @@ func (m *Metrics) Handler() http.HandlerFunc {
 		// ---- Gauges ----
 		writeLabeledInt(&b, "nexus_cache_entries", "Current cache entries per layer", "gauge", &m.cacheEntries)
 		writeSimpleInt(&b, "nexus_active_requests", "Current in-flight requests", "gauge", m.activeRequests.Load())
+		writeSimpleInt(&b, "nexus_goroutines_total", "Current number of goroutines", "gauge", int64(runtime.NumGoroutine()))
 
 		uptime := time.Since(m.startTime).Seconds()
 		writeSimpleFloat(&b, "nexus_uptime_seconds", "Time since gateway start", "gauge", uptime)

@@ -19,6 +19,9 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.metrics.IncActiveRequests()
+	defer s.metrics.DecActiveRequests()
+
 	ctx := &chatContext{start: time.Now(), httpReq: r}
 	if err := s.parseRequest(ctx, r); err != nil {
 		writeNexusError(w, errInvalidRequest(err.Error()), http.StatusBadRequest)

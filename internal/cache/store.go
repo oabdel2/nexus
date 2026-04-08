@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"sync"
 	"time"
 )
 
@@ -18,6 +19,17 @@ type Store struct {
 	context    *ContextFingerprint
 	registry   *SynonymRegistry
 	cancel     context.CancelFunc
+
+	// Per-layer latency tracking for the most recent Lookup call.
+	lastLookupMu    sync.RWMutex
+	lastLookupStats LookupStats
+}
+
+// LookupStats holds per-layer latency information from the most recent Lookup.
+type LookupStats struct {
+	L1LookupNs  int64 `json:"l1_lookup_ns"`
+	L2aLookupNs int64 `json:"l2a_lookup_ns"`
+	L2bLookupNs int64 `json:"l2b_lookup_ns"`
 }
 
 // StoreConfig holds configuration for all cache layers.
@@ -98,30 +110,59 @@ func NewStore(cfg StoreConfig) *Store {
 }
 
 // Lookup checks caches in order: L1 (exact) → L2a (BM25) → L2b (semantic).
+// Per-layer latency is recorded and retrievable via LastLookupStats().
 func (s *Store) Lookup(prompt string, model string) ([]byte, bool, string) {
+	var stats LookupStats
+
 	// L1: exact match
 	if s.l1Enabled && s.exact != nil {
+		start := time.Now()
 		key := HashKey(prompt, model)
 		if data, ok := s.exact.Get(key); ok {
+			stats.L1LookupNs = time.Since(start).Nanoseconds()
+			s.setLastLookupStats(stats)
 			return data, true, "l1_exact"
 		}
+		stats.L1LookupNs = time.Since(start).Nanoseconds()
 	}
 
 	// L2a: BM25 keyword matching
 	if s.l2aEnabled && s.bm25 != nil {
+		start := time.Now()
 		if data, ok := s.bm25.Lookup(prompt, model); ok {
+			stats.L2aLookupNs = time.Since(start).Nanoseconds()
+			s.setLastLookupStats(stats)
 			return data, true, "l2_bm25"
 		}
+		stats.L2aLookupNs = time.Since(start).Nanoseconds()
 	}
 
 	// L2b: semantic embedding matching
 	if s.l2bEnabled && s.semantic != nil {
+		start := time.Now()
 		if data, ok := s.semantic.Lookup(prompt, model); ok {
+			stats.L2bLookupNs = time.Since(start).Nanoseconds()
+			s.setLastLookupStats(stats)
 			return data, true, "l2_semantic"
 		}
+		stats.L2bLookupNs = time.Since(start).Nanoseconds()
 	}
 
+	s.setLastLookupStats(stats)
 	return nil, false, ""
+}
+
+// LastLookupStats returns per-layer latency information from the most recent Lookup.
+func (s *Store) LastLookupStats() LookupStats {
+	s.lastLookupMu.RLock()
+	defer s.lastLookupMu.RUnlock()
+	return s.lastLookupStats
+}
+
+func (s *Store) setLastLookupStats(stats LookupStats) {
+	s.lastLookupMu.Lock()
+	s.lastLookupStats = stats
+	s.lastLookupMu.Unlock()
 }
 
 // StoreResponse stores the response in ALL enabled cache layers.
